@@ -5,8 +5,11 @@ import Sidebar from './Sidebar';
 import GlobalTicker from './GlobalTicker';
 import ManagerChat from './ManagerChat';
 import LivePayroll from './LivePayroll';
-import RecentEvolutions from './RecentEvolutions';
-import QuickStats from './QuickStats';
+import ManagerInputBar from './ManagerInputBar';
+import ActiveOperations from './ActiveOperations';
+import TeamOverview from './TeamOverview';
+import CompanyLedger from './CompanyLedger';
+import NewOperationModal, { OperationConfig } from './NewOperationModal';
 import OfficeView from './views/OfficeView';
 import TalentHubView from './views/TalentHubView';
 import OperationsView from './views/OperationsView';
@@ -20,6 +23,7 @@ interface DashboardProps {
 export default function Dashboard({ isFirstTime = false }: DashboardProps) {
   const [activeView, setActiveView] = useState('hq');
   const [selectedOperationId, setSelectedOperationId] = useState<string | null>(null);
+  const [isNewOperationOpen, setIsNewOperationOpen] = useState(false);
 
   const handleViewChange = (view: string) => {
     setActiveView(view);
@@ -27,6 +31,13 @@ export default function Dashboard({ isFirstTime = false }: DashboardProps) {
     if (view !== 'ledger') {
       setSelectedOperationId(null);
     }
+  };
+
+  const handleLaunchOperation = (config: OperationConfig) => {
+    // TODO: Integrate with OperationFlow
+    console.log('Launching operation:', config);
+    // For now, just close the modal
+    setIsNewOperationOpen(false);
   };
 
   return (
@@ -42,22 +53,27 @@ export default function Dashboard({ isFirstTime = false }: DashboardProps) {
         {/* Main Workspace */}
         <main className="flex-1 overflow-y-auto p-6">
           {activeView === 'hq' && (
-            <div className="max-w-7xl mx-auto">
-              {/* Welcome Header */}
-              <div className="mb-8">
-                <h1 className="text-3xl font-bold text-white mb-2">
-                  Welcome back to HQ
-                </h1>
-                <p className="text-slate-400">
-                  Your workforce is ready. Here's what's happening today.
-                </p>
+            <div className="max-w-7xl mx-auto space-y-6">
+              {/* Manager Input Bar - Top */}
+              <ManagerInputBar onNewOperation={() => setIsNewOperationOpen(true)} />
+
+              {/* Center Section - Two Columns */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Center-Left: Active Operations (Mission Control) */}
+                <ActiveOperations />
+
+                {/* Center-Right: Team Overview (The Office) */}
+                <TeamOverview />
               </div>
 
-              {/* Quick Stats Grid */}
-              <QuickStats />
-
-              {/* Recent Evolutions Feed */}
-              <RecentEvolutions />
+              {/* Bottom: Company Ledger (Recent History) */}
+              <CompanyLedger
+                onViewAll={() => handleViewChange('ledger')}
+                onViewOperation={(id) => {
+                  setSelectedOperationId(id);
+                  handleViewChange('ledger');
+                }}
+              />
             </div>
           )}
 
@@ -87,6 +103,13 @@ export default function Dashboard({ isFirstTime = false }: DashboardProps) {
           <LivePayroll />
         </aside>
       </div>
+
+      {/* New Operation Modal */}
+      <NewOperationModal
+        isOpen={isNewOperationOpen}
+        onClose={() => setIsNewOperationOpen(false)}
+        onLaunch={handleLaunchOperation}
+      />
     </div>
   );
 }
