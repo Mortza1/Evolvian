@@ -17,6 +17,14 @@ export interface Agent {
   tags: string[];
 }
 
+export interface HiredAgent extends Agent {
+  teamId: string;
+  hiredAt: Date;
+  tasksCompleted: number;
+  accuracy: number;
+  isOnline: boolean;
+}
+
 // Parse CSV data
 export function parseAgentsCSV(csvText: string): Agent[] {
   const lines = csvText.trim().split('\n');
@@ -102,4 +110,72 @@ agent-030,Jonathan Harris,Video Script Writer,Content,Video Production,Writes en
 
 export function getAgents(): Agent[] {
   return parseAgentsCSV(AGENT_CSV_DATA);
+}
+
+// Hired Agents Storage
+const HIRED_AGENTS_KEY = 'evolvian_hired_agents';
+
+export function getHiredAgents(teamId?: string): HiredAgent[] {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const stored = localStorage.getItem(HIRED_AGENTS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      const agents = parsed.map((a: any) => ({
+        ...a,
+        hiredAt: new Date(a.hiredAt),
+      }));
+
+      // Filter by team if provided
+      if (teamId) {
+        return agents.filter((a: HiredAgent) => a.teamId === teamId);
+      }
+
+      return agents;
+    }
+  } catch (error) {
+    console.error('Failed to load hired agents:', error);
+  }
+
+  return [];
+}
+
+export function hireAgent(agent: Agent, teamId: string): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const hired = getHiredAgents();
+
+    const hiredAgent: HiredAgent = {
+      ...agent,
+      teamId,
+      hiredAt: new Date(),
+      tasksCompleted: 0,
+      accuracy: 85,
+      isOnline: Math.random() > 0.3, // 70% chance of being online
+    };
+
+    hired.push(hiredAgent);
+    localStorage.setItem(HIRED_AGENTS_KEY, JSON.stringify(hired));
+  } catch (error) {
+    console.error('Failed to hire agent:', error);
+  }
+}
+
+export function fireAgent(agentId: string, teamId: string): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const hired = getHiredAgents();
+    const filtered = hired.filter((a) => !(a.id === agentId && a.teamId === teamId));
+    localStorage.setItem(HIRED_AGENTS_KEY, JSON.stringify(filtered));
+  } catch (error) {
+    console.error('Failed to fire agent:', error);
+  }
+}
+
+export function isAgentHired(agentId: string, teamId: string): boolean {
+  const hired = getHiredAgents(teamId);
+  return hired.some((a) => a.id === agentId);
 }

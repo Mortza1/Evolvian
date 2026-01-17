@@ -13,6 +13,7 @@ export interface AgentContribution {
 
 export interface StoredOperation {
   id: string;
+  teamId: string;
   timestamp: Date;
   config: OperationConfig;
   team: Agent[];
@@ -66,6 +67,11 @@ export function getAllOperations(): StoredOperation[] {
 export function getOperationById(id: string): StoredOperation | null {
   const operations = getAllOperations();
   return operations.find(op => op.id === id) || null;
+}
+
+export function getOperationsByTeam(teamId: string): StoredOperation[] {
+  const operations = getAllOperations();
+  return operations.filter(op => op.teamId === teamId);
 }
 
 export function getOperationsByAgent(agentId: string): StoredOperation[] {

@@ -5,7 +5,8 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from database import get_db, User
+from database import get_db
+from models import User
 
 # Security settings
 SECRET_KEY = "evolvian-secret-key-change-in-production-2024"  # Change this in production

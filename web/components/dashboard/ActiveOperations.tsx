@@ -1,56 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getOperationsByTeam, StoredOperation } from '@/lib/operations-storage';
 
-interface ActiveOperation {
-  id: string;
-  title: string;
-  status: string;
-  currentAgent: string;
-  progress: number;
-  cost: number;
-  needsIntervention: boolean;
-  question?: string;
-  team: Array<{
-    id: string;
-    name: string;
-    photo_url: string;
-    active: boolean;
-  }>;
+interface ActiveOperationsProps {
+  teamId: string;
 }
 
-export default function ActiveOperations() {
-  const [operations, setOperations] = useState<ActiveOperation[]>([
-    {
-      id: '1',
-      title: 'GDPR Compliance Audit',
-      status: 'Scanner is processing documents...',
-      currentAgent: 'Scanner',
-      progress: 45,
-      cost: 0.23,
-      needsIntervention: false,
-      team: [
-        { id: '1', name: 'Scanner', photo_url: 'https://i.pravatar.cc/150?img=1', active: true },
-        { id: '2', name: 'Auditor', photo_url: 'https://i.pravatar.cc/150?img=2', active: false },
-        { id: '3', name: 'Reporter', photo_url: 'https://i.pravatar.cc/150?img=3', active: false },
-      ],
-    },
-  ]);
+export default function ActiveOperations({ teamId }: ActiveOperationsProps) {
+  const [operations, setOperations] = useState<StoredOperation[]>([]);
 
-  // Simulate live cost ticker
   useEffect(() => {
-    const interval = setInterval(() => {
-      setOperations((prev) =>
-        prev.map((op) => ({
-          ...op,
-          cost: parseFloat((op.cost + 0.001).toFixed(3)),
-          progress: Math.min(op.progress + 1, 100),
-        }))
-      );
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, []);
+    // Get only in-progress operations for this team
+    const teamOps = getOperationsByTeam(teamId);
+    const activeOps = teamOps.filter(op => op.status === 'in_progress');
+    setOperations(activeOps);
+  }, [teamId]);
 
   if (operations.length === 0) {
     return (
@@ -75,97 +40,75 @@ export default function ActiveOperations() {
         <span className="text-sm text-slate-400">{operations.length} active</span>
       </div>
 
-      {operations.map((operation) => (
-        <div
-          key={operation.id}
-          className={`glass rounded-xl p-5 transition-all duration-300 ${
-            operation.needsIntervention
-              ? 'ring-2 ring-[#FDE047] shadow-lg shadow-[#FDE047]/20 animate-pulse'
-              : ''
-          }`}
-        >
-          {/* Header */}
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-white mb-1">{operation.title}</h3>
-              <p className="text-sm text-slate-400">{operation.status}</p>
-            </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-[#FDE047]">${operation.cost.toFixed(2)}</div>
-              <div className="text-xs text-slate-500">live cost</div>
-            </div>
-          </div>
+      {operations.map((operation) => {
+        // Calculate progress (simulate based on time)
+        const elapsed = Date.now() - new Date(operation.timestamp).getTime();
+        const estimatedDuration = operation.timeTaken * 60 * 1000; // convert minutes to ms
+        const progress = Math.min(Math.floor((elapsed / estimatedDuration) * 100), 95);
 
-          {/* Progress Bar */}
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-slate-500">Progress</span>
-              <span className="text-xs text-slate-400">{operation.progress}%</span>
+        return (
+          <div
+            key={operation.id}
+            className="glass rounded-xl p-5 transition-all duration-300"
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-white mb-1">{operation.config.title}</h3>
+                <p className="text-sm text-slate-400">Processing operation...</p>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-[#FDE047]">${operation.cost.toFixed(2)}</div>
+                <div className="text-xs text-slate-500">current cost</div>
+              </div>
             </div>
-            <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-[#6366F1] to-[#818CF8] transition-all duration-500"
-                style={{ width: `${operation.progress}%` }}
-              />
-            </div>
-          </div>
 
-          {/* Team Mini-Graph */}
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-xs text-slate-500">Team:</span>
-            {operation.team.map((agent, index) => (
-              <div key={agent.id} className="flex items-center">
+            {/* Progress Bar */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-slate-500">Progress</span>
+                <span className="text-xs text-slate-400">{progress}%</span>
+              </div>
+              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
                 <div
-                  className={`relative w-8 h-8 rounded-full border-2 transition-all ${
-                    agent.active
-                      ? 'border-[#6366F1] ring-2 ring-[#6366F1]/30'
-                      : 'border-slate-700'
-                  }`}
-                >
-                  <img
-                    src={agent.photo_url}
-                    alt={agent.name}
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                  {agent.active && (
+                  className="h-full bg-gradient-to-r from-[#6366F1] to-[#818CF8] transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Team Mini-Graph */}
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xs text-slate-500">Team:</span>
+              {operation.team.map((agent, index) => (
+                <div key={agent.id} className="flex items-center">
+                  <div className="relative w-8 h-8 rounded-full border-2 border-[#6366F1] ring-2 ring-[#6366F1]/30">
+                    <img
+                      src={agent.photo_url}
+                      alt={agent.name}
+                      className="w-full h-full rounded-full object-cover"
+                    />
                     <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#6366F1] rounded-full border-2 border-[#020617] animate-pulse" />
+                  </div>
+                  {index < operation.team.length - 1 && (
+                    <div className="w-4 h-0.5 bg-slate-700 mx-1" />
                   )}
                 </div>
-                {index < operation.team.length - 1 && (
-                  <div className="w-4 h-0.5 bg-slate-700 mx-1" />
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Intervention Alert */}
-          {operation.needsIntervention && (
-            <div className="mt-4 p-3 bg-[#FDE047]/10 border border-[#FDE047]/30 rounded-lg">
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-[#FDE047]/20 flex items-center justify-center flex-shrink-0">
-                  <span className="text-[#FDE047] text-sm">?</span>
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-slate-300 mb-2">{operation.question}</p>
-                  <button className="text-xs text-[#FDE047] hover:text-[#FDE047]/80 font-medium transition-colors">
-                    Answer Question →
-                  </button>
-                </div>
-              </div>
+              ))}
             </div>
-          )}
 
-          {/* Actions */}
-          <div className="mt-4 flex items-center gap-2">
-            <button className="flex-1 px-3 py-2 text-sm bg-[#020617]/50 border border-slate-700/50 rounded-lg text-slate-300 hover:bg-[#020617]/70 hover:border-slate-600 transition-all">
-              View Details
-            </button>
-            <button className="px-3 py-2 text-sm text-slate-400 hover:text-white transition-colors">
-              Pause
-            </button>
+            {/* Actions */}
+            <div className="mt-4 flex items-center gap-2">
+              <button className="flex-1 px-3 py-2 text-sm bg-[#020617]/50 border border-slate-700/50 rounded-lg text-slate-300 hover:bg-[#020617]/70 hover:border-slate-600 transition-all">
+                View Details
+              </button>
+              <button className="px-3 py-2 text-sm text-slate-400 hover:text-white transition-colors">
+                Pause
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

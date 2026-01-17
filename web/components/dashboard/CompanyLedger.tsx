@@ -1,21 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getAllOperations, StoredOperation } from '@/lib/operations-storage';
+import { getOperationsByTeam, StoredOperation } from '@/lib/operations-storage';
 
 interface CompanyLedgerProps {
+  teamId: string;
   onViewAll: () => void;
   onViewOperation: (id: string) => void;
 }
 
-export default function CompanyLedger({ onViewAll, onViewOperation }: CompanyLedgerProps) {
+export default function CompanyLedger({ teamId, onViewAll, onViewOperation }: CompanyLedgerProps) {
   const [recentOps, setRecentOps] = useState<StoredOperation[]>([]);
 
   useEffect(() => {
-    const ops = getAllOperations();
-    // Show last 5 completed operations
+    const ops = getOperationsByTeam(teamId);
+    // Show last 5 completed operations for this team
     setRecentOps(ops.filter(op => op.status === 'completed').slice(0, 5));
-  }, []);
+  }, [teamId]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
