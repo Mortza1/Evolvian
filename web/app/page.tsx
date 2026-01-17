@@ -9,16 +9,11 @@ type AppState = 'auth' | 'onboarding' | 'dashboard';
 
 export default function Home() {
   const [appState, setAppState] = useState<AppState>('auth');
-  const [isFirstTimeUser, setIsFirstTimeUser] = useState(true);
+  const [isFirstTimeUser, setIsFirstTimeUser] = useState(false);
 
   const handleAuthSuccess = () => {
-    // For demo, we'll treat everyone as a first-time user
-    // In production, check if user has completed onboarding
-    if (isFirstTimeUser) {
-      setAppState('onboarding');
-    } else {
-      setAppState('dashboard');
-    }
+    // Skip onboarding and go straight to dashboard
+    setAppState('dashboard');
   };
 
   const handleOnboardingComplete = () => {

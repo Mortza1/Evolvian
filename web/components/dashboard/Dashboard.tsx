@@ -15,6 +15,7 @@ import TalentHubView from './views/TalentHubView';
 import OperationsView from './views/OperationsView';
 import OperationsLedger from '../operations/OperationsLedger';
 import OperationDetail from '../operations/OperationDetail';
+import NeuralVaultView from '../neural-vault/NeuralVaultView';
 
 interface DashboardProps {
   isFirstTime?: boolean;
@@ -92,6 +93,7 @@ export default function Dashboard({ isFirstTime = false }: DashboardProps) {
               />
             )
           )}
+          {activeView === 'vault' && <NeuralVaultView />}
         </main>
 
         {/* Right Sidebar - Contextual */}
