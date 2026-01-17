@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Evolvian - Your AI Workforce",
-  description: "Build and manage your evolving AI workforce. Hire specialized agents, create workflows, and watch them learn.",
+  title: "Evolvian - Your Workforce",
+  description: "Build and manage your evolving workforce. Hire specialized agents, create workflows, and watch them learn.",
 };
 
 export default function RootLayout({

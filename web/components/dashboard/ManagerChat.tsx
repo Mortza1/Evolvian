@@ -51,12 +51,12 @@ export default function ManagerChat() {
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="w-10 h-10 bg-gradient-to-br from-[#6366F1] to-[#818CF8] rounded-full flex items-center justify-center">
-              <span className="text-white font-semibold text-sm">GM</span>
+              <span className="text-white font-semibold text-sm">EVO</span>
             </div>
             <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#020617]"></div>
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">General Manager</h3>
+            <h3 className="text-sm font-semibold text-white">Evo</h3>
             <p className="text-xs text-slate-400">Always available</p>
           </div>
         </div>

@@ -121,7 +121,7 @@ export default function RecentEvolutions() {
           Your employees are learning
         </h3>
         <p className="text-xs text-slate-400 max-w-sm mx-auto">
-          As your AI workforce completes tasks and receives feedback, they'll evolve and appear here.
+          As your workforce completes tasks and receives feedback, they'll evolve and appear here.
           Each evolution makes them smarter and more efficient.
         </p>
       </div>
