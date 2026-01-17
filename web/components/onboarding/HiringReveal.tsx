@@ -2,10 +2,7 @@
 
 import { useState, useEffect } from 'react';
 
-interface HiringRevealProps {
-  department: string;
-  onComplete: () => void;
-}
+import { type Agent } from '@/lib/agents';
 
 interface Employee {
   id: string;
@@ -14,14 +11,22 @@ interface Employee {
   level: number;
   salary: string;
   specialization: string;
+  category?: string;
+  description?: string;
 }
 
-export default function HiringReveal({ department, onComplete }: HiringRevealProps) {
+interface HiringRevealProps {
+  department: string;
+  customEmployees?: Agent[];
+  onComplete: () => void;
+}
+
+export default function HiringReveal({ department, customEmployees, onComplete }: HiringRevealProps) {
   const [stage, setStage] = useState<'revealing' | 'complete'>('revealing');
   const [revealedCards, setRevealedCards] = useState<number>(0);
   const [showManagerMessage, setShowManagerMessage] = useState(false);
 
-  // Department-specific employees
+  // Department-specific employees (only used if not custom)
   const employeeData: Record<string, Employee[]> = {
     compliance: [
       {
@@ -103,7 +108,17 @@ export default function HiringReveal({ department, onComplete }: HiringRevealPro
     ],
   };
 
-  const employees = employeeData[department] || employeeData.compliance;
+  // Use custom employees if provided, otherwise use department template
+  const employees = customEmployees && customEmployees.length > 0
+    ? customEmployees.map(agent => ({
+        id: agent.id,
+        name: agent.name,
+        role: agent.role,
+        level: agent.level,
+        salary: `$${agent.price_per_hour.toFixed(2)}/hr`,
+        specialization: agent.specialization,
+      }))
+    : (employeeData[department] || employeeData.compliance);
 
   // Calculate total salary
   const totalSalary = employees
@@ -149,15 +164,21 @@ export default function HiringReveal({ department, onComplete }: HiringRevealPro
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-white mb-3">
-            Welcoming Your New Team
+            {customEmployees && customEmployees.length > 0 ? 'Welcoming Your Custom Team' : 'Welcoming Your New Team'}
           </h1>
           <p className="text-slate-400 text-lg">
-            Your employees are signing in...
+            {employees.length === 1 ? 'Your employee is signing in...' : 'Your employees are signing in...'}
           </p>
         </div>
 
         {/* Employee ID Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <div className={`grid gap-6 mb-12 ${
+          employees.length === 1
+            ? 'grid-cols-1 max-w-md mx-auto'
+            : employees.length === 2
+            ? 'grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto'
+            : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+        }`}>
           {employees.map((employee, index) => {
             const isRevealed = revealedCards > index;
 
@@ -232,12 +253,29 @@ export default function HiringReveal({ department, onComplete }: HiringRevealPro
 
             <div className="glass-light rounded-lg p-4 mb-6">
               <p className="text-slate-200 leading-relaxed mb-3">
-                Perfect! I've brought on a <span className="font-semibold text-white">{employees[0].name}</span>,
-                an <span className="font-semibold text-white">{employees[1].name}</span>, and
-                a <span className="font-semibold text-white">{employees[2].name}</span>.
+                {employees.length === 1 ? (
+                  <>
+                    Perfect! I've brought on <span className="font-semibold text-white">{employees[0].name}</span>.
+                  </>
+                ) : employees.length === 2 ? (
+                  <>
+                    Perfect! I've brought on <span className="font-semibold text-white">{employees[0].name}</span> and{' '}
+                    <span className="font-semibold text-white">{employees[1].name}</span>.
+                  </>
+                ) : employees.length === 3 ? (
+                  <>
+                    Perfect! I've brought on a <span className="font-semibold text-white">{employees[0].name}</span>,
+                    an <span className="font-semibold text-white">{employees[1].name}</span>, and
+                    a <span className="font-semibold text-white">{employees[2].name}</span>.
+                  </>
+                ) : (
+                  <>
+                    Perfect! I've brought on your custom team of {employees.length} employees.
+                  </>
+                )}
               </p>
               <p className="text-slate-200 leading-relaxed">
-                Their combined hourly salary is{' '}
+                {employees.length === 1 ? 'Their' : 'Their combined'} hourly salary is{' '}
                 <span className="font-bold text-[#FDE047] text-lg">${totalSalary}</span>.
               </p>
             </div>

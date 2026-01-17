@@ -10,6 +10,8 @@ import QuickStats from './QuickStats';
 import OfficeView from './views/OfficeView';
 import TalentHubView from './views/TalentHubView';
 import OperationsView from './views/OperationsView';
+import OperationsLedger from '../operations/OperationsLedger';
+import OperationDetail from '../operations/OperationDetail';
 
 interface DashboardProps {
   isFirstTime?: boolean;
@@ -17,6 +19,15 @@ interface DashboardProps {
 
 export default function Dashboard({ isFirstTime = false }: DashboardProps) {
   const [activeView, setActiveView] = useState('hq');
+  const [selectedOperationId, setSelectedOperationId] = useState<string | null>(null);
+
+  const handleViewChange = (view: string) => {
+    setActiveView(view);
+    // Clear selected operation when changing views
+    if (view !== 'ledger') {
+      setSelectedOperationId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen w-full bg-[#020617] flex flex-col">
@@ -26,7 +37,7 @@ export default function Dashboard({ isFirstTime = false }: DashboardProps) {
       {/* Main Layout */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar - Navigation */}
-        <Sidebar activeView={activeView} setActiveView={setActiveView} />
+        <Sidebar activeView={activeView} setActiveView={handleViewChange} />
 
         {/* Main Workspace */}
         <main className="flex-1 overflow-y-auto p-6">
@@ -53,6 +64,18 @@ export default function Dashboard({ isFirstTime = false }: DashboardProps) {
           {activeView === 'office' && <OfficeView />}
           {activeView === 'store' && <TalentHubView />}
           {activeView === 'operations' && <OperationsView />}
+          {activeView === 'ledger' && (
+            selectedOperationId ? (
+              <OperationDetail
+                operationId={selectedOperationId}
+                onBack={() => setSelectedOperationId(null)}
+              />
+            ) : (
+              <OperationsLedger
+                onViewOperation={(id) => setSelectedOperationId(id)}
+              />
+            )
+          )}
         </main>
 
         {/* Right Sidebar - Contextual */}

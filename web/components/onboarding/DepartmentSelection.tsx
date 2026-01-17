@@ -1,52 +1,81 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { getAgents } from '@/lib/agents';
+
+import type { Agent } from '@/lib/agents';
 
 interface DepartmentSelectionProps {
-  onSelect: (department: string) => void;
+  onSelect: (department: string, agents?: Agent[]) => void;
+  onCustomTeam: () => void;
 }
 
-export default function DepartmentSelection({ onSelect }: DepartmentSelectionProps) {
+export default function DepartmentSelection({ onSelect, onCustomTeam }: DepartmentSelectionProps) {
   const [selectedDept, setSelectedDept] = useState<string | null>(null);
+  const [mode, setMode] = useState<'choose' | 'custom'>('choose');
 
-  const departments = [
-    {
-      id: 'compliance',
-      name: 'Compliance & Legal',
-      description: 'Review documents for regulatory compliance, risk assessment, and legal requirements',
-      employees: ['Scanner', 'Auditor', 'Reporter'],
-      salary: '$2.95/hr',
-      recommended: true,
-      icon: ShieldIcon,
-      color: 'from-emerald-500 to-teal-500',
-    },
-    {
-      id: 'sales',
-      name: 'Sales & Outreach',
-      description: 'Generate leads, qualify prospects, and personalize outreach campaigns',
-      employees: ['Lead Finder', 'Qualifier', 'Outreach Bot'],
-      salary: '$3.20/hr',
-      recommended: false,
-      icon: RocketIcon,
-      color: 'from-blue-500 to-indigo-500',
-    },
-    {
-      id: 'marketing',
-      name: 'Marketing & Content',
-      description: 'Create content, manage social media, and analyze campaign performance',
-      employees: ['Content Writer', 'Social Manager', 'Analyst'],
-      salary: '$2.50/hr',
-      recommended: false,
-      icon: MegaphoneIcon,
-      color: 'from-purple-500 to-pink-500',
-    },
-  ];
+  const allAgents = useMemo(() => getAgents(), []);
+
+  // Build departments from real agents
+  const departments = useMemo(() => {
+    // Compliance Department - top 3 compliance agents
+    const complianceAgents = allAgents
+      .filter(a => a.category === 'Compliance')
+      .sort((a, b) => b.rating - a.rating)
+      .slice(0, 3);
+
+    // Sales Department - top 3 sales agents
+    const salesAgents = allAgents
+      .filter(a => a.category === 'Sales')
+      .sort((a, b) => b.rating - a.rating)
+      .slice(0, 3);
+
+    // Marketing Department - top 3 marketing agents
+    const marketingAgents = allAgents
+      .filter(a => a.category === 'Marketing')
+      .sort((a, b) => b.rating - a.rating)
+      .slice(0, 3);
+
+    return [
+      {
+        id: 'compliance',
+        name: 'Compliance & Legal',
+        description: 'Review documents for regulatory compliance, risk assessment, and legal requirements',
+        agents: complianceAgents,
+        salary: `$${complianceAgents.reduce((sum, a) => sum + a.price_per_hour, 0).toFixed(2)}/hr`,
+        recommended: true,
+        icon: ShieldIcon,
+        color: 'from-emerald-500 to-teal-500',
+      },
+      {
+        id: 'sales',
+        name: 'Sales & Outreach',
+        description: 'Generate leads, qualify prospects, and personalize outreach campaigns',
+        agents: salesAgents,
+        salary: `$${salesAgents.reduce((sum, a) => sum + a.price_per_hour, 0).toFixed(2)}/hr`,
+        recommended: false,
+        icon: RocketIcon,
+        color: 'from-blue-500 to-indigo-500',
+      },
+      {
+        id: 'marketing',
+        name: 'Marketing & Content',
+        description: 'Create content, manage social media, and analyze campaign performance',
+        agents: marketingAgents,
+        salary: `$${marketingAgents.reduce((sum, a) => sum + a.price_per_hour, 0).toFixed(2)}/hr`,
+        recommended: false,
+        icon: MegaphoneIcon,
+        color: 'from-purple-500 to-pink-500',
+      },
+    ];
+  }, [allAgents]);
 
   const handleSelect = (deptId: string) => {
     setSelectedDept(deptId);
     // Brief delay for visual feedback
+    const selectedDepartment = departments.find(d => d.id === deptId);
     setTimeout(() => {
-      onSelect(deptId);
+      onSelect(deptId, selectedDepartment?.agents);
     }, 300);
   };
 
@@ -59,17 +88,46 @@ export default function DepartmentSelection({ onSelect }: DepartmentSelectionPro
 
       <div className="relative z-10 w-full max-w-6xl">
         {/* Header */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-3">
-            Choose Your First Department
+            Build Your First Team
           </h1>
           <p className="text-slate-400 text-lg">
-            Start with a specialized team. You can add more departments anytime.
+            Choose a pre-built department for quick start, or build your own custom team
           </p>
         </div>
 
-        {/* Department Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* Mode Toggle */}
+        <div className="flex justify-center mb-12">
+          <div className="glass rounded-xl p-1.5 inline-flex gap-1">
+            <button
+              onClick={() => setMode('choose')}
+              className={`px-6 py-3 rounded-lg text-sm font-semibold transition-all ${
+                mode === 'choose'
+                  ? 'bg-[#6366F1] text-white shadow-lg shadow-[#6366F1]/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Quick Start Departments
+            </button>
+            <button
+              onClick={() => setMode('custom')}
+              className={`px-6 py-3 rounded-lg text-sm font-semibold transition-all ${
+                mode === 'custom'
+                  ? 'bg-[#6366F1] text-white shadow-lg shadow-[#6366F1]/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Build Custom Team
+            </button>
+          </div>
+        </div>
+
+        {/* Content based on mode */}
+        {mode === 'choose' ? (
+          <>
+            {/* Department Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {departments.map((dept) => {
             const Icon = dept.icon;
             const isSelected = selectedDept === dept.id;
@@ -106,14 +164,28 @@ export default function DepartmentSelection({ onSelect }: DepartmentSelectionPro
                   <p className="text-xs text-slate-500 uppercase tracking-wide mb-2">
                     Team Members
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    {dept.employees.map((employee, idx) => (
-                      <span
+                  <div className="space-y-2">
+                    {dept.agents.map((agent, idx) => (
+                      <div
                         key={idx}
-                        className="text-xs bg-[#020617]/50 text-slate-300 px-2 py-1 rounded-md"
+                        className="flex items-center gap-2 text-xs bg-[#020617]/30 p-2 rounded-lg"
                       >
-                        {employee}
-                      </span>
+                        <img
+                          src={agent.photo_url}
+                          alt={agent.name}
+                          className="w-6 h-6 rounded-full object-cover"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-slate-200 truncate">{agent.name}</div>
+                          <div className="text-slate-500 text-[10px] truncate">{agent.role}</div>
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                          <svg className="w-2.5 h-2.5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                          <span className="text-[10px] font-semibold text-white">{agent.rating?.toFixed(1) || '0.0'}</span>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -139,10 +211,37 @@ export default function DepartmentSelection({ onSelect }: DepartmentSelectionPro
           })}
         </div>
 
-        {/* Footer Note */}
-        <p className="text-center text-slate-500 text-sm">
-          Don't worry - you can hire individual employees or build custom teams later
-        </p>
+            {/* Footer Note */}
+            <p className="text-center text-slate-500 text-sm">
+              Don't worry - you can hire individual employees or build custom teams later
+            </p>
+          </>
+        ) : (
+          /* Custom Team Builder */
+          <div className="glass rounded-2xl p-12 text-center max-w-2xl mx-auto">
+            <div className="w-20 h-20 bg-gradient-to-br from-[#6366F1] to-[#818CF8] rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-3">
+              Build Your Custom Team
+            </h2>
+            <p className="text-slate-300 mb-6 leading-relaxed">
+              Browse our talent pool and handpick exactly the employees you need.
+              Choose their roles, set their priorities, and create a team that fits your unique workflow.
+            </p>
+            <button
+              onClick={onCustomTeam}
+              className="px-8 py-4 bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white font-semibold rounded-xl shadow-lg shadow-[#6366F1]/30 hover:shadow-[#6366F1]/50 transform hover:scale-105 transition-all duration-200"
+            >
+              Browse Talent Pool
+            </button>
+            <p className="text-sm text-slate-500 mt-4">
+              You'll need at least 1 employee to get started
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
