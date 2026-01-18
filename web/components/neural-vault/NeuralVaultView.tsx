@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import {
   getKnowledgeGraph,
   getGraphAtTime,
+  syncPreferencesToGraph,
   KnowledgeGraph,
   KnowledgeNode,
 } from '@/lib/knowledge-graph';
@@ -20,6 +21,10 @@ export default function NeuralVaultView() {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
   useEffect(() => {
+    // Sync learned preferences from agents to knowledge graph
+    syncPreferencesToGraph();
+
+    // Load the updated graph
     const graph = getKnowledgeGraph();
     setFullGraph(graph);
     setDisplayGraph(graph);

@@ -17,12 +17,24 @@ export interface Agent {
   tags: string[];
 }
 
+export interface LearnedPreference {
+  id: string;
+  category: string; // e.g., "Tone", "Color Preference", "Target Audience"
+  rule: string; // e.g., "Prefers 'Elite Authority' with conversational edge"
+  learnedAt: Date;
+  confidence: number; // 0-100, how confident the agent is about this preference
+  appliedCount: number; // How many times this preference has been applied
+}
+
 export interface HiredAgent extends Agent {
   teamId: string;
   hiredAt: Date;
   tasksCompleted: number;
   accuracy: number;
   isOnline: boolean;
+  agentLevel: number; // Override base level - agent's current level in this team (1-10)
+  experience: number; // XP points towards next level (0-100)
+  learnedPreferences: LearnedPreference[]; // What this agent has learned about the user
 }
 
 // Parse CSV data
@@ -106,7 +118,11 @@ agent-026,Andrew Garcia,Technical Writer,Documentation,API Documentation,Creates
 agent-027,Michelle Brown,Conversion Optimizer,Marketing,CRO & A/B Testing,Optimizes landing pages and funnels. Expert in CRO frameworks and hypothesis testing.,claude-3-sonnet,1.10,9,4.5,278,@conversionpro,community,"analytics,ab_testing,heatmaps",https://i.pravatar.cc/150?img=34,"cro,conversion,optimization,ab-testing"
 agent-028,Robert Taylor,Business Analyst,Operations,Process Optimization,Analyzes and optimizes business processes. Expert in Lean Six Sigma and process mapping.,gpt-4,1.80,12,4.6,189,@processexpert,community,"flowchart,analytics,documentation",https://i.pravatar.cc/150?img=35,"business-analysis,process,optimization,six-sigma"
 agent-029,Victoria Adams,Grant Writer,Fundraising,Grant Applications,Writes compelling grant applications for nonprofits and research institutions. 73% success rate.,gpt-4,1.40,10,4.9,98,@grantwriter,community,"document_writer,research,budget_calculator",https://i.pravatar.cc/150?img=36,"grants,fundraising,nonprofit,writing"
-agent-030,Jonathan Harris,Video Script Writer,Content,Video Production,Writes engaging video scripts for YouTube, TikTok, and corporate videos. Expert in storytelling.,gpt-4-turbo,1.00,8,4.7,356,@videocontent,community,"document_writer,research",https://i.pravatar.cc/150?img=37,"video,scripting,youtube,content-creation"`;
+agent-030,Jonathan Harris,Video Script Writer,Content,Video Production,Writes engaging video scripts for YouTube, TikTok, and corporate videos. Expert in storytelling.,gpt-4-turbo,1.00,8,4.7,356,@videocontent,community,"document_writer,research",https://i.pravatar.cc/150?img=37,"video,scripting,youtube,content-creation"
+agent-031,Aurora,Color Oracle,Branding,Color Psychology & Palettes,Specialist in color psychology and brand palette strategy. Expert at creating emotionally resonant color schemes.,gpt-4,1.80,10,4.9,412,Evolvian,official,"color_analyzer,psychology,brand_strategy",https://i.pravatar.cc/150?img=38,"branding,color,psychology,design"
+agent-032,Atlas,Brand Strategist,Branding,Market Positioning,Expert in brand positioning and competitive strategy. Specializes in high-end market differentiation.,gpt-4,2.00,11,4.9,534,Evolvian,official,"market_research,competitor_analysis,strategy",https://i.pravatar.cc/150?img=39,"branding,strategy,positioning,market-research"
+agent-033,Lexis,Naming Expert,Branding,Linguistic Strategy,Specialist in brand nomenclature and linguistic positioning. Creates memorable and strategic brand names.,gpt-4,1.70,9,4.8,289,Evolvian,official,"linguistics,trademark_search,naming",https://i.pravatar.cc/150?img=40,"branding,naming,linguistics,strategy"
+agent-034,Sage,Content Architect,Branding,Messaging Framework,Expert in brand messaging and content architecture. Creates comprehensive brand voice guidelines.,gpt-4-turbo,1.90,10,4.8,367,Evolvian,official,"content_strategy,messaging,copywriting",https://i.pravatar.cc/150?img=41,"branding,content,messaging,copywriting"`;
 
 export function getAgents(): Agent[] {
   return parseAgentsCSV(AGENT_CSV_DATA);
@@ -125,6 +141,10 @@ export function getHiredAgents(teamId?: string): HiredAgent[] {
       const agents = parsed.map((a: any) => ({
         ...a,
         hiredAt: new Date(a.hiredAt),
+        learnedPreferences: (a.learnedPreferences || []).map((pref: any) => ({
+          ...pref,
+          learnedAt: new Date(pref.learnedAt),
+        })),
       }));
 
       // Filter by team if provided
@@ -154,6 +174,9 @@ export function hireAgent(agent: Agent, teamId: string): void {
       tasksCompleted: 0,
       accuracy: 85,
       isOnline: Math.random() > 0.3, // 70% chance of being online
+      agentLevel: 1, // Start at level 1 for this team
+      experience: 0, // 0 XP at start
+      learnedPreferences: [], // No learned preferences yet
     };
 
     hired.push(hiredAgent);
@@ -178,4 +201,106 @@ export function fireAgent(agentId: string, teamId: string): void {
 export function isAgentHired(agentId: string, teamId: string): boolean {
   const hired = getHiredAgents(teamId);
   return hired.some((a) => a.id === agentId);
+}
+
+// Evolution Functions
+
+export function addLearnedPreference(
+  agentId: string,
+  teamId: string,
+  category: string,
+  rule: string,
+  confidence: number = 90
+): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const allAgents = getHiredAgents();
+    const agentIndex = allAgents.findIndex((a) => a.id === agentId && a.teamId === teamId);
+
+    if (agentIndex === -1) return false;
+
+    const newPreference: LearnedPreference = {
+      id: `pref-${Date.now()}`,
+      category,
+      rule,
+      learnedAt: new Date(),
+      confidence,
+      appliedCount: 0,
+    };
+
+    allAgents[agentIndex].learnedPreferences.push(newPreference);
+    localStorage.setItem(HIRED_AGENTS_KEY, JSON.stringify(allAgents));
+
+    return true;
+  } catch (error) {
+    console.error('Failed to add learned preference:', error);
+    return false;
+  }
+}
+
+export function levelUpAgent(agentId: string, teamId: string): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const allAgents = getHiredAgents();
+    const agentIndex = allAgents.findIndex((a) => a.id === agentId && a.teamId === teamId);
+
+    if (agentIndex === -1) return false;
+
+    const agent = allAgents[agentIndex];
+
+    // Level up (max level 10)
+    if (agent.agentLevel < 10) {
+      allAgents[agentIndex].agentLevel += 1;
+      allAgents[agentIndex].experience = 0; // Reset XP
+      allAgents[agentIndex].accuracy = Math.min(99, agent.accuracy + 2); // Increase accuracy
+
+      localStorage.setItem(HIRED_AGENTS_KEY, JSON.stringify(allAgents));
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error('Failed to level up agent:', error);
+    return false;
+  }
+}
+
+export function addExperience(agentId: string, teamId: string, xp: number): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const allAgents = getHiredAgents();
+    const agentIndex = allAgents.findIndex((a) => a.id === agentId && a.teamId === teamId);
+
+    if (agentIndex === -1) return false;
+
+    allAgents[agentIndex].experience = Math.min(100, allAgents[agentIndex].experience + xp);
+    localStorage.setItem(HIRED_AGENTS_KEY, JSON.stringify(allAgents));
+
+    return true;
+  } catch (error) {
+    console.error('Failed to add experience:', error);
+    return false;
+  }
+}
+
+export function updateHiredAgent(agentId: string, teamId: string, updates: Partial<HiredAgent>): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const allAgents = getHiredAgents();
+    const agentIndex = allAgents.findIndex((a) => a.id === agentId && a.teamId === teamId);
+
+    if (agentIndex === -1) return false;
+
+    allAgents[agentIndex] = { ...allAgents[agentIndex], ...updates };
+    localStorage.setItem(HIRED_AGENTS_KEY, JSON.stringify(allAgents));
+
+    return true;
+  } catch (error) {
+    console.error('Failed to update hired agent:', error);
+    return false;
+  }
 }

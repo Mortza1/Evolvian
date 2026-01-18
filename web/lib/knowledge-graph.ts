@@ -7,7 +7,8 @@ export type NodeType =
   | 'agent'       // AI agents/employees
   | 'document'    // Source documents
   | 'decision'    // Decision points
-  | 'concept';    // Abstract concepts
+  | 'concept'     // Abstract concepts
+  | 'preference'; // Learned user preferences
 
 export type RelationshipType =
   | 'identified'      // Agent identified something
@@ -387,6 +388,7 @@ export function getNodeColor(type: NodeType): string {
     document: '#8B5CF6',    // Purple
     decision: '#10B981',    // Green
     concept: '#F59E0B',     // Amber
+    preference: '#EC4899',  // Pink (for learned preferences)
   };
   return colors[type];
 }
@@ -454,4 +456,118 @@ export function getKnowledgeGraph(): KnowledgeGraph {
   }
 
   return DEMO_KNOWLEDGE_GRAPH;
+}
+
+// Function to sync learned preferences from agents to knowledge graph
+export function syncPreferencesToGraph(teamId?: string): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    // Import getHiredAgents dynamically to avoid circular dependency
+    const agentsModule = require('./agents');
+    const agents = agentsModule.getHiredAgents(teamId);
+
+    const graph = getKnowledgeGraph();
+
+    // Process each agent's learned preferences
+    agents.forEach((agent: any) => {
+      if (!agent.learnedPreferences || agent.learnedPreferences.length === 0) return;
+
+      // Ensure agent node exists in graph
+      let agentNode = graph.nodes.find(n => n.id === agent.id);
+      if (!agentNode) {
+        agentNode = {
+          id: agent.id,
+          type: 'agent',
+          label: agent.name,
+          description: agent.role,
+          metadata: {
+            created: agent.hiredAt || new Date(),
+            createdBy: 'system',
+            department: agent.category || 'general',
+            confidence: 1.0,
+          },
+          properties: {
+            role: agent.role,
+            level: agent.agentLevel || 1,
+            specialization: agent.specialization,
+          },
+        };
+        graph.nodes.push(agentNode);
+      }
+
+      // Add each learned preference as a node
+      agent.learnedPreferences.forEach((pref: any) => {
+        const prefId = `pref-${pref.id}`;
+
+        // Check if preference node already exists
+        if (graph.nodes.find(n => n.id === prefId)) return;
+
+        // Create preference node
+        const prefNode: KnowledgeNode = {
+          id: prefId,
+          type: 'preference',
+          label: pref.category,
+          description: pref.rule,
+          metadata: {
+            created: pref.learnedAt || new Date(),
+            createdBy: agent.id,
+            department: agent.category || 'general',
+            confidence: pref.confidence / 100, // Convert to 0-1 scale
+          },
+          properties: {
+            category: pref.category,
+            rule: pref.rule,
+            appliedCount: pref.appliedCount,
+          },
+        };
+
+        graph.nodes.push(prefNode);
+
+        // Create edge from agent to preference
+        const edgeId = `edge-${agent.id}-${pref.id}`;
+        if (!graph.edges.find(e => e.id === edgeId)) {
+          const edge: KnowledgeEdge = {
+            id: edgeId,
+            source: agent.id,
+            target: prefId,
+            type: 'learned_from',
+            label: 'learned preference',
+            metadata: {
+              created: pref.learnedAt || new Date(),
+              createdBy: 'system',
+              confidence: pref.confidence / 100,
+              evidence: `Agent evolved: ${pref.rule}`,
+            },
+          };
+          graph.edges.push(edge);
+        }
+
+        // Add evolution event
+        const evtId = `evt-pref-${pref.id}`;
+        if (!graph.evolutionHistory.find(e => e.id === evtId)) {
+          const event: EvolutionEvent = {
+            id: evtId,
+            timestamp: pref.learnedAt || new Date(),
+            type: 'learning',
+            nodeId: prefId,
+            agentId: agent.id,
+            description: `${agent.name} learned: ${pref.category} - ${pref.rule}`,
+            userFeedback: pref.rule,
+          };
+          graph.evolutionHistory.push(event);
+        }
+      });
+    });
+
+    // Update metadata
+    graph.metadata.nodeCount = graph.nodes.length;
+    graph.metadata.edgeCount = graph.edges.length;
+    graph.metadata.lastUpdated = new Date();
+
+    // Save updated graph
+    saveKnowledgeGraph(graph);
+  } catch (error) {
+    console.error('Failed to sync preferences to graph:', error);
+  }
 }

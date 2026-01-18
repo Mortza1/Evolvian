@@ -19,6 +19,10 @@ import OperationDetail from '../operations/OperationDetail';
 import NeuralVaultView from '../neural-vault/NeuralVaultView';
 import WorkshopView from '../workshop/WorkshopView';
 import HomeView from '../home/HomeView';
+import InboxView from '../inbox/InboxView';
+import AlignmentScore from '../discovery/AlignmentScore';
+import WarRoom from '../operations/WarRoom';
+import BrandingProjectStarter from '../projects/BrandingProjectStarter';
 import { getActiveTeam, setActiveTeamId, syncTeamsFromBackend, Team } from '@/lib/teams';
 
 interface DashboardProps {
@@ -93,12 +97,14 @@ export default function Dashboard({ isFirstTime = false }: DashboardProps) {
       // Add current view
       if (activeView !== 'hq') {
         const viewLabels: Record<string, string> = {
+          inbox: 'Inbox',
           office: 'Office',
           store: 'Store',
           operations: 'Operations',
           ledger: 'Ledger',
           vault: 'Vault',
           workshop: 'Workshop',
+          'war-room': 'War Room',
         };
         items.push({
           label: viewLabels[activeView] || activeView,
@@ -148,6 +154,16 @@ export default function Dashboard({ isFirstTime = false }: DashboardProps) {
               {/* Manager Input Bar - Top */}
               <ManagerInputBar onNewOperation={() => setIsNewOperationOpen(true)} />
 
+              {/* Branding Project Starter */}
+              <BrandingProjectStarter
+                teamId={currentTeam.id.toString()}
+                onStartProject={() => handleViewChange('inbox')}
+                onHireSpecialists={() => handleViewChange('store')}
+              />
+
+              {/* Alignment Score - Discovery Phase Tracking */}
+              <AlignmentScore teamId={currentTeam.id.toString()} onCommence={() => handleViewChange('war-room')} />
+
               {/* Center Section - Two Columns */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Center-Left: Active Operations (Mission Control) */}
@@ -169,6 +185,7 @@ export default function Dashboard({ isFirstTime = false }: DashboardProps) {
             </div>
           )}
 
+            {activeView === 'inbox' && currentTeam && <InboxView teamId={currentTeam.id.toString()} />}
             {activeView === 'office' && currentTeam && <OfficeView teamId={currentTeam.id.toString()} />}
             {activeView === 'store' && currentTeam && <TalentHubView teamId={currentTeam.id.toString()} />}
             {activeView === 'operations' && currentTeam && <OperationsView />}
@@ -186,6 +203,7 @@ export default function Dashboard({ isFirstTime = false }: DashboardProps) {
             )}
             {activeView === 'vault' && currentTeam && <NeuralVaultView />}
             {activeView === 'workshop' && currentTeam && <WorkshopView />}
+            {activeView === 'war-room' && currentTeam && <WarRoom />}
           </div>
         </main>
 
