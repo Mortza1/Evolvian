@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getTeams, getGlobalMetrics, getTeamActivity, Team, TeamActivity, setActiveTeamId } from '@/lib/teams';
+import { getTeams, getGlobalMetrics, getTeamActivity, Team, TeamActivity, setActiveTeamId, syncTeamsFromBackend } from '@/lib/teams';
 import CreateTeamModal from './CreateTeamModal';
 
 interface HomeViewProps {
-  onSelectTeam: (teamId: string) => void;
+  onSelectTeam: (teamId: number) => void;
 }
 
 export default function HomeView({ onSelectTeam }: HomeViewProps) {
@@ -25,18 +25,22 @@ export default function HomeView({ onSelectTeam }: HomeViewProps) {
     loadTeams();
   }, []);
 
-  const loadTeams = () => {
+  const loadTeams = async () => {
+    await syncTeamsFromBackend();
     setTeams(getTeams());
     setMetrics(getGlobalMetrics());
   };
 
-  const handleSelectTeam = (teamId: string) => {
+  const handleSelectTeam = (teamId: number) => {
     setActiveTeamId(teamId);
     onSelectTeam(teamId);
   };
 
   const handleTeamCreated = (team: Team) => {
-    loadTeams(); // Refresh teams list
+    // Team list is already synced in createTeam function
+    // Just reload from cache
+    setTeams(getTeams());
+    setMetrics(getGlobalMetrics());
   };
 
   return (

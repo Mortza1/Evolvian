@@ -192,3 +192,25 @@ class InstalledTool(Base):
 
     # Relationships
     team = relationship("Team")
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+
+    # Message Details
+    role = Column(String)  # 'user' or 'manager' (assistant)
+    content = Column(Text)
+
+    # Optional context for the message
+    context = Column(JSON, default={}, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    team = relationship("Team")
+    user = relationship("User")

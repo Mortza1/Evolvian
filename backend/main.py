@@ -16,11 +16,12 @@ from auth import (
 from schemas import (
     UserCreate, UserLogin, UserResponse, Token,
     TeamCreate, TeamUpdate, TeamResponse,
-    AgentCreate, AgentUpdate, AgentResponse
+    AgentCreate, AgentUpdate, AgentResponse,
+    ManagerChatRequest, SimpleChatRequest
 )
-from llm_service import llm_service, ChatMessage, ChatCompletionRequest
+from llm_service import llm_service, ChatMessage as LLMChatMessage, ChatCompletionRequest
 from database import get_db, engine, Base
-from models import User, Team, Agent, Operation, KnowledgeNode, InstalledTool
+from models import User, Team, Agent, Operation, KnowledgeNode, InstalledTool, ChatMessage
 from typing import List
 
 # Create all database tables
@@ -461,8 +462,7 @@ async def chat_completion(
 
 @app.post("/api/chat/simple")
 async def simple_chat(
-    message: str,
-    system_prompt: str = None,
+    request: SimpleChatRequest,
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -473,8 +473,8 @@ async def simple_chat(
     """
     try:
         response = llm_service.simple_chat(
-            user_message=message,
-            system_prompt=system_prompt
+            user_message=request.message,
+            system_prompt=request.system_prompt
         )
 
         return {
@@ -490,9 +490,7 @@ async def simple_chat(
 
 @app.post("/api/chat/manager")
 async def manager_chat(
-    message: str,
-    team_id: int,
-    context: dict = None,
+    request: ManagerChatRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -504,7 +502,7 @@ async def manager_chat(
     """
     # Verify team belongs to user
     team = db.query(Team).filter(
-        Team.id == team_id,
+        Team.id == request.team_id,
         Team.user_id == current_user.id
     ).first()
 
@@ -514,8 +512,19 @@ async def manager_chat(
             detail="Team not found"
         )
 
+    # Save user message to database
+    user_message = ChatMessage(
+        team_id=request.team_id,
+        user_id=current_user.id,
+        role="user",
+        content=request.message,
+        context=request.context or {}
+    )
+    db.add(user_message)
+    db.commit()
+
     # Get team context
-    agents = db.query(Agent).filter(Agent.team_id == team_id).all()
+    agents = db.query(Agent).filter(Agent.team_id == request.team_id).all()
     agent_count = len(agents)
 
     # Build system prompt with team context
@@ -537,19 +546,29 @@ Your role is to:
 
 Be helpful, professional, and concise. Focus on actionable insights."""
 
-    if context:
-        system_prompt += f"\n\nAdditional Context:\n{context}"
+    if request.context:
+        system_prompt += f"\n\nAdditional Context:\n{request.context}"
 
     try:
         response = llm_service.simple_chat(
-            user_message=message,
+            user_message=request.message,
             system_prompt=system_prompt
         )
+
+        # Save assistant response to database
+        assistant_message = ChatMessage(
+            team_id=request.team_id,
+            user_id=current_user.id,
+            role="manager",
+            content=response
+        )
+        db.add(assistant_message)
+        db.commit()
 
         return {
             "success": True,
             "response": response,
-            "team_id": team_id,
+            "team_id": request.team_id,
             "team_name": team.name
         }
     except Exception as e:
@@ -557,6 +576,52 @@ Be helpful, professional, and concise. Focus on actionable insights."""
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"LLM API error: {str(e)}"
         )
+
+
+@app.get("/api/chat/history/{team_id}")
+async def get_chat_history(
+    team_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = 50
+):
+    """
+    Get chat message history for a specific team
+
+    Returns the most recent messages (default: 50)
+    """
+    # Verify team belongs to user
+    team = db.query(Team).filter(
+        Team.id == team_id,
+        Team.user_id == current_user.id
+    ).first()
+
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Team not found"
+        )
+
+    # Get chat messages for this team
+    messages = db.query(ChatMessage).filter(
+        ChatMessage.team_id == team_id,
+        ChatMessage.user_id == current_user.id
+    ).order_by(ChatMessage.created_at.asc()).limit(limit).all()
+
+    return {
+        "success": True,
+        "team_id": team_id,
+        "messages": [
+            {
+                "id": msg.id,
+                "role": msg.role,
+                "content": msg.content,
+                "created_at": msg.created_at.isoformat(),
+                "context": msg.context
+            }
+            for msg in messages
+        ]
+    }
 
 
 if __name__ == "__main__":

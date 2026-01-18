@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Team, saveTeam } from '@/lib/teams';
+import { Team, createTeam } from '@/lib/teams';
 
 interface CreateTeamModalProps {
   isOpen: boolean;
@@ -32,51 +32,55 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
   const [selectedColor, setSelectedColor] = useState(TEAM_COLORS[0]);
   const [dailyBudgetCap, setDailyBudgetCap] = useState('');
   const [requireApprovalThreshold, setRequireApprovalThreshold] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!name.trim()) {
-      alert('Please enter a team name');
+      setError('Please enter a team name');
       return;
     }
 
-    const newTeam: Team = {
-      id: `team-${Date.now()}`,
-      name: name.trim(),
-      description: description.trim() || 'A new AI workforce team',
-      icon: selectedIcon,
-      color: selectedColor,
-      createdAt: new Date(),
-      settings: {
-        dailyBudgetCap: dailyBudgetCap ? parseFloat(dailyBudgetCap) : undefined,
-        requireApprovalThreshold: requireApprovalThreshold ? parseFloat(requireApprovalThreshold) : undefined,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      },
-      stats: {
-        totalAgents: 0,
-        activeAgents: 0,
-        totalOperations: 0,
-        operationsThisWeek: 0,
-        totalSpend: 0,
-        spendThisMonth: 0,
-        avgOperationCost: 0,
-      },
-      status: 'active',
-    };
+    setIsCreating(true);
+    setError(null);
 
-    saveTeam(newTeam);
-    onCreated(newTeam);
+    try {
+      const newTeam = await createTeam({
+        name: name.trim(),
+        description: description.trim() || 'A new AI workforce team',
+        icon: selectedIcon,
+        color: selectedColor,
+        settings: {
+          dailyBudgetCap: dailyBudgetCap ? parseFloat(dailyBudgetCap) : undefined,
+          requireApprovalThreshold: requireApprovalThreshold ? parseFloat(requireApprovalThreshold) : undefined,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          workingHours: undefined,
+        },
+      });
 
-    // Reset form
-    setName('');
-    setDescription('');
-    setSelectedIcon(TEAM_ICONS[0]);
-    setSelectedColor(TEAM_COLORS[0]);
-    setDailyBudgetCap('');
-    setRequireApprovalThreshold('');
+      if (newTeam) {
+        onCreated(newTeam);
 
-    onClose();
+        // Reset form
+        setName('');
+        setDescription('');
+        setSelectedIcon(TEAM_ICONS[0]);
+        setSelectedColor(TEAM_COLORS[0]);
+        setDailyBudgetCap('');
+        setRequireApprovalThreshold('');
+
+        onClose();
+      } else {
+        setError('Failed to create team. Please try again.');
+      }
+    } catch (err: any) {
+      console.error('Error creating team:', err);
+      setError(err.message || 'Failed to create team. Please try again.');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -226,20 +230,31 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-slate-700/50 flex items-center justify-between">
-          <button
-            onClick={onClose}
-            className="px-6 py-2.5 text-slate-400 hover:text-white transition-colors"
-          >
-            Cancel
-          </button>
+        <div className="p-6 border-t border-slate-700/50">
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+              {error}
+            </div>
+          )}
 
-          <button
-            onClick={handleCreate}
-            className="px-6 py-2.5 bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white font-medium rounded-lg shadow-lg shadow-[#6366F1]/30 hover:shadow-[#6366F1]/50 transform hover:scale-[1.02] transition-all duration-200"
-          >
-            Create Team
-          </button>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={onClose}
+              disabled={isCreating}
+              className="px-6 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+
+            <button
+              onClick={handleCreate}
+              disabled={isCreating}
+              className="px-6 py-2.5 bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white font-medium rounded-lg shadow-lg shadow-[#6366F1]/30 hover:shadow-[#6366F1]/50 transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            >
+              {isCreating ? 'Creating...' : 'Create Team'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -133,3 +133,13 @@ class AgentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# Chat Schemas
+class ManagerChatRequest(BaseModel):
+    message: str = Field(..., min_length=1)
+    team_id: int
+    context: Optional[Dict[str, Any]] = None
+
+class SimpleChatRequest(BaseModel):
+    message: str = Field(..., min_length=1)
+    system_prompt: Optional[str] = None

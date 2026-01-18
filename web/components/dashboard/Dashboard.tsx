@@ -19,7 +19,7 @@ import OperationDetail from '../operations/OperationDetail';
 import NeuralVaultView from '../neural-vault/NeuralVaultView';
 import WorkshopView from '../workshop/WorkshopView';
 import HomeView from '../home/HomeView';
-import { getActiveTeam, setActiveTeamId, Team } from '@/lib/teams';
+import { getActiveTeam, setActiveTeamId, syncTeamsFromBackend, Team } from '@/lib/teams';
 
 interface DashboardProps {
   isFirstTime?: boolean;
@@ -32,11 +32,18 @@ export default function Dashboard({ isFirstTime = false }: DashboardProps) {
   const [currentTeam, setCurrentTeam] = useState<Team | null>(null);
 
   useEffect(() => {
-    // Check if there's an active team
-    const team = getActiveTeam();
-    if (team) {
-      setCurrentTeam(team);
-    }
+    // Sync teams from backend on mount
+    const initializeTeams = async () => {
+      await syncTeamsFromBackend();
+
+      // Check if there's an active team
+      const team = getActiveTeam();
+      if (team) {
+        setCurrentTeam(team);
+      }
+    };
+
+    initializeTeams();
   }, []);
 
   const handleViewChange = (view: string) => {
@@ -54,7 +61,7 @@ export default function Dashboard({ isFirstTime = false }: DashboardProps) {
     setIsNewOperationOpen(false);
   };
 
-  const handleSelectTeam = (teamId: string) => {
+  const handleSelectTeam = (teamId: number) => {
     setActiveTeamId(teamId);
     const team = getActiveTeam();
     setCurrentTeam(team);
@@ -186,7 +193,7 @@ export default function Dashboard({ isFirstTime = false }: DashboardProps) {
         {currentTeam && activeView !== 'home' && (
           <aside className="w-80 border-l border-slate-800 bg-[#020617] overflow-y-auto">
             {/* Manager Chat */}
-            <ManagerChat />
+            <ManagerChat teamId={currentTeam.id.toString()} />
 
             {/* Live Payroll */}
             <LivePayroll teamId={currentTeam.id.toString()} />
