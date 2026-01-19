@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import TaskCreationFlow from './TaskCreationFlow';
 
 interface BoardViewProps {
   teamId: string;
@@ -20,6 +21,7 @@ interface Task {
 
 export default function BoardView({ teamId }: BoardViewProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [isTaskCreationOpen, setIsTaskCreationOpen] = useState(false);
 
   const columns = [
     { id: 'todo', title: 'To Do', color: '#6366F1' },
@@ -50,7 +52,10 @@ export default function BoardView({ teamId }: BoardViewProps) {
             <h1 className="text-2xl font-bold text-white">The Board</h1>
             <p className="text-slate-400 text-sm">Track all tasks and projects in one place</p>
           </div>
-          <button className="px-4 py-2 bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white font-medium rounded-lg shadow-lg shadow-[#6366F1]/30 hover:shadow-[#6366F1]/50 transform hover:scale-[1.02] transition-all">
+          <button
+            onClick={() => setIsTaskCreationOpen(true)}
+            className="px-4 py-2 bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white font-medium rounded-lg shadow-lg shadow-[#6366F1]/30 hover:shadow-[#6366F1]/50 transform hover:scale-[1.02] transition-all"
+          >
             + New Task
           </button>
         </div>
@@ -147,6 +152,14 @@ export default function BoardView({ teamId }: BoardViewProps) {
           })}
         </div>
       </div>
+
+      {/* Task Creation Flow Modal */}
+      <TaskCreationFlow
+        isOpen={isTaskCreationOpen}
+        onClose={() => setIsTaskCreationOpen(false)}
+        teamId={teamId}
+        userObjective={localStorage.getItem('userObjective') || 'Create a complete Brand Identity Pack'}
+      />
     </div>
   );
 }
