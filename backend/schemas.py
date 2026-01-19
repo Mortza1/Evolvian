@@ -143,3 +143,55 @@ class ManagerChatRequest(BaseModel):
 class SimpleChatRequest(BaseModel):
     message: str = Field(..., min_length=1)
     system_prompt: Optional[str] = None
+
+
+# Operation/Task Schemas
+class WorkflowNode(BaseModel):
+    id: str
+    agentId: str
+    agentName: str
+    agentPhoto: str
+    agentRole: str
+    action: str
+    order: int
+
+class OperationCreate(BaseModel):
+    team_id: int
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str
+    status: str = "pending"  # pending, active, completed, failed
+    progress: int = 0
+    cost: float = 0.0
+    workflowNodes: List[WorkflowNode]
+
+class OperationUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    progress: Optional[int] = None
+    cost: Optional[float] = None
+    current_phase: Optional[str] = None
+    output: Optional[str] = None
+
+class OperationResponse(BaseModel):
+    id: int
+    team_id: int
+    title: str
+    description: str
+    status: str
+    workflow_config: Dict[str, Any]
+    current_phase: Optional[str]
+    assigned_agent_ids: List[Any]
+    estimated_cost: float
+    actual_cost: float
+    estimated_time: int
+    actual_time: Optional[int]
+    output: Optional[str]
+    assumptions: List[Any]
+    evolution_events: List[Any]
+    created_at: datetime
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True

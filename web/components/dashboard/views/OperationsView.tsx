@@ -1,49 +1,90 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getTasks, Task, getTask } from '@/lib/tasks';
+import { getHiredAgents } from '@/lib/agents';
+import WarRoomLive from '@/components/operations/WarRoomLive';
 
-export default function OperationsView() {
-  const [activeTask, setActiveTask] = useState<string | null>(null);
+interface OperationsViewProps {
+  teamId: string;
+}
 
-  const tasks = [
-    {
-      id: 'task-1',
-      title: 'GDPR Compliance Review',
-      status: 'completed',
-      progress: 100,
-      startedAt: '2 hours ago',
-      completedAt: '45 min ago',
-      cost: '$0.12',
-      agents: ['Scanner', 'Auditor', 'Reporter'],
-    },
-    {
-      id: 'task-2',
-      title: 'Sales Outreach Campaign',
-      status: 'in_progress',
-      progress: 67,
-      startedAt: '23 min ago',
-      cost: '$0.48',
-      agents: ['Lead Finder', 'Qualifier'],
-    },
-    {
-      id: 'task-3',
-      title: 'Content Generation: Blog Post',
-      status: 'in_progress',
-      progress: 34,
-      startedAt: '12 min ago',
-      cost: '$0.18',
-      agents: ['Content Writer'],
-    },
-    {
-      id: 'task-4',
-      title: 'Risk Assessment Report',
-      status: 'queued',
-      progress: 0,
-      startedAt: 'Queued',
-      cost: '$0.00',
-      agents: [],
-    },
-  ];
+export default function OperationsView({ teamId }: OperationsViewProps) {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
+  const [showWarRoom, setShowWarRoom] = useState(false);
+
+  useEffect(() => {
+    const loadTasksAsync = async () => {
+      // Load tasks for this team
+      const teamTasks = await getTasks(parseInt(teamId));
+      setTasks(teamTasks);
+    };
+
+    loadTasksAsync();
+  }, [teamId]);
+
+  const formatTimeAgo = (date: Date) => {
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  };
+
+  const handleViewLive = (taskId: number) => {
+    setActiveTaskId(taskId);
+    setShowWarRoom(true);
+  };
+
+  if (showWarRoom && activeTaskId) {
+    const task = tasks.find(t => t.id === activeTaskId);
+    if (task) {
+      const hiredAgents = getHiredAgents(teamId);
+      const workflowNodes = task.workflowNodes.map(node => {
+        const agent = hiredAgents.find(a => a.id === node.agentId);
+        return {
+          id: node.id,
+          agent: agent || {
+            id: node.agentId,
+            name: node.agentName,
+            photo_url: node.agentPhoto,
+            role: node.agentRole,
+          } as any,
+          action: node.action,
+          order: node.order,
+        };
+      });
+
+      return (
+        <div className="h-full flex flex-col">
+          <div className="flex-shrink-0 px-6 py-4 border-b border-slate-800 flex items-center gap-4">
+            <button
+              onClick={async () => {
+                setShowWarRoom(false);
+                setActiveTaskId(null);
+                // Reload tasks when closing execution theatre
+                const teamTasks = await getTasks(parseInt(teamId));
+                setTasks(teamTasks);
+              }}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded transition-all"
+            >
+              ← Back to Operations
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <WarRoomLive
+              taskId={task.id}
+              workflowNodes={workflowNodes}
+              taskDescription={task.description}
+            />
+          </div>
+        </div>
+      );
+    }
+  }
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -57,7 +98,7 @@ export default function OperationsView() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="glass rounded-lg p-4">
           <div className="text-2xl font-bold text-[#6366F1] mb-1">
-            {tasks.filter((t) => t.status === 'in_progress').length}
+            {tasks.filter((t) => t.status === 'active').length}
           </div>
           <div className="text-sm text-slate-400">Active Tasks</div>
         </div>
@@ -69,13 +110,13 @@ export default function OperationsView() {
         </div>
         <div className="glass rounded-lg p-4">
           <div className="text-2xl font-bold text-slate-400 mb-1">
-            {tasks.filter((t) => t.status === 'queued').length}
+            {tasks.filter((t) => t.status === 'pending').length}
           </div>
           <div className="text-sm text-slate-400">Queued</div>
         </div>
         <div className="glass rounded-lg p-4">
           <div className="text-2xl font-bold text-[#FDE047] mb-1">
-            ${tasks.reduce((acc, t) => acc + parseFloat(t.cost.replace('$', '')), 0).toFixed(2)}
+            ${tasks.reduce((acc, t) => acc + t.cost, 0).toFixed(2)}
           </div>
           <div className="text-sm text-slate-400">Total Cost</div>
         </div>
@@ -116,8 +157,7 @@ export default function OperationsView() {
         {tasks.map((task) => (
           <div
             key={task.id}
-            className="glass rounded-xl p-6 hover:bg-[#1E293B]/80 transition-all cursor-pointer"
-            onClick={() => setActiveTask(task.id)}
+            className="glass rounded-xl p-6 hover:bg-[#1E293B]/80 transition-all"
           >
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
@@ -127,36 +167,36 @@ export default function OperationsView() {
                     className={`px-2 py-1 rounded-full text-xs font-medium ${
                       task.status === 'completed'
                         ? 'bg-green-500/20 text-green-400'
-                        : task.status === 'in_progress'
+                        : task.status === 'active'
                         ? 'bg-blue-500/20 text-blue-400'
                         : 'bg-slate-700/50 text-slate-400'
                     }`}
                   >
-                    {task.status === 'in_progress'
+                    {task.status === 'active'
                       ? 'In Progress'
                       : task.status === 'completed'
                       ? 'Completed'
-                      : 'Queued'}
+                      : 'Pending'}
                   </span>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-slate-400">
-                  <span>{task.startedAt}</span>
+                  {task.startedAt && <span>{formatTimeAgo(task.startedAt)}</span>}
                   {task.completedAt && (
                     <>
                       <span>•</span>
-                      <span>Completed {task.completedAt}</span>
+                      <span>Completed {formatTimeAgo(task.completedAt)}</span>
                     </>
                   )}
                 </div>
               </div>
               <div className="text-right">
                 <div className="text-sm text-slate-400 mb-1">Cost</div>
-                <div className="text-lg font-bold text-[#FDE047]">{task.cost}</div>
+                <div className="text-lg font-bold text-[#FDE047]">${task.cost.toFixed(2)}</div>
               </div>
             </div>
 
             {/* Progress Bar */}
-            {task.status !== 'queued' && (
+            {task.status !== 'pending' && (
               <div className="mb-4">
                 <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
                   <span>Progress</span>
@@ -176,16 +216,16 @@ export default function OperationsView() {
             )}
 
             {/* Agents */}
-            {task.agents.length > 0 && (
+            {task.workflowNodes.length > 0 && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-500">Agents:</span>
                 <div className="flex gap-2">
-                  {task.agents.map((agent, idx) => (
+                  {task.workflowNodes.map((node, idx) => (
                     <span
                       key={idx}
                       className="text-xs bg-[#6366F1]/20 text-[#6366F1] px-2 py-1 rounded-md font-medium"
                     >
-                      {agent}
+                      {node.agentName}
                     </span>
                   ))}
                 </div>
@@ -193,9 +233,12 @@ export default function OperationsView() {
             )}
 
             {/* Actions */}
-            {task.status === 'in_progress' && (
+            {task.status === 'active' && (
               <div className="mt-4 pt-4 border-t border-slate-700/50">
-                <button className="text-sm text-[#6366F1] hover:text-[#818CF8] font-medium transition-colors">
+                <button
+                  onClick={() => handleViewLive(task.id)}
+                  className="text-sm text-[#6366F1] hover:text-[#818CF8] font-medium transition-colors"
+                >
                   View Live Progress →
                 </button>
               </div>

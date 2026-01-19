@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { getHiredAgents, HiredAgent } from '@/lib/agents';
+import { createTask } from '@/lib/tasks';
 
 interface TaskCreationFlowProps {
   isOpen: boolean;
   onClose: () => void;
   teamId: string;
   userObjective: string;
+  onTaskCreated?: (taskId: number) => void;
 }
 
 interface WorkflowNode {
@@ -17,7 +19,7 @@ interface WorkflowNode {
   order: number;
 }
 
-export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjective }: TaskCreationFlowProps) {
+export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjective, onTaskCreated }: TaskCreationFlowProps) {
   const [step, setStep] = useState<'input' | 'operation' | 'workflow'>('input');
   const [taskDescription, setTaskDescription] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -89,13 +91,45 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
     }
   };
 
-  const handleCommence = () => {
-    // TODO: Create the actual task
-    console.log('Commencing operation:', taskDescription);
-    onClose();
-    // Reset state
-    setStep('input');
-    setTaskDescription('');
+  const handleCommence = async () => {
+    try {
+      // Create the task
+      const task = await createTask({
+        title: 'Brand Identity Assembly',
+        description: taskDescription,
+        teamId: parseInt(teamId),
+        status: 'active',
+        progress: 0,
+        startedAt: new Date(),
+        cost: 0,
+        workflowNodes: workflowNodes.map(node => ({
+          id: node.id,
+          agentId: node.agent.id,
+          agentName: node.agent.name,
+          agentPhoto: node.agent.photo_url,
+          agentRole: node.agent.role,
+          action: node.action,
+          order: node.order,
+        })),
+      });
+
+      // Reset state first
+      setStep('input');
+      setTaskDescription('');
+
+      // Close modal
+      onClose();
+
+      // Notify parent (this will open Execution Theatre)
+      if (onTaskCreated) {
+        setTimeout(() => {
+          onTaskCreated(task.id);
+        }, 100);
+      }
+    } catch (error) {
+      console.error('Failed to create task:', error);
+      alert('Failed to create task. Please try again.');
+    }
   };
 
   if (!isOpen) return null;

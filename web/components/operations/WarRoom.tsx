@@ -227,7 +227,7 @@ export default function WarRoom() {
       <div className="p-6 border-b border-slate-800 bg-gradient-to-r from-slate-900 to-slate-800">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-1">Operations War Room</h2>
+            <h2 className="text-2xl font-bold text-white mb-1">Execution Theatre</h2>
             <p className="text-sm text-slate-400">Live agent collaboration - Personal Branding Project</p>
           </div>
           <div className="flex items-center gap-4">

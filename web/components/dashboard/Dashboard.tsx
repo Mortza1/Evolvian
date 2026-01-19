@@ -16,7 +16,7 @@ import NeuralVaultView from '../neural-vault/NeuralVaultView';
 import WorkshopView from '../workshop/WorkshopView';
 import HomeView from '../home/HomeView';
 import InboxView from '../inbox/InboxView';
-import WarRoom from '../operations/WarRoom';
+import OperationsView from './views/OperationsView';
 import { getActiveTeam, setActiveTeamId, syncTeamsFromBackend, Team } from '@/lib/teams';
 
 interface DashboardProps {
@@ -117,7 +117,7 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
           store: 'Store',
           vault: 'Vault',
           workshop: 'Workshop',
-          'war-room': 'War Room',
+          'war-room': 'Execution Theatre',
         };
         items.push({
           label: viewLabels[activeView] || activeView,
@@ -260,7 +260,7 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
               {activeView === 'store' && currentTeam && <TalentHubView teamId={currentTeam.id.toString()} />}
               {activeView === 'vault' && currentTeam && <NeuralVaultView />}
               {activeView === 'workshop' && currentTeam && <WorkshopView />}
-              {activeView === 'war-room' && currentTeam && <WarRoom />}
+              {activeView === 'war-room' && currentTeam && <OperationsView teamId={currentTeam.id.toString()} />}
             </div>
           )}
         </main>
