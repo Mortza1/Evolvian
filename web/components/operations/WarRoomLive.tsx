@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { HiredAgent } from '@/lib/agents';
+import { HiredAgent, addExperience, addLearnedPreference, updateHiredAgent } from '@/lib/agents';
 import { updateTask } from '@/lib/tasks';
+import { getKnowledgeGraph, saveKnowledgeGraph, KnowledgeNode, KnowledgeEdge, EvolutionEvent } from '@/lib/knowledge-graph';
 
 interface WarRoomLiveProps {
   taskId: number;
@@ -21,7 +22,7 @@ interface LogEntry {
   timestamp: Date;
   agent: string;
   message: string;
-  type: 'info' | 'tool' | 'output' | 'complete';
+  type: 'info' | 'tool' | 'output' | 'complete' | 'file';
 }
 
 interface NodeStatus {
@@ -87,8 +88,82 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
     );
   };
 
+  const addPreferenceToGraph = (agentId: string, agentName: string, preference: string, context: string) => {
+    try {
+      const graph = getKnowledgeGraph();
+
+      // Create preference node
+      const prefId = `pref-${Date.now()}`;
+      const prefNode: KnowledgeNode = {
+        id: prefId,
+        type: 'preference',
+        label: preference,
+        description: `CEO preference: ${context}`,
+        metadata: {
+          created: new Date(),
+          createdBy: agentId,
+          department: 'branding',
+          confidence: 1.0, // CEO decision = 100% confidence
+          operationId: `task-${taskId}`,
+        },
+        properties: {
+          category: 'Strategic Direction',
+          rule: context,
+          source: 'CEO Decision',
+        },
+      };
+
+      graph.nodes.push(prefNode);
+
+      // Create edge from agent to preference
+      const edgeId = `edge-${agentId}-${prefId}`;
+      const edge: KnowledgeEdge = {
+        id: edgeId,
+        source: agentId,
+        target: prefId,
+        type: 'learned_from',
+        label: 'learned from CEO',
+        metadata: {
+          created: new Date(),
+          createdBy: 'system',
+          confidence: 1.0,
+          evidence: `CEO decision in Task #${taskId}`,
+          operationId: `task-${taskId}`,
+        },
+      };
+
+      graph.edges.push(edge);
+
+      // Add evolution event
+      const event: EvolutionEvent = {
+        id: `evt-${Date.now()}`,
+        timestamp: new Date(),
+        type: 'learning',
+        nodeId: prefId,
+        agentId: agentId,
+        operationId: `task-${taskId}`,
+        description: `${agentName} learned: ${preference} - ${context}`,
+        userFeedback: context,
+      };
+
+      graph.evolutionHistory.push(event);
+
+      // Update metadata
+      graph.metadata.nodeCount = graph.nodes.length;
+      graph.metadata.edgeCount = graph.edges.length;
+      graph.metadata.lastUpdated = new Date();
+
+      // Save to localStorage
+      saveKnowledgeGraph(graph);
+
+      addLog('System', `Knowledge Graph updated: "${preference}" preference stored`, 'complete');
+    } catch (error) {
+      console.error('Failed to add preference to graph:', error);
+    }
+  };
+
   const simulateExecution = async () => {
-    // Simulate execution for demo purposes - make it longer
+    // Simulate execution for demo purposes - extended duration
     for (let i = 0; i < workflowNodes.length; i++) {
       const node = workflowNodes[i];
 
@@ -96,33 +171,44 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
       updateNodeStatus(node.id, { status: 'active', progress: 0 });
       addLog(node.agent.name, `Starting: ${node.action}`, 'info');
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 2500));
 
       // Initial research/setup
-      updateNodeStatus(node.id, { progress: 10 });
+      updateNodeStatus(node.id, { progress: 8 });
       addLog(node.agent.name, `Initializing workspace...`, 'info');
+
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Vault file retrieval
+      const templates = [
+        'Brand_Strategy_Template.docx',
+        'Color_Palette_Framework.pdf',
+        'Messaging_Guidelines.docx',
+      ];
+      updateNodeStatus(node.id, { progress: 15 });
+      addLog(node.agent.name, `Retrieved ${templates[i]} from Vault`, 'file');
 
       await new Promise(resolve => setTimeout(resolve, 2500));
 
       // Tool usage phase 1
-      const tools = ['Web Search Pro', 'Data Analyzer', 'Content Generator'];
+      const tools = ['Web Search Pro', 'Market Analyzer', 'Content Generator'];
       const tool = tools[i % tools.length];
-      updateNodeStatus(node.id, { activeTool: tool, progress: 20 });
+      updateNodeStatus(node.id, { activeTool: tool, progress: 22 });
       addLog(node.agent.name, `Using tool: ${tool}`, 'tool');
 
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 4000));
 
       // Data collection
-      updateNodeStatus(node.id, { progress: 35 });
-      addLog(node.agent.name, `Collecting data...`, 'info');
+      updateNodeStatus(node.id, { progress: 32 });
+      addLog(node.agent.name, `Collecting and synthesizing data...`, 'info');
 
-      await new Promise(resolve => setTimeout(resolve, 3500));
+      await new Promise(resolve => setTimeout(resolve, 4500));
 
       // Analysis phase
-      updateNodeStatus(node.id, { progress: 50 });
+      updateNodeStatus(node.id, { progress: 45 });
       addLog(node.agent.name, `Analyzing results...`, 'info');
 
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 4000));
 
       // Human-in-the-loop pause for 2nd agent (Color Oracle / Aurora)
       if (i === 1) {
@@ -139,6 +225,24 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
 
         // Simulate CEO response after a few seconds (hardcoded for demo)
         addLog('System', `CEO responded: "Prioritize Authority"`, 'complete');
+
+        // Add preference to Knowledge Graph
+        addPreferenceToGraph(
+          node.agent.id,
+          node.agent.name,
+          'Authority over Innovation',
+          'For executive branding, prioritize authority and credibility over innovation and disruption'
+        );
+
+        // Add learned preference to agent
+        addLearnedPreference(
+          node.agent.id,
+          teamId,
+          'Strategic Direction',
+          'Prioritize Authority over Innovation for executive branding',
+          95
+        );
+
         addLog(node.agent.name, `Proceeding with authority-focused approach`, 'info');
 
         // Resume execution
@@ -148,28 +252,64 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
       }
 
       // Refinement
-      updateNodeStatus(node.id, { progress: 65 });
+      updateNodeStatus(node.id, { progress: 62 });
       addLog(node.agent.name, `Refining output...`, 'info');
+
+      await new Promise(resolve => setTimeout(resolve, 3500));
+
+      // Quality check
+      updateNodeStatus(node.id, { progress: 72 });
+      addLog(node.agent.name, `Running quality checks...`, 'info');
+
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Output generation
+      updateNodeStatus(node.id, { progress: 82 });
+      addLog(node.agent.name, `Generating deliverable...`, 'output');
+
+      await new Promise(resolve => setTimeout(resolve, 3500));
+
+      // File output to Vault
+      const outputs = [
+        { name: 'Market_Analysis_Report.pdf', path: '/Workflow Outputs/Market_Analysis_Report.pdf' },
+        { name: 'Color_Strategy_Document.pdf', path: '/Workflow Outputs/Color_Strategy_Document.pdf' },
+        { name: 'Brand_Manifesto.docx', path: '/Workflow Outputs/Brand_Manifesto.docx' },
+      ];
+      updateNodeStatus(node.id, { progress: 92 });
+      addLog(node.agent.name, `Saved ${outputs[i].name} to ${outputs[i].path}`, 'file');
 
       await new Promise(resolve => setTimeout(resolve, 2500));
 
-      // Quality check
-      updateNodeStatus(node.id, { progress: 80 });
-      addLog(node.agent.name, `Running quality checks...`, 'info');
-
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Output generation
-      updateNodeStatus(node.id, { progress: 90 });
-      addLog(node.agent.name, `Generated deliverable`, 'output');
+      // Final validation
+      updateNodeStatus(node.id, { progress: 97 });
+      addLog(node.agent.name, `Validating deliverable integrity...`, 'info');
 
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Complete
       updateNodeStatus(node.id, { status: 'completed', progress: 100, activeTool: undefined });
-      addLog(node.agent.name, `Completed successfully`, 'complete');
+      addLog(node.agent.name, `Work completed successfully`, 'complete');
 
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Award XP and update agent (Knowledge Harvest)
+      const xpGained = 50;
+      addExperience(node.agent.id, teamId, xpGained);
+
+      // Update tasks completed count
+      updateHiredAgent(node.agent.id, teamId, {
+        tasksCompleted: (node.agent as any).tasksCompleted + 1,
+      });
+
+      addLog('System', `${node.agent.name} gained ${xpGained} XP`, 'complete');
+
+      // Special: Color Oracle gains specialization after human-in-the-loop learning
+      if (i === 1) {
+        updateHiredAgent(node.agent.id, teamId, {
+          specialization: 'Executive Branding',
+        });
+        addLog('System', `${node.agent.name} specialized in: Executive Branding`, 'complete');
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
     // All nodes completed - update task status in backend
@@ -363,6 +503,21 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
               );
             })}
           </div>
+
+          {/* Vault Indicator */}
+          <div className="flex justify-center mt-12 pb-4">
+            <div className="px-6 py-4 bg-slate-900/50 border border-slate-700 rounded-lg flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#FDE047]/10 border border-[#FDE047]/30 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-[#FDE047]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-white">Vault Storage</div>
+                <div className="text-xs text-slate-500">File outputs saved here</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Data Preview Panel */}
@@ -418,8 +573,10 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
                 className={`flex-shrink-0 font-medium ${
                   log.type === 'tool'
                     ? 'text-[#6366F1]'
-                    : log.type === 'output'
+                    : log.type === 'file'
                     ? 'text-[#FDE047]'
+                    : log.type === 'output'
+                    ? 'text-[#EC4899]'
                     : log.type === 'complete'
                     ? 'text-green-500'
                     : 'text-slate-400'
@@ -427,7 +584,7 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
               >
                 [{log.agent}]
               </span>
-              <span className="text-slate-400 flex-1">{log.message}</span>
+              <span className={`flex-1 ${log.type === 'file' ? 'text-[#FDE047]' : 'text-slate-400'}`}>{log.message}</span>
             </div>
           ))}
         </div>

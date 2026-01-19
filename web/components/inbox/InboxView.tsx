@@ -17,6 +17,10 @@ interface SpecialistAgent {
   isOnline: boolean;
   lastMessage?: string;
   lastMessageTime?: Date;
+  evolutionNotification?: {
+    type: 'xp' | 'specialization' | 'level_up';
+    message: string;
+  };
 }
 
 interface InboxViewProps {
@@ -176,6 +180,26 @@ export default function InboxView({ teamId }: InboxViewProps) {
         lastMessage: 'Ready to assist you',
       };
 
+      // Check for recent evolution (XP gain or specialization update)
+      let evolutionNotification: { type: 'xp' | 'specialization' | 'level_up'; message: string } | undefined;
+
+      // Check if specialization was recently updated (different from default)
+      const defaultSpecialty = specialistMap[agent.id]?.specialty || agent.specialization;
+      if (agent.specialization !== defaultSpecialty && agent.specialization) {
+        evolutionNotification = {
+          type: 'specialization',
+          message: `Specialized in: ${agent.specialization}`,
+        };
+      }
+
+      // Check for high XP (50+ means recent gain)
+      if (agent.experience >= 50 && !evolutionNotification) {
+        evolutionNotification = {
+          type: 'xp',
+          message: `Gained ${agent.experience} XP`,
+        };
+      }
+
       return {
         id: agent.id,
         name: agent.name,
@@ -187,6 +211,7 @@ export default function InboxView({ teamId }: InboxViewProps) {
         isOnline: agent.isOnline,
         lastMessage: specialistData.lastMessage,
         lastMessageTime: new Date(Date.now() - Math.random() * 60 * 60 * 1000), // Random time within last hour
+        evolutionNotification,
       };
     });
 
@@ -297,7 +322,24 @@ export default function InboxView({ teamId }: InboxViewProps) {
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mb-1 truncate">{specialist.role}</p>
-                  {specialist.lastMessage && (
+
+                  {/* Evolution Notification */}
+                  {specialist.evolutionNotification && (
+                    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium mb-1 ${
+                      specialist.evolutionNotification.type === 'specialization'
+                        ? 'bg-[#FDE047]/20 text-[#FDE047] border border-[#FDE047]/30'
+                        : specialist.evolutionNotification.type === 'level_up'
+                        ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                        : 'bg-[#6366F1]/20 text-[#6366F1] border border-[#6366F1]/30'
+                    }`}>
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                      <span>{specialist.evolutionNotification.message}</span>
+                    </div>
+                  )}
+
+                  {specialist.lastMessage && !specialist.evolutionNotification && (
                     <p className="text-xs text-slate-600 truncate">
                       {specialist.lastMessage}
                     </p>
