@@ -7,6 +7,7 @@ import CustomTeamBuilder from './CustomTeamBuilder';
 import HiringReveal from './HiringReveal';
 import OperationFlow from '../operations/OperationFlow';
 import { type Agent } from '@/lib/agents';
+import { createTeam } from '@/lib/teams';
 
 type OnboardingStep = 'welcome' | 'department' | 'custom_team' | 'hiring' | 'operation';
 
@@ -23,9 +24,25 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setStep('department');
   };
 
-  const handleDepartmentSelected = (dept: string, deptAgents?: Agent[]) => {
+  const handleDepartmentSelected = async (dept: string, deptAgents?: Agent[]) => {
     setSelectedDepartment(dept);
-    // If department agents are provided, use them as custom team
+
+    // If Personal Branding is selected, create team and go directly to HQ
+    if (dept === 'personal-branding') {
+      const newTeam = await createTeam({
+        name: 'Personal Branding',
+        department: 'personal-branding',
+        icon: '✨',
+        color: '#EC4899',
+      });
+      // Mark as new team for HQ to detect
+      localStorage.setItem('newTeamId', newTeam.id.toString());
+      localStorage.setItem('isNewTeam', 'true');
+      onComplete();
+      return;
+    }
+
+    // For other departments, use the regular hiring flow
     if (deptAgents && deptAgents.length > 0) {
       setCustomTeam(deptAgents);
     }

@@ -57,8 +57,11 @@ export default function ManagerChat({ teamId }: ManagerChatProps) {
           ]);
         }
       } catch (err: any) {
-        console.error('Failed to load chat history:', err);
-        // Show welcome message on error
+        // Suppress "Team not found" error for new teams - this is expected
+        if (!err.message?.includes('Team not found')) {
+          console.error('Failed to load chat history:', err);
+        }
+        // Show welcome message on error (including "Team not found" for new teams)
         setMessages([
           {
             id: 1,
@@ -67,6 +70,8 @@ export default function ManagerChat({ teamId }: ManagerChatProps) {
             timestamp: new Date(),
           },
         ]);
+        // Clear the error so user can still use the chat
+        setError(null);
       } finally {
         setIsLoadingHistory(false);
       }

@@ -41,6 +41,18 @@ export async function apiRequest<T = any>(
     throw new Error(error.detail || `HTTP ${response.status}`);
   }
 
+  // Handle responses with no content (like DELETE requests)
+  const contentLength = response.headers.get('Content-Length');
+  if (response.status === 204 || contentLength === '0') {
+    return undefined;
+  }
+
+  // Check if response has content
+  const contentType = response.headers.get('Content-Type');
+  if (contentType && contentType.includes('application/json')) {
+    return response.json();
+  }
+
   return response.json();
 }
 

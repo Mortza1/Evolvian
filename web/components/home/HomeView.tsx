@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { getTeams, getGlobalMetrics, getTeamActivity, Team, TeamActivity, setActiveTeamId, syncTeamsFromBackend } from '@/lib/teams';
+import { teamAPI } from '@/lib/api';
 import CreateTeamModal from './CreateTeamModal';
+import PersonalBrandingFlow from '../personal-branding/PersonalBrandingFlow';
+import DeleteTeamModal from './DeleteTeamModal';
 
 interface HomeViewProps {
   onSelectTeam: (teamId: number) => void;
@@ -20,6 +23,9 @@ export default function HomeView({ onSelectTeam }: HomeViewProps) {
     activeTeams: 0,
   });
   const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
+  const [personalBrandingTeam, setPersonalBrandingTeam] = useState<Team | null>(null);
+  const [showPersonalBrandingFlow, setShowPersonalBrandingFlow] = useState(false);
+  const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
 
   useEffect(() => {
     loadTeams();
@@ -36,12 +42,80 @@ export default function HomeView({ onSelectTeam }: HomeViewProps) {
     onSelectTeam(teamId);
   };
 
-  const handleTeamCreated = (team: Team) => {
+  const handleTeamCreated = (team: Team, isPersonalBranding?: boolean) => {
     // Team list is already synced in createTeam function
     // Just reload from cache
     setTeams(getTeams());
     setMetrics(getGlobalMetrics());
+
+    // If personal branding, trigger the special flow
+    if (isPersonalBranding) {
+      setPersonalBrandingTeam(team);
+      setShowPersonalBrandingFlow(true);
+    }
   };
+
+  const handlePersonalBrandingComplete = async () => {
+    setShowPersonalBrandingFlow(false);
+
+    // Reload teams to get updated stats
+    await loadTeams();
+
+    if (personalBrandingTeam) {
+      handleSelectTeam(personalBrandingTeam.id);
+    }
+  };
+
+  const handleDeleteTeam = async (team: Team) => {
+    try {
+      console.log('Attempting to delete team with ID:', team.id);
+
+      // Try to delete from backend
+      try {
+        await teamAPI.deleteTeam(team.id);
+      } catch (backendError) {
+        console.warn('Backend delete failed, team may only exist locally:', backendError);
+        // Continue anyway to clean up localStorage
+      }
+
+      // Clean up localStorage - remove hired agents for this team
+      const hiredAgentsKey = `hired_agents_${team.id}`;
+      localStorage.removeItem(hiredAgentsKey);
+
+      // Also remove from teams cache manually if backend delete failed
+      const teamsCache = localStorage.getItem('teams_cache');
+      if (teamsCache) {
+        try {
+          const teams = JSON.parse(teamsCache);
+          const filtered = teams.filter((t: Team) => t.id !== team.id);
+          localStorage.setItem('teams_cache', JSON.stringify(filtered));
+        } catch (e) {
+          console.error('Error cleaning teams cache:', e);
+        }
+      }
+
+      // Reload teams
+      await loadTeams();
+
+      // Close modal
+      setTeamToDelete(null);
+    } catch (error) {
+      console.error('Failed to delete team:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to delete team: ${errorMessage}`);
+      setTeamToDelete(null);
+    }
+  };
+
+  // Show Personal Branding flow if active
+  if (showPersonalBrandingFlow && personalBrandingTeam) {
+    return (
+      <PersonalBrandingFlow
+        team={personalBrandingTeam}
+        onComplete={handlePersonalBrandingComplete}
+      />
+    );
+  }
 
   return (
     <div className="h-full overflow-y-auto">
@@ -109,7 +183,12 @@ export default function HomeView({ onSelectTeam }: HomeViewProps) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
           {teams.map((team) => (
-            <TeamCard key={team.id} team={team} onSelect={() => handleSelectTeam(team.id)} />
+            <TeamCard
+              key={team.id}
+              team={team}
+              onSelect={() => handleSelectTeam(team.id)}
+              onDelete={() => setTeamToDelete(team)}
+            />
           ))}
         </div>
 
@@ -139,12 +218,20 @@ export default function HomeView({ onSelectTeam }: HomeViewProps) {
         onClose={() => setIsCreateTeamOpen(false)}
         onCreated={handleTeamCreated}
       />
+
+      {/* Delete Team Modal */}
+      <DeleteTeamModal
+        isOpen={!!teamToDelete}
+        team={teamToDelete}
+        onClose={() => setTeamToDelete(null)}
+        onConfirm={() => teamToDelete && handleDeleteTeam(teamToDelete)}
+      />
     </div>
   );
 }
 
 // Team Card Component
-function TeamCard({ team, onSelect }: { team: Team; onSelect: () => void }) {
+function TeamCard({ team, onSelect, onDelete }: { team: Team; onSelect: () => void; onDelete: () => void }) {
   const [activity, setActivity] = useState<TeamActivity[]>([]);
   const hasUrgentIssues = false; // TODO: Implement urgency detection
 
@@ -181,11 +268,25 @@ function TeamCard({ team, onSelect }: { team: Team; onSelect: () => void }) {
           </div>
         </div>
 
-        {hasUrgentIssues && (
-          <span className="px-2 py-1 bg-[#FDE047]/20 text-[#FDE047] text-xs font-semibold uppercase rounded-md animate-pulse">
-            Urgent
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {hasUrgentIssues && (
+            <span className="px-2 py-1 bg-[#FDE047]/20 text-[#FDE047] text-xs font-semibold uppercase rounded-md animate-pulse">
+              Urgent
+            </span>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="p-2 rounded-lg bg-[#020617]/50 border border-slate-700/50 hover:border-red-500/50 hover:bg-red-500/10 transition-all group/delete"
+            title="Delete team"
+          >
+            <svg className="w-4 h-4 text-slate-400 group-hover/delete:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Stats Grid */}

@@ -161,7 +161,7 @@ export function getHiredAgents(teamId?: string): HiredAgent[] {
   return [];
 }
 
-export function hireAgent(agent: Agent, teamId: string): void {
+export function hireAgent(agent: Agent, teamId: string, options?: { isOnline?: boolean }): void {
   if (typeof window === 'undefined') return;
 
   try {
@@ -173,7 +173,7 @@ export function hireAgent(agent: Agent, teamId: string): void {
       hiredAt: new Date(),
       tasksCompleted: 0,
       accuracy: 85,
-      isOnline: Math.random() > 0.3, // 70% chance of being online
+      isOnline: options?.isOnline !== undefined ? options.isOnline : Math.random() > 0.3, // Default 70% chance of being online
       agentLevel: 1, // Start at level 1 for this team
       experience: 0, // 0 XP at start
       learnedPreferences: [], // No learned preferences yet

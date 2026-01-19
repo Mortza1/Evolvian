@@ -512,23 +512,29 @@ async def manager_chat(
             detail="Team not found"
         )
 
-    # Save user message to database
-    user_message = ChatMessage(
-        team_id=request.team_id,
-        user_id=current_user.id,
-        role="user",
-        content=request.message,
-        context=request.context or {}
-    )
-    db.add(user_message)
-    db.commit()
+    # Save user message to database (skip if it's an initial message)
+    is_initial = request.context and request.context.get("isInitial", False)
+    if not is_initial:
+        user_message = ChatMessage(
+            team_id=request.team_id,
+            user_id=current_user.id,
+            role="user",
+            content=request.message,
+            context=request.context or {}
+        )
+        db.add(user_message)
+        db.commit()
 
     # Get team context
     agents = db.query(Agent).filter(Agent.team_id == request.team_id).all()
     agent_count = len(agents)
 
-    # Build system prompt with team context
-    system_prompt = f"""You are an AI Manager assistant for the Evolvian platform.
+    # Check if a custom system prompt is provided in context (for Aria, etc.)
+    if request.context and "systemPrompt" in request.context:
+        system_prompt = request.context["systemPrompt"]
+    else:
+        # Build default system prompt with team context
+        system_prompt = f"""You are an AI Manager assistant for the Evolvian platform.
 You're helping manage a team called "{team.name}".
 
 Team Information:
@@ -546,21 +552,19 @@ Your role is to:
 
 Be helpful, professional, and concise. Focus on actionable insights."""
 
-    if request.context:
-        system_prompt += f"\n\nAdditional Context:\n{request.context}"
-
     try:
         response = llm_service.simple_chat(
             user_message=request.message,
             system_prompt=system_prompt
         )
 
-        # Save assistant response to database
+        # Save assistant response to database with context
         assistant_message = ChatMessage(
             team_id=request.team_id,
             user_id=current_user.id,
             role="manager",
-            content=response
+            content=response,
+            context=request.context or {}
         )
         db.add(assistant_message)
         db.commit()

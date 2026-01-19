@@ -92,15 +92,15 @@ export default function AlignmentScore({ projectId, teamId, onCommence }: Alignm
   const completedCount = specialists.filter(s => s.status === 'complete').length;
 
   const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-400';
-    if (score >= 50) return 'text-yellow-400';
-    return 'text-red-400';
+    if (score >= 80) return 'text-pink-400';
+    if (score >= 50) return 'text-purple-400';
+    return 'text-pink-300';
   };
 
   const getScoreBgColor = (score: number) => {
-    if (score >= 80) return 'from-green-500 to-emerald-500';
-    if (score >= 50) return 'from-yellow-500 to-amber-500';
-    return 'from-red-500 to-rose-500';
+    if (score >= 80) return 'from-pink-500 via-purple-500 to-pink-500';
+    if (score >= 50) return 'from-purple-500 to-pink-400';
+    return 'from-pink-400 to-purple-400';
   };
 
   const getStatusIcon = (status: string) => {
@@ -139,13 +139,16 @@ export default function AlignmentScore({ projectId, teamId, onCommence }: Alignm
   };
 
   return (
-    <div className="glass rounded-xl overflow-hidden border border-slate-700/50">
+    <div className="glass rounded-xl overflow-hidden border border-pink-500/20 shadow-xl shadow-pink-500/10">
       {/* Header */}
-      <div className="p-6 bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-700/50">
-        <div className="flex items-center justify-between mb-4">
+      <div className="p-6 bg-gradient-to-br from-purple-900/40 via-pink-900/40 to-purple-900/40 border-b border-pink-500/20 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-pink-500/5 via-purple-500/5 to-pink-500/5 animate-pulse"></div>
+        <div className="relative flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-lg font-bold text-white mb-1">Project Alignment Score</h3>
-            <p className="text-sm text-slate-400">
+            <h3 className="text-lg font-bold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
+              Project Alignment Score
+            </h3>
+            <p className="text-sm text-pink-200/70">
               Discovery phase completion - {completedCount}/{specialists.length} specialists ready
             </p>
           </div>
@@ -322,14 +325,17 @@ export default function AlignmentScore({ projectId, teamId, onCommence }: Alignm
             <button
               onClick={onCommence}
               disabled={!canCommence}
-              className={`w-full py-3 px-4 rounded-lg font-semibold transition-all ${
+              className={`group w-full py-4 px-4 rounded-lg font-bold transition-all duration-300 relative overflow-hidden ${
                 canCommence
-                  ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:shadow-lg hover:shadow-green-500/50 hover:scale-[1.02]'
+                  ? 'bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 text-white hover:shadow-2xl hover:shadow-pink-500/50 hover:scale-[1.02] animate-pulse'
                   : 'bg-slate-700 text-slate-500 cursor-not-allowed opacity-50'
               }`}
             >
+              {canCommence && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+              )}
               {canCommence ? (
-                <span className="flex items-center justify-center gap-2">
+                <span className="relative flex items-center justify-center gap-2">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

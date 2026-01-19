@@ -3,7 +3,7 @@
 import { useState } from 'react';
 
 interface AuthPageProps {
-  onAuthSuccess?: () => void;
+  onAuthSuccess?: (email?: string) => void;
 }
 
 const API_URL = 'http://localhost:8000';
@@ -60,9 +60,9 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
       // Store token in localStorage as backup
       localStorage.setItem('access_token', data.access_token);
 
-      // Call the success callback
+      // Call the success callback with email
       if (onAuthSuccess) {
-        onAuthSuccess();
+        onAuthSuccess(email);
       }
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');

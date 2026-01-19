@@ -9,9 +9,10 @@ interface SidebarProps {
   setActiveView: (view: string) => void;
   currentTeam: Team | null;
   onGoHome: () => void;
+  onLogout?: () => void;
 }
 
-export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHome }: SidebarProps) {
+export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHome, onLogout }: SidebarProps) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [isTeamDropdownOpen, setIsTeamDropdownOpen] = useState(false);
   const [inboxBadgeCount, setInboxBadgeCount] = useState(0);
@@ -48,10 +49,9 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
   const navItems = [
     { id: 'hq', label: 'HQ', icon: HQIcon },
     { id: 'inbox', label: 'Inbox', icon: InboxIcon, badge: inboxBadgeCount }, // Badge count for pending specialist questions
+    { id: 'board', label: 'Board', icon: BoardIcon },
     { id: 'office', label: 'Office', icon: UsersIcon },
     { id: 'store', label: 'Store', icon: StoreIcon },
-    { id: 'operations', label: 'Operations', icon: OperationsIcon },
-    { id: 'ledger', label: 'Ledger', icon: LedgerIcon },
     { id: 'vault', label: 'Vault', icon: VaultIcon },
     { id: 'workshop', label: 'Workshop', icon: WorkshopIcon },
   ];
@@ -166,9 +166,20 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
       <div className="flex-1"></div>
 
       {/* Settings */}
-      <button className="p-3 text-slate-400 hover:text-white hover:bg-[#1E293B] rounded-lg transition-all">
+      <button className="p-3 text-slate-400 hover:text-white hover:bg-[#1E293B] rounded-lg transition-all" title="Settings">
         <SettingsIcon className="w-6 h-6" />
       </button>
+
+      {/* Logout */}
+      {onLogout && (
+        <button
+          onClick={onLogout}
+          className="p-3 text-slate-400 hover:text-red-400 hover:bg-[#1E293B] rounded-lg transition-all"
+          title="Logout"
+        >
+          <LogoutIcon className="w-6 h-6" />
+        </button>
+      )}
     </aside>
   );
 }
@@ -186,6 +197,14 @@ function InboxIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+    </svg>
+  );
+}
+
+function BoardIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
     </svg>
   );
 }
@@ -243,6 +262,14 @@ function WorkshopIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+    </svg>
+  );
+}
+
+function LogoutIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
     </svg>
   );
 }

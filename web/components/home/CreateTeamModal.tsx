@@ -6,7 +6,7 @@ import { Team, createTeam } from '@/lib/teams';
 interface CreateTeamModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreated: (team: Team) => void;
+  onCreated: (team: Team, isPersonalBranding?: boolean) => void;
 }
 
 const TEAM_ICONS = ['⚖️', '📢', '🔬', '💰', '🏥', '🎓', '🏭', '🚀', '🎨', '📊', '🔒', '🌍'];
@@ -25,7 +25,11 @@ const TEAM_COLORS = [
   '#84CC16', // Lime
 ];
 
+type ModalStep = 'blueprint' | 'details';
+
 export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTeamModalProps) {
+  const [step, setStep] = useState<ModalStep>('blueprint');
+  const [selectedBlueprint, setSelectedBlueprint] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedIcon, setSelectedIcon] = useState(TEAM_ICONS[0]);
@@ -36,6 +40,39 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const blueprints = [
+    {
+      id: 'personal-branding',
+      name: 'Personal Branding',
+      icon: '✨',
+      color: '#EC4899',
+      description: 'Build an elite personal brand with AI specialists',
+      features: ['Lead Manager', 'Color Psychology', 'Viral Content', 'Typography'],
+    },
+    {
+      id: 'custom',
+      name: 'Custom Team',
+      icon: '🎯',
+      color: '#6366F1',
+      description: 'Build your own team from scratch',
+      features: ['Full Control', 'Choose Specialists', 'Custom Workflow', 'Flexible Budget'],
+    },
+  ];
+
+  const handleBlueprintSelect = (blueprintId: string) => {
+    setSelectedBlueprint(blueprintId);
+
+    // Auto-fill based on blueprint
+    if (blueprintId === 'personal-branding') {
+      setName('Personal Branding');
+      setDescription('Elite personal branding with AI specialists');
+      setSelectedIcon('✨');
+      setSelectedColor('#EC4899');
+    }
+
+    setStep('details');
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) {
@@ -61,9 +98,12 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
       });
 
       if (newTeam) {
-        onCreated(newTeam);
+        const isPersonalBranding = selectedBlueprint === 'personal-branding';
+        onCreated(newTeam, isPersonalBranding);
 
         // Reset form
+        setStep('blueprint');
+        setSelectedBlueprint(null);
         setName('');
         setDescription('');
         setSelectedIcon(TEAM_ICONS[0]);
@@ -90,8 +130,14 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
         <div className="p-6 border-b border-slate-700/50">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-white">Create New Team</h2>
-              <p className="text-sm text-slate-400 mt-1">Set up a new AI workforce for your organization</p>
+              <h2 className="text-2xl font-bold text-white">
+                {step === 'blueprint' ? 'Choose a Blueprint' : 'Create New Team'}
+              </h2>
+              <p className="text-sm text-slate-400 mt-1">
+                {step === 'blueprint'
+                  ? 'Start with a pre-built team or build custom'
+                  : 'Set up your AI workforce'}
+              </p>
             </div>
             <button
               onClick={onClose}
@@ -104,7 +150,48 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
 
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
-          <div className="space-y-6">
+          {step === 'blueprint' ? (
+            <div className="space-y-4">
+              {blueprints.map((blueprint) => (
+                <button
+                  key={blueprint.id}
+                  onClick={() => handleBlueprintSelect(blueprint.id)}
+                  className="w-full p-6 glass rounded-xl border-2 border-slate-700/50 hover:border-slate-600 text-left transition-all group"
+                >
+                  <div className="flex items-start gap-4">
+                    <div
+                      className="w-16 h-16 rounded-xl flex items-center justify-center text-3xl flex-shrink-0"
+                      style={{ backgroundColor: blueprint.color + '30' }}
+                    >
+                      {blueprint.icon}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-white mb-2 group-hover:text-[#6366F1] transition-colors">
+                        {blueprint.name}
+                      </h3>
+                      <p className="text-sm text-slate-400 mb-3">{blueprint.description}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {blueprint.features.map((feature) => (
+                          <span
+                            key={feature}
+                            className="px-2 py-1 bg-[#6366F1]/20 border border-[#6366F1]/30 text-[#6366F1] text-xs rounded-md"
+                          >
+                            {feature}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-slate-600 group-hover:text-slate-400 transition-colors">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-6">
             {/* Team Name */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -227,6 +314,7 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
               </div>
             </div>
           </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -240,20 +328,29 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
 
           <div className="flex items-center justify-between">
             <button
-              onClick={onClose}
+              onClick={() => {
+                if (step === 'details') {
+                  setStep('blueprint');
+                  setError(null);
+                } else {
+                  onClose();
+                }
+              }}
               disabled={isCreating}
               className="px-6 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Cancel
+              {step === 'details' ? 'Back' : 'Cancel'}
             </button>
 
-            <button
-              onClick={handleCreate}
-              disabled={isCreating}
-              className="px-6 py-2.5 bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white font-medium rounded-lg shadow-lg shadow-[#6366F1]/30 hover:shadow-[#6366F1]/50 transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-            >
-              {isCreating ? 'Creating...' : 'Create Team'}
-            </button>
+            {step === 'details' && (
+              <button
+                onClick={handleCreate}
+                disabled={isCreating}
+                className="px-6 py-2.5 bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white font-medium rounded-lg shadow-lg shadow-[#6366F1]/30 hover:shadow-[#6366F1]/50 transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              >
+                {isCreating ? 'Creating...' : 'Create Team'}
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import SpecialistChat from './SpecialistChat';
-import { getHiredAgents, HiredAgent } from '@/lib/agents';
+import EvoChat from './EvoChat';
+import AriaChat from './AriaChat';
+import { getHiredAgents, HiredAgent, hireAgent, Agent } from '@/lib/agents';
 
 interface SpecialistAgent {
   id: string;
@@ -24,44 +26,145 @@ interface InboxViewProps {
 export default function InboxView({ teamId }: InboxViewProps) {
   const [specialists, setSpecialists] = useState<SpecialistAgent[]>([]);
   const [selectedSpecialist, setSelectedSpecialist] = useState<SpecialistAgent | null>(null);
+  const [ariaHired, setAriaHired] = useState(false);
+
+  // Handle specialist selection with localStorage persistence
+  const handleSelectSpecialist = (specialist: SpecialistAgent) => {
+    setSelectedSpecialist(specialist);
+    localStorage.setItem(`selectedSpecialist_${teamId}`, specialist.id);
+  };
+
+  const handleAriaHired = () => {
+    // Set flag to show Aria
+    setAriaHired(true);
+
+    // Create Aria as a hired agent (add to employees)
+    const ariaAgent: Agent = {
+      id: 'aria-manager',
+      name: 'Aria Martinez',
+      role: 'Senior Brand Lead',
+      category: 'Management',
+      specialization: 'Personal Branding & Executive Positioning',
+      description: 'Senior Brand Lead specializing in personal branding for C-suite executives, thought leaders, and entrepreneurs. Expert in team coordination and brand strategy.',
+      model: 'gpt-4',
+      price_per_hour: 85,
+      level: 10,
+      rating: 4.9,
+      total_reviews: 342,
+      creator: 'Evolvian',
+      creator_type: 'official',
+      tools: ['brand_strategy', 'team_management', 'stakeholder_communication'],
+      photo_url: 'https://i.pravatar.cc/150?img=45',
+      tags: ['management', 'branding', 'strategy', 'leadership'],
+    };
+
+    // Add Aria to hired agents list
+    hireAgent(ariaAgent, teamId, { isOnline: true });
+
+    // Create Aria contact
+    const ariaContact: SpecialistAgent = {
+      id: 'aria-manager',
+      name: 'Aria Martinez',
+      role: 'Senior Brand Lead',
+      specialty: 'Personal Branding & Executive Positioning',
+      avatar: '👩‍💼',
+      color: '#EC4899',
+      pendingQuestions: 1,
+      isOnline: true,
+      lastMessage: "Hi CEO, I'm Aria. To start, I've identified we need...",
+      lastMessageTime: new Date(),
+    };
+
+    // Add Aria to specialists and select her
+    setSpecialists(prev => [...prev, ariaContact]);
+
+    // Wait a moment then switch to Aria's chat
+    setTimeout(() => {
+      setSelectedSpecialist(ariaContact);
+      localStorage.setItem(`selectedSpecialist_${teamId}`, ariaContact.id);
+    }, 500);
+  };
 
   useEffect(() => {
     const hiredAgents = getHiredAgents(teamId);
 
-    // Filter for branding specialists only
-    const brandingAgents = hiredAgents.filter(a => a.category === 'Branding');
+    // Check if Aria is hired FOR THIS SPECIFIC TEAM
+    const ariaAgent = hiredAgents.find(a => a.id === 'aria-manager' && a.teamId === teamId);
+    const isAriaHired = !!ariaAgent;
+
+    // Add Evo (General Manager) as first contact
+    const evoContact: SpecialistAgent = {
+      id: 'evo-gm',
+      name: 'Evo',
+      role: 'General Manager AI',
+      specialty: 'Team Coordination & Strategy',
+      avatar: '🧠',
+      color: '#6366F1',
+      pendingQuestions: isAriaHired ? 0 : 1,
+      isOnline: true,
+      lastMessage: isAriaHired
+        ? "Excellent. I'm handing the floor to Aria..."
+        : 'Welcome to your new Branding Department...',
+      lastMessageTime: new Date(),
+    };
+
+    const contacts: SpecialistAgent[] = [evoContact];
+
+    // Add Aria if hired
+    if (isAriaHired) {
+      const ariaContact: SpecialistAgent = {
+        id: 'aria-manager',
+        name: 'Aria Martinez',
+        role: 'Senior Brand Lead',
+        specialty: 'Personal Branding & Executive Positioning',
+        avatar: '👩‍💼',
+        color: '#EC4899',
+        pendingQuestions: 0,
+        isOnline: true,
+        lastMessage: "Let's build your perfect team together...",
+        lastMessageTime: new Date(),
+      };
+      contacts.push(ariaContact);
+      setAriaHired(true);
+    }
+
+    // Filter for all agents (Branding and Management)
+    const teamSpecialists = hiredAgents.filter(a =>
+      (a.category === 'Branding' || a.category === 'Management') &&
+      a.id !== 'aria-manager' // Aria already added above
+    );
 
     // Map hired agents to specialist format
-    const mappedSpecialists: SpecialistAgent[] = brandingAgents.map((agent) => {
+    const mappedSpecialists: SpecialistAgent[] = teamSpecialists.map((agent) => {
       // Map agent IDs to specialist data
       const specialistMap: Record<string, { avatar: string; color: string; specialty: string; defaultQuestions: number; lastMessage: string }> = {
         'agent-031': { // Aurora
           avatar: '🎨',
           color: '#EC4899',
           specialty: 'Color Psychology & Brand Palettes',
-          defaultQuestions: 3,
-          lastMessage: 'I have some questions about your brand palette preferences...',
+          defaultQuestions: 0,
+          lastMessage: 'Ready to collaborate on your brand!',
         },
         'agent-032': { // Atlas
           avatar: '🎯',
           color: '#8B5CF6',
           specialty: 'Positioning & Market Analysis',
-          defaultQuestions: 2,
-          lastMessage: 'Need to clarify your target audience profile...',
+          defaultQuestions: 0,
+          lastMessage: 'Ready to map out your strategy!',
         },
         'agent-033': { // Lexis
           avatar: '✍️',
           color: '#10B981',
           specialty: 'Linguistic Strategy & Nomenclature',
-          defaultQuestions: 1,
-          lastMessage: 'Ready to discuss name direction when you are',
+          defaultQuestions: 0,
+          lastMessage: 'Standing by for naming tasks',
         },
         'agent-034': { // Sage
           avatar: '📝',
           color: '#F59E0B',
           specialty: 'Voice, Tone & Messaging',
           defaultQuestions: 0,
-          lastMessage: 'Standing by for your responses to Color and Strategy',
+          lastMessage: 'Ready to craft your message',
         },
       };
 
@@ -87,14 +190,37 @@ export default function InboxView({ teamId }: InboxViewProps) {
       };
     });
 
-    setSpecialists(mappedSpecialists);
+    // Combine all contacts
+    const allContacts = [...contacts, ...mappedSpecialists];
+    setSpecialists(allContacts);
 
-    // Auto-select first specialist with pending questions
-    const firstPending = mappedSpecialists.find(s => s.pendingQuestions > 0);
-    if (firstPending) {
-      setSelectedSpecialist(firstPending);
+    // Restore selected specialist from localStorage or auto-select
+    if (!selectedSpecialist) {
+      const savedSpecialistId = localStorage.getItem(`selectedSpecialist_${teamId}`);
+
+      if (savedSpecialistId) {
+        // Try to restore the saved selection, but only if it exists in current contacts
+        const savedSpecialist = allContacts.find(s => s.id === savedSpecialistId);
+        if (savedSpecialist) {
+          setSelectedSpecialist(savedSpecialist);
+        } else {
+          // Saved specialist no longer exists (e.g., Aria not hired yet)
+          // Clear the saved selection and auto-select first pending
+          localStorage.removeItem(`selectedSpecialist_${teamId}`);
+          const firstPending = allContacts.find(s => s.pendingQuestions > 0);
+          if (firstPending) {
+            setSelectedSpecialist(firstPending);
+          }
+        }
+      } else {
+        // No saved selection, auto-select first contact with pending questions
+        const firstPending = allContacts.find(s => s.pendingQuestions > 0);
+        if (firstPending) {
+          setSelectedSpecialist(firstPending);
+        }
+      }
     }
-  }, [teamId]);
+  }, [teamId, ariaHired]);
 
   const totalPending = specialists.reduce((sum, s) => sum + s.pendingQuestions, 0);
 
@@ -110,21 +236,23 @@ export default function InboxView({ teamId }: InboxViewProps) {
   };
 
   return (
-    <div className="h-full flex">
+    <div className="h-full w-full flex">
       {/* Left Sidebar - Specialist List */}
-      <div className="w-80 border-r border-slate-800 bg-[#0F172A] flex flex-col">
+      <div className="w-80 border-r border-slate-800 bg-[#0A0A0F] flex flex-col flex-shrink-0">
         {/* Header */}
         <div className="p-6 border-b border-slate-800">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xl font-bold text-white">Specialist Inbox</h2>
+            <h2 className="text-lg font-semibold text-white">
+              Messages
+            </h2>
             {totalPending > 0 && (
-              <span className="px-2 py-1 bg-[#6366F1] text-white text-xs font-bold rounded-full">
-                {totalPending}
+              <span className="px-2.5 py-1 bg-[#6366F1] text-white text-xs font-semibold rounded-md">
+                {totalPending} new
               </span>
             )}
           </div>
-          <p className="text-sm text-slate-400">
-            Direct messages from your consulting team
+          <p className="text-sm text-slate-500">
+            Team conversations
           </p>
         </div>
 
@@ -133,27 +261,26 @@ export default function InboxView({ teamId }: InboxViewProps) {
           {specialists.map((specialist) => (
             <button
               key={specialist.id}
-              onClick={() => setSelectedSpecialist(specialist)}
-              className={`w-full p-4 border-b border-slate-800 hover:bg-slate-800/50 transition-all text-left ${
-                selectedSpecialist?.id === specialist.id ? 'bg-slate-800/70' : ''
+              onClick={() => handleSelectSpecialist(specialist)}
+              className={`w-full p-4 border-b border-slate-800 hover:bg-slate-800/30 transition-all text-left ${
+                selectedSpecialist?.id === specialist.id
+                  ? 'bg-slate-800/50 border-l-2 border-l-[#6366F1]'
+                  : ''
               }`}
             >
               <div className="flex items-start gap-3">
                 {/* Avatar */}
                 <div className="relative flex-shrink-0">
-                  <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-2xl"
-                    style={{ backgroundColor: specialist.color + '30' }}
-                  >
+                  <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-lg border border-slate-700">
                     {specialist.avatar}
                   </div>
                   {/* Online indicator */}
                   {specialist.isOnline && (
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0F172A]"></div>
+                    <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0A0A0F]"></div>
                   )}
                   {/* Pending badge */}
                   {specialist.pendingQuestions > 0 && (
-                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-[#6366F1] text-white text-xs font-bold rounded-full flex items-center justify-center">
+                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-[#6366F1] text-white text-xs font-semibold rounded-full flex items-center justify-center">
                       {specialist.pendingQuestions}
                     </div>
                   )}
@@ -169,9 +296,9 @@ export default function InboxView({ teamId }: InboxViewProps) {
                       {formatTimeAgo(specialist.lastMessageTime)}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400 mb-1">{specialist.role}</p>
+                  <p className="text-xs text-slate-500 mb-1 truncate">{specialist.role}</p>
                   {specialist.lastMessage && (
-                    <p className="text-xs text-slate-500 truncate">
+                    <p className="text-xs text-slate-600 truncate">
                       {specialist.lastMessage}
                     </p>
                   )}
@@ -182,23 +309,29 @@ export default function InboxView({ teamId }: InboxViewProps) {
         </div>
 
         {/* Footer Info */}
-        <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="p-4 border-t border-slate-800 bg-[#0A0A0F]">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>Specialists interview you to ensure perfect execution</span>
+            <span>Team members may ask clarifying questions</span>
           </div>
         </div>
       </div>
 
       {/* Right Side - Chat */}
-      <div className="flex-1 flex flex-col bg-[#020617]">
+      <div className="flex-1 flex flex-col bg-[#020617] min-w-0">
         {selectedSpecialist ? (
-          <SpecialistChat
-            specialist={selectedSpecialist}
-            teamId={teamId}
-          />
+          selectedSpecialist.id === 'evo-gm' ? (
+            <EvoChat teamId={teamId} onAriaHired={handleAriaHired} />
+          ) : selectedSpecialist.id === 'aria-manager' ? (
+            <AriaChat teamId={teamId} userObjective={localStorage.getItem('userObjective') || ''} />
+          ) : (
+            <SpecialistChat
+              specialist={selectedSpecialist}
+              teamId={teamId}
+            />
+          )
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center max-w-md">

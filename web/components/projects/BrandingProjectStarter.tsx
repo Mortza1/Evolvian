@@ -50,30 +50,37 @@ export default function BrandingProjectStarter({
   return (
     <div className="glass rounded-xl border border-slate-700/50 overflow-hidden">
       {/* Header */}
-      <div className="p-6 bg-gradient-to-r from-purple-900/30 to-pink-900/30 border-b border-slate-700/50">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+      <div className="p-6 bg-gradient-to-br from-purple-900/40 via-pink-900/40 to-purple-900/40 border-b border-pink-500/20 relative overflow-hidden">
+        {/* Animated background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-pink-500/10 animate-pulse"></div>
+
+        <div className="relative flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-pink-500/50 animate-pulse">
             <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
             </svg>
           </div>
           <div>
-            <h3 className="text-xl font-bold text-white">Branding Project</h3>
-            <p className="text-sm text-slate-400">Complete brand identity development</p>
+            <h3 className="text-xl font-bold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
+              Branding Project
+            </h3>
+            <p className="text-sm text-pink-200/70">Complete brand identity development</p>
           </div>
         </div>
 
         {/* Progress Bar */}
-        <div className="mt-4">
+        <div className="relative mt-4">
           <div className="flex items-center justify-between text-sm mb-2">
-            <span className="text-slate-300 font-medium">Team Assembly</span>
-            <span className="text-purple-400 font-bold">{hiredCount}/4 Specialists</span>
+            <span className="text-pink-200 font-medium">Team Assembly</span>
+            <span className="text-pink-400 font-bold animate-pulse">{hiredCount}/4 Specialists</span>
           </div>
-          <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+          <div className="h-3 bg-slate-800/50 rounded-full overflow-hidden relative">
             <div
-              className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500"
+              className="h-full bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 transition-all duration-700 ease-out relative"
               style={{ width: `${(hiredCount / 4) * 100}%` }}
-            ></div>
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -85,16 +92,18 @@ export default function BrandingProjectStarter({
           {requiredSpecialists.map((specialist) => (
             <div
               key={specialist.id}
-              className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
+              className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-300 ${
                 specialist.isHired
-                  ? 'bg-green-500/10 border border-green-500/30'
-                  : 'bg-slate-800/50 border border-slate-700/50'
+                  ? 'bg-gradient-to-r from-pink-500/10 to-purple-500/10 border border-pink-500/30 shadow-lg shadow-pink-500/10 animate-pulse'
+                  : 'bg-slate-800/50 border border-slate-700/50 hover:border-pink-500/30 hover:bg-slate-800/70'
               }`}
             >
               {/* Status Icon */}
               <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  specialist.isHired ? 'bg-green-500' : 'bg-slate-700'
+                className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
+                  specialist.isHired
+                    ? 'bg-gradient-to-br from-pink-500 to-purple-600 shadow-lg shadow-pink-500/50 animate-bounce'
+                    : 'bg-slate-700'
                 }`}
               >
                 {specialist.isHired ? (
@@ -116,11 +125,11 @@ export default function BrandingProjectStarter({
 
               {/* Status Badge */}
               {specialist.isHired ? (
-                <span className="text-xs font-semibold text-green-400 px-2 py-1 bg-green-500/20 rounded-full">
-                  Hired
+                <span className="text-xs font-semibold text-pink-300 px-3 py-1 bg-gradient-to-r from-pink-500/30 to-purple-500/30 rounded-full border border-pink-500/30 animate-pulse">
+                  ✓ Hired
                 </span>
               ) : (
-                <span className="text-xs font-semibold text-slate-400 px-2 py-1 bg-slate-700/50 rounded-full">
+                <span className="text-xs font-semibold text-slate-400 px-3 py-1 bg-slate-700/50 rounded-full border border-slate-600">
                   Needed
                 </span>
               )}
@@ -157,22 +166,24 @@ export default function BrandingProjectStarter({
           {allHired ? (
             <button
               onClick={onStartProject}
-              className="w-full py-3 px-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:shadow-lg hover:shadow-purple-500/50 text-white rounded-lg font-semibold transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
+              className="group w-full py-4 px-4 bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 hover:shadow-2xl hover:shadow-pink-500/50 text-white rounded-lg font-bold transition-all hover:scale-[1.02] flex items-center justify-center gap-2 relative overflow-hidden"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+              <svg className="w-5 h-5 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
-              Begin Discovery Interviews
+              <span className="relative">Begin Discovery Interviews</span>
             </button>
           ) : (
             <button
               onClick={onHireSpecialists}
-              className="w-full py-3 px-4 bg-gradient-to-r from-slate-700 to-slate-600 hover:from-purple-600 hover:to-pink-600 border border-slate-600 hover:border-purple-500 text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
+              className="group w-full py-4 px-4 bg-gradient-to-r from-slate-700 to-slate-600 hover:from-pink-600 hover:via-purple-600 hover:to-pink-600 border border-slate-600 hover:border-pink-500 hover:shadow-xl hover:shadow-pink-500/30 text-white rounded-lg font-bold transition-all duration-300 hover:scale-[1.02] flex items-center justify-center gap-2 relative overflow-hidden"
             >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
               </svg>
-              Go to Store - Hire Specialists ({4 - hiredCount} remaining)
+              <span className="relative">Go to Store - Hire Specialists ({4 - hiredCount} remaining)</span>
             </button>
           )}
         </div>
