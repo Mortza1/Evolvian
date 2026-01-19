@@ -82,6 +82,7 @@ export default function BoardView({ teamId }: BoardViewProps) {
             <div className="flex-1 overflow-hidden">
               <WarRoomLive
                 taskId={task.id}
+                teamId={teamId}
                 workflowNodes={workflowNodes}
                 taskDescription={task.description}
               />

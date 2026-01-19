@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { chatAPI } from '@/lib/api';
 
 interface Message {
   id: number;
@@ -9,6 +10,8 @@ interface Message {
   text: string;
   timestamp: Date;
   isLoading?: boolean;
+  isDecisionRequest?: boolean;
+  decisionContext?: any;
 }
 
 interface SpecialistAgent {
@@ -35,8 +38,36 @@ export default function SpecialistChat({ specialist, teamId }: SpecialistChatPro
 
   // Load specialist-specific conversation
   useEffect(() => {
-    // Demo messages based on specialist type
-    const welcomeMessages: Record<string, Message[]> = {
+    const loadMessages = async () => {
+      try {
+        // Try to load real messages from API first
+        const history = await chatAPI.getChatHistory(teamId, 100);
+
+        // Filter messages related to this specialist (from_agent matches)
+        const specialistMessages = history.messages
+          .filter((msg: any) => {
+            // Include all user messages and assistant messages from this agent
+            return msg.role === 'user' || msg.context?.from_agent === specialist.name;
+          })
+          .map((msg: any) => ({
+            id: msg.id,
+            from: msg.role === 'user' ? 'user' : 'specialist',
+            text: msg.content,
+            timestamp: new Date(msg.created_at),
+            isDecisionRequest: msg.context?.type === 'decision_request',
+            decisionContext: msg.context,
+          }));
+
+        if (specialistMessages.length > 0) {
+          setMessages(specialistMessages as Message[]);
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to load chat history:', error);
+      }
+
+      // Fallback to demo messages if no API messages
+      const welcomeMessages: Record<string, Message[]> = {
       'agent-031': [ // Aurora - Color Oracle
         {
           id: 1,
@@ -71,17 +102,26 @@ export default function SpecialistChat({ specialist, teamId }: SpecialistChatPro
       ],
     };
 
-    const specialistMessages = welcomeMessages[specialist.id] || [
-      {
-        id: 1,
-        from: 'specialist',
-        text: `Hello! I'm ${specialist.name}, your **${specialist.role}**.\n\nI specialize in ${specialist.specialty}. I have some questions to help us deliver perfect results. Ready when you are!`,
-        timestamp: new Date(),
-      },
-    ];
+      const specialistMessages = welcomeMessages[specialist.id] || [
+        {
+          id: 1,
+          from: 'specialist',
+          text: `Hello! I'm ${specialist.name}, your **${specialist.role}**.\n\nI specialize in ${specialist.specialty}. I have some questions to help us deliver perfect results. Ready when you are!`,
+          timestamp: new Date(),
+        },
+      ];
 
-    setMessages(specialistMessages as Message[]);
-  }, [specialist]);
+      setMessages(specialistMessages as Message[]);
+    };
+
+    // Initial load
+    loadMessages();
+
+    // Poll for new messages every 2 seconds
+    const interval = setInterval(loadMessages, 2000);
+
+    return () => clearInterval(interval);
+  }, [specialist, teamId]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -90,14 +130,15 @@ export default function SpecialistChat({ specialist, teamId }: SpecialistChatPro
     }
   }, [messages]);
 
-  const handleSend = async (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent, quickReply?: string) => {
     e.preventDefault();
-    if (!message.trim() || isLoading) return;
 
-    const userMessage = message.trim();
+    const userMessage = quickReply || message.trim();
+    if (!userMessage || isLoading) return;
+
     setMessage('');
 
-    // Add user message
+    // Add user message optimistically
     const userMsg: Message = {
       id: Date.now(),
       from: 'user',
@@ -106,35 +147,26 @@ export default function SpecialistChat({ specialist, teamId }: SpecialistChatPro
     };
 
     setMessages((prev) => [...prev, userMsg]);
-
-    // Add loading message
-    const loadingMsg: Message = {
-      id: Date.now() + 1,
-      from: 'specialist',
-      text: '...',
-      timestamp: new Date(),
-      isLoading: true,
-    };
-
-    setMessages((prev) => [...prev, loadingMsg]);
     setIsLoading(true);
 
-    // Simulate specialist response (will be replaced with real API)
-    setTimeout(() => {
-      setMessages((prev) => {
-        const filtered = prev.filter((m) => !m.isLoading);
-        return [
-          ...filtered,
-          {
-            id: Date.now() + 2,
-            from: 'specialist',
-            text: `Thanks for that input! Let me process this and follow up with a refined question based on your response.\n\n*This is a demo response. Real specialist AI will be integrated soon.*`,
-            timestamp: new Date(),
-          },
-        ];
-      });
+    try {
+      // Send message via API
+      await chatAPI.sendManagerMessage(teamId, userMessage);
+
+      // Message will appear via polling, so we don't need to manually add it
+    } catch (error) {
+      console.error('Failed to send message:', error);
+
+      // Show error message
+      setMessages((prev) => [...prev, {
+        id: Date.now() + 1,
+        from: 'specialist',
+        text: 'Sorry, I encountered an error sending your message. Please try again.',
+        timestamp: new Date(),
+      }]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -223,6 +255,37 @@ export default function SpecialistChat({ specialist, teamId }: SpecialistChatPro
                   >
                     {msg.text}
                   </ReactMarkdown>
+                </div>
+              )}
+
+              {/* Quick Reply Buttons for Decision Requests */}
+              {msg.isDecisionRequest && msg.from === 'specialist' && (
+                <div className="mt-3 pt-3 border-t border-slate-700/50 flex flex-col gap-2">
+                  <div className="text-xs text-slate-400 mb-1">Quick Reply:</div>
+                  <button
+                    onClick={async () => {
+                      // Send response
+                      const response = 'Prioritize Authority';
+                      setMessage(response);
+                      const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+                      await handleSend(fakeEvent, response);
+                    }}
+                    className="w-full px-4 py-2 bg-[#6366F1]/20 hover:bg-[#6366F1]/30 border border-[#6366F1]/50 text-[#6366F1] rounded text-sm font-medium transition-all"
+                  >
+                    Prioritize Authority
+                  </button>
+                  <button
+                    onClick={async () => {
+                      // Send response
+                      const response = 'Prioritize Innovation';
+                      setMessage(response);
+                      const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+                      await handleSend(fakeEvent, response);
+                    }}
+                    className="w-full px-4 py-2 bg-[#8B5CF6]/20 hover:bg-[#8B5CF6]/30 border border-[#8B5CF6]/50 text-[#8B5CF6] rounded text-sm font-medium transition-all"
+                  >
+                    Prioritize Innovation
+                  </button>
                 </div>
               )}
             </div>

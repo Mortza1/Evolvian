@@ -6,6 +6,7 @@ import { updateTask } from '@/lib/tasks';
 
 interface WarRoomLiveProps {
   taskId: number;
+  teamId: string;
   workflowNodes: {
     id: string;
     agent: HiredAgent;
@@ -25,9 +26,10 @@ interface LogEntry {
 
 interface NodeStatus {
   nodeId: string;
-  status: 'pending' | 'active' | 'completed';
+  status: 'pending' | 'active' | 'completed' | 'waiting';
   activeTool?: string;
   progress?: number;
+  waitingReason?: string;
 }
 
 interface IntermediateData {
@@ -39,7 +41,7 @@ interface IntermediateData {
   }[];
 }
 
-export default function WarRoomLive({ taskId, workflowNodes, taskDescription }: WarRoomLiveProps) {
+export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescription }: WarRoomLiveProps) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [nodeStatuses, setNodeStatuses] = useState<NodeStatus[]>([]);
   const [selectedConnection, setSelectedConnection] = useState<{ from: number; to: number } | null>(null);
@@ -121,6 +123,29 @@ export default function WarRoomLive({ taskId, workflowNodes, taskDescription }: 
       addLog(node.agent.name, `Analyzing results...`, 'info');
 
       await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Human-in-the-loop pause for 2nd agent (Color Oracle / Aurora)
+      if (i === 1) {
+        // Pause for decision
+        updateNodeStatus(node.id, { status: 'waiting', progress: 50 });
+        addLog(node.agent.name, `Needs CEO decision on strategic direction...`, 'info');
+
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Show the question in logs
+        addLog('System', `Inbox notification sent to CEO`, 'info');
+
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        // Simulate CEO response after a few seconds (hardcoded for demo)
+        addLog('System', `CEO responded: "Prioritize Authority"`, 'complete');
+        addLog(node.agent.name, `Proceeding with authority-focused approach`, 'info');
+
+        // Resume execution
+        updateNodeStatus(node.id, { status: 'active', progress: 50 });
+
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
 
       // Refinement
       updateNodeStatus(node.id, { progress: 65 });
@@ -219,34 +244,36 @@ export default function WarRoomLive({ taskId, workflowNodes, taskDescription }: 
               const nodeColor = colors[idx % colors.length];
               const isActive = nodeStatus?.status === 'active';
               const isCompleted = nodeStatus?.status === 'completed';
+              const isWaiting = nodeStatus?.status === 'waiting';
+              const displayColor = isWaiting ? '#F59E0B' : nodeColor; // Amber for waiting
 
               return (
                 <div key={node.id} className="flex items-center">
                   {/* Node */}
                   <div className="relative">
-                    {/* Pulsing glow for active node */}
-                    {isActive && (
+                    {/* Pulsing glow for active or waiting node */}
+                    {(isActive || isWaiting) && (
                       <div
                         className="absolute -inset-4 rounded-lg blur-2xl opacity-40 animate-pulse"
-                        style={{ backgroundColor: nodeColor }}
+                        style={{ backgroundColor: displayColor }}
                       ></div>
                     )}
 
                     {/* Node card */}
                     <div
                       className={`relative bg-[#0A0A0F] border rounded-lg p-5 w-64 transition-all ${
-                        isActive ? 'border-opacity-100' : 'border-opacity-50'
+                        (isActive || isWaiting) ? 'border-opacity-100' : 'border-opacity-50'
                       } ${isCompleted ? 'opacity-60' : ''}`}
-                      style={{ borderColor: isActive ? nodeColor : '#334155' }}
+                      style={{ borderColor: (isActive || isWaiting) ? displayColor : '#334155' }}
                     >
                       {/* Order badge */}
                       <div
                         className={`absolute -top-2 -left-2 w-7 h-7 rounded-full flex items-center justify-center text-white font-semibold text-sm ${
                           isCompleted ? 'bg-slate-700' : ''
                         }`}
-                        style={{ backgroundColor: isCompleted ? undefined : nodeColor }}
+                        style={{ backgroundColor: isCompleted ? undefined : displayColor }}
                       >
-                        {isCompleted ? '✓' : node.order}
+                        {isCompleted ? '✓' : isWaiting ? '⏸' : node.order}
                       </div>
 
                       {/* Agent Photo */}
@@ -255,9 +282,9 @@ export default function WarRoomLive({ taskId, workflowNodes, taskDescription }: 
                           src={node.agent.photo_url}
                           alt={node.agent.name}
                           className={`w-16 h-16 rounded-full object-cover mx-auto border-2 ${
-                            isActive ? 'ring-2 ring-offset-2 ring-offset-[#0A0A0F]' : ''
+                            (isActive || isWaiting) ? 'ring-2 ring-offset-2 ring-offset-[#0A0A0F]' : ''
                           }`}
-                          style={{ borderColor: isActive ? nodeColor : '#334155', ringColor: isActive ? nodeColor : undefined }}
+                          style={{ borderColor: (isActive || isWaiting) ? displayColor : '#334155', ringColor: (isActive || isWaiting) ? displayColor : undefined }}
                         />
                       </div>
 
@@ -280,6 +307,14 @@ export default function WarRoomLive({ taskId, workflowNodes, taskDescription }: 
                         </div>
                       )}
 
+                      {/* Waiting indicator */}
+                      {isWaiting && (
+                        <div className="flex items-center justify-center gap-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded mb-3">
+                          <div className="w-3 h-3 bg-amber-500 rounded-full animate-pulse"></div>
+                          <span className="text-xs text-amber-500 font-medium">Awaiting Decision</span>
+                        </div>
+                      )}
+
                       {/* Progress bar */}
                       {isActive && nodeStatus?.progress !== undefined && (
                         <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
@@ -297,6 +332,7 @@ export default function WarRoomLive({ taskId, workflowNodes, taskDescription }: 
                       <div className="mt-3 pt-3 border-t border-slate-800">
                         <div className="text-xs text-center">
                           {isCompleted && <span className="text-green-500">Completed</span>}
+                          {isWaiting && <span className="text-amber-500">Waiting for Input</span>}
                           {isActive && <span className="text-[#6366F1]">In Progress</span>}
                           {nodeStatus?.status === 'pending' && <span className="text-slate-500">Pending</span>}
                         </div>
