@@ -16,6 +16,7 @@ import WorkshopView from '../workshop/WorkshopView';
 import HomeView from '../home/HomeView';
 import InboxView from '../inbox/InboxView';
 import OperationsView from './views/OperationsView';
+import BillingView from './views/BillingView';
 import { getActiveTeam, setActiveTeamId, syncTeamsFromBackend, Team } from '@/lib/teams';
 
 interface DashboardProps {
@@ -117,6 +118,7 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
           vault: 'Vault',
           workshop: 'Workshop',
           'war-room': 'Execution Theatre',
+          billing: 'Billing',
         };
         items.push({
           label: viewLabels[activeView] || activeView,
@@ -130,7 +132,10 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
   return (
     <div className="min-h-screen w-full bg-[#020617] flex flex-col">
       {/* Corporate Status Bar */}
-      <CorporateStatusBar teamId={currentTeam?.id.toString()} />
+      <CorporateStatusBar
+        teamId={currentTeam?.id.toString()}
+        onNavigateToBilling={() => setActiveView('billing')}
+      />
 
       {/* Main Layout */}
       <div className="flex flex-1 overflow-hidden">
@@ -145,8 +150,8 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
 
         {/* Main Workspace */}
         <main className="flex-1 overflow-y-auto flex flex-col">
-          {/* Breadcrumb Navigation - Show when not on home */}
-          {activeView !== 'home' && activeView !== 'inbox' && (
+          {/* Breadcrumb Navigation - Show when not on home, inbox, or billing */}
+          {activeView !== 'home' && activeView !== 'inbox' && activeView !== 'billing' && (
             <div className="bg-[#020617]/50 border-b border-slate-800 px-6 py-3">
               <Breadcrumb items={getBreadcrumbItems()} />
             </div>
@@ -159,8 +164,18 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
             </div>
           )}
 
+          {/* Billing gets full height without padding */}
+          {activeView === 'billing' && currentTeam && (
+            <div className="flex-1 overflow-hidden">
+              <BillingView
+                totalSpend={currentTeam.stats.spendThisMonth * 12} // Mock total spend
+                thisMonthSpend={currentTeam.stats.spendThisMonth}
+              />
+            </div>
+          )}
+
           {/* Other views get padding wrapper */}
-          {activeView !== 'inbox' && (
+          {activeView !== 'inbox' && activeView !== 'billing' && (
             <div className="p-6">
               {activeView === 'home' && <HomeView onSelectTeam={handleSelectTeam} />}
 
@@ -264,8 +279,8 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
           )}
         </main>
 
-        {/* Right Sidebar - Contextual - Only show when in a team and not in inbox */}
-        {currentTeam && activeView !== 'home' && activeView !== 'inbox' && (
+        {/* Right Sidebar - Contextual - Only show when in a team and not in inbox or billing */}
+        {currentTeam && activeView !== 'home' && activeView !== 'inbox' && activeView !== 'billing' && (
           <aside className="w-80 border-l border-slate-800 bg-[#020617]">
             {/* Manager Chat - Full screen height */}
             <ManagerChat teamId={currentTeam.id.toString()} />
