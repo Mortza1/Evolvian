@@ -170,9 +170,9 @@ export default function SpecialistChat({ specialist, teamId }: SpecialistChatPro
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-[calc(100vh-48px)] flex flex-col">
       {/* Header */}
-      <div className="p-6 border-b border-slate-800 bg-gradient-to-r from-slate-900 to-slate-800">
+      <div className="flex-shrink-0 p-6 border-b border-slate-800 bg-gradient-to-r from-slate-900 to-slate-800">
         <div className="flex items-center gap-4">
           {/* Avatar */}
           <div className="relative">
@@ -206,7 +206,7 @@ export default function SpecialistChat({ specialist, teamId }: SpecialistChatPro
       </div>
 
       {/* Messages */}
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-[#020617]">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-[#020617] min-h-0">
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -293,8 +293,8 @@ export default function SpecialistChat({ specialist, teamId }: SpecialistChatPro
         ))}
       </div>
 
-      {/* Input */}
-      <form onSubmit={handleSend} className="p-6 border-t border-slate-800 bg-slate-900/50">
+      {/* Input - Fixed to bottom */}
+      <form onSubmit={handleSend} className="flex-shrink-0 p-6 border-t border-slate-800 bg-slate-900/50">
         <div className="flex gap-3">
           <input
             type="text"

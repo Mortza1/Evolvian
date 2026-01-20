@@ -349,7 +349,7 @@ Parse keywords from their objective (e.g., "high-end", "personal brand", "AI con
         onHireAria={handleAriaHired}
         teamId={teamId}
       />
-    <div className="h-full flex flex-col bg-[#020617]">
+    <div className="h-[calc(100vh-48px)] flex flex-col bg-[#020617]">
       {/* Header */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-slate-800">
         <div className="flex items-center gap-3">
@@ -367,7 +367,7 @@ Parse keywords from their objective (e.g., "high-end", "personal brand", "AI con
       </div>
 
       {/* Messages */}
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-3 bg-[#020617]">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-3 bg-[#020617] min-h-0">
         {isLoadingHistory ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">

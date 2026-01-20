@@ -31,11 +31,26 @@ export default function InboxView({ teamId }: InboxViewProps) {
   const [specialists, setSpecialists] = useState<SpecialistAgent[]>([]);
   const [selectedSpecialist, setSelectedSpecialist] = useState<SpecialistAgent | null>(null);
   const [ariaHired, setAriaHired] = useState(false);
+  const [readSpecialists, setReadSpecialists] = useState<Set<string>>(new Set());
+
+  // Load read specialists from localStorage
+  useEffect(() => {
+    const storedRead = localStorage.getItem(`readSpecialists_${teamId}`);
+    if (storedRead) {
+      setReadSpecialists(new Set(JSON.parse(storedRead)));
+    }
+  }, [teamId]);
 
   // Handle specialist selection with localStorage persistence
   const handleSelectSpecialist = (specialist: SpecialistAgent) => {
     setSelectedSpecialist(specialist);
     localStorage.setItem(`selectedSpecialist_${teamId}`, specialist.id);
+
+    // Mark as read
+    const newReadSet = new Set(readSpecialists);
+    newReadSet.add(specialist.id);
+    setReadSpecialists(newReadSet);
+    localStorage.setItem(`readSpecialists_${teamId}`, JSON.stringify([...newReadSet]));
   };
 
   const handleAriaHired = () => {
@@ -73,7 +88,7 @@ export default function InboxView({ teamId }: InboxViewProps) {
       specialty: 'Personal Branding & Executive Positioning',
       avatar: '👩‍💼',
       color: '#EC4899',
-      pendingQuestions: 1,
+      pendingQuestions: 0, // Will be auto-selected, so no pending questions
       isOnline: true,
       lastMessage: "Hi CEO, I'm Aria. To start, I've identified we need...",
       lastMessageTime: new Date(),
@@ -86,6 +101,12 @@ export default function InboxView({ teamId }: InboxViewProps) {
     setTimeout(() => {
       setSelectedSpecialist(ariaContact);
       localStorage.setItem(`selectedSpecialist_${teamId}`, ariaContact.id);
+
+      // Mark Aria as read
+      const newReadSet = new Set(readSpecialists);
+      newReadSet.add('aria-manager');
+      setReadSpecialists(newReadSet);
+      localStorage.setItem(`readSpecialists_${teamId}`, JSON.stringify([...newReadSet]));
     }, 500);
   };
 
@@ -97,6 +118,7 @@ export default function InboxView({ teamId }: InboxViewProps) {
     const isAriaHired = !!ariaAgent;
 
     // Add Evo (General Manager) as first contact
+    const evoHasUnread = !isAriaHired && !readSpecialists.has('evo-gm');
     const evoContact: SpecialistAgent = {
       id: 'evo-gm',
       name: 'Evo',
@@ -104,7 +126,7 @@ export default function InboxView({ teamId }: InboxViewProps) {
       specialty: 'Team Coordination & Strategy',
       avatar: '🧠',
       color: '#6366F1',
-      pendingQuestions: isAriaHired ? 0 : 1,
+      pendingQuestions: evoHasUnread ? 1 : 0,
       isOnline: true,
       lastMessage: isAriaHired
         ? "Excellent. I'm handing the floor to Aria..."
@@ -245,7 +267,7 @@ export default function InboxView({ teamId }: InboxViewProps) {
         }
       }
     }
-  }, [teamId, ariaHired]);
+  }, [teamId, ariaHired, readSpecialists]);
 
   const totalPending = specialists.reduce((sum, s) => sum + s.pendingQuestions, 0);
 

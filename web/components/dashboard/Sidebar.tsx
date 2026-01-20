@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { getTeams, getActiveTeam, Team } from '@/lib/teams';
 import { getHiredAgents } from '@/lib/agents';
-import { chatAPI } from '@/lib/api';
 
 interface SidebarProps {
   activeView: string;
@@ -28,60 +27,53 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
       return;
     }
 
-    const checkForDecisionRequests = async () => {
+    const calculateUnreadCount = () => {
       try {
-        // Check chat history for decision_request messages
-        const history = await chatAPI.getChatHistory(currentTeam.id.toString(), 50);
+        const teamId = currentTeam.id.toString();
 
-        // Count messages with type: 'decision_request' that don't have a user response after them
-        let decisionRequestCount = 0;
-        const messages = history.messages;
+        // Get read specialists from localStorage
+        const storedRead = localStorage.getItem(`readSpecialists_${teamId}`);
+        const readSpecialists = storedRead ? new Set(JSON.parse(storedRead)) : new Set();
 
-        for (let i = 0; i < messages.length; i++) {
-          const msg = messages[i];
-          if (msg.context?.type === 'decision_request') {
-            // Check if there's a user message after this one
-            const hasResponse = messages.slice(i + 1).some((m: any) => m.role === 'user');
-            if (!hasResponse) {
-              decisionRequestCount++;
-            }
-          }
+        // Check if Aria is hired
+        const hiredAgents = getHiredAgents(teamId);
+        const ariaAgent = hiredAgents.find(a => a.id === 'aria-manager' && a.teamId === teamId);
+        const isAriaHired = !!ariaAgent;
+
+        let unreadCount = 0;
+
+        // Evo has unread if: Aria is not hired AND Evo hasn't been read
+        if (!isAriaHired && !readSpecialists.has('evo-gm')) {
+          unreadCount++;
         }
 
-        // Also calculate static badge count from hired branding specialists
-        const hiredAgents = getHiredAgents(currentTeam.id.toString());
-        const brandingAgents = hiredAgents.filter(a => a.category === 'Branding');
+        // Aria has unread if: Aria is hired AND Aria hasn't been read
+        if (isAriaHired && !readSpecialists.has('aria-manager')) {
+          unreadCount++;
+        }
 
-        // Pending questions map (same as InboxView)
-        const questionCount: Record<string, number> = {
-          'agent-031': 3, // Aurora
-          'agent-032': 2, // Atlas
-          'agent-033': 1, // Lexis
-          'agent-034': 0, // Sage
-        };
+        // Other specialists currently have no pending questions by default
+        // But we could extend this if needed
 
-        const staticPending = brandingAgents.reduce((sum, agent) => {
-          return sum + (questionCount[agent.id] || 0);
-        }, 0);
-
-        setInboxBadgeCount(staticPending + decisionRequestCount);
+        setInboxBadgeCount(unreadCount);
       } catch (error) {
-        console.error('Failed to check for decision requests:', error);
+        console.error('Failed to calculate unread count:', error);
+        setInboxBadgeCount(0);
       }
     };
 
-    // Initial check
-    checkForDecisionRequests();
+    // Initial calculation
+    calculateUnreadCount();
 
-    // Poll every 3 seconds for new decision requests
-    const interval = setInterval(checkForDecisionRequests, 3000);
+    // Poll every 2 seconds to check for changes
+    const interval = setInterval(calculateUnreadCount, 2000);
 
     return () => clearInterval(interval);
   }, [currentTeam]);
 
   const navItems = [
     { id: 'hq', label: 'HQ', icon: HQIcon },
-    { id: 'inbox', label: 'Inbox', icon: InboxIcon, badge: inboxBadgeCount }, // Badge count for pending specialist questions
+    { id: 'inbox', label: 'Inbox', icon: InboxIcon, badge: inboxBadgeCount }, // Badge count for unread messages
     { id: 'board', label: 'Board', icon: BoardIcon },
     { id: 'office', label: 'Office', icon: UsersIcon },
     { id: 'store', label: 'Store', icon: StoreIcon },

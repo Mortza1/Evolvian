@@ -163,9 +163,9 @@ export default function ManagerChat({ teamId }: ManagerChatProps) {
   };
 
   return (
-    <div className="h-[calc(70vh)] border-b border-slate-800 flex flex-col">
+    <div className="h-[calc(100vh-48px)] flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-slate-800">
+      <div className="flex-shrink-0 p-4 border-b border-slate-800">
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="w-10 h-10 bg-gradient-to-br from-[#6366F1] to-[#818CF8] rounded-full flex items-center justify-center">
@@ -181,7 +181,7 @@ export default function ManagerChat({ teamId }: ManagerChatProps) {
       </div>
 
       {/* Messages */}
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
         {isLoadingHistory ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -247,8 +247,8 @@ export default function ManagerChat({ teamId }: ManagerChatProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <form onSubmit={handleSend} className="p-4 border-t border-slate-800">
+      {/* Input - Fixed to bottom */}
+      <form onSubmit={handleSend} className="flex-shrink-0 p-4 border-t border-slate-800 bg-[#020617]">
         {error && (
           <div className="mb-2 p-2 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400">
             {error}

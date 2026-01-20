@@ -5,7 +5,6 @@ import Sidebar from './Sidebar';
 import Breadcrumb from './Breadcrumb';
 import CorporateStatusBar from './CorporateStatusBar';
 import ManagerChat from './ManagerChat';
-import LivePayroll from './LivePayroll';
 import ActiveOperations from './ActiveOperations';
 import TeamOverview from './TeamOverview';
 import NewOperationModal, { OperationConfig } from './NewOperationModal';
@@ -267,12 +266,9 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
 
         {/* Right Sidebar - Contextual - Only show when in a team and not in inbox */}
         {currentTeam && activeView !== 'home' && activeView !== 'inbox' && (
-          <aside className="w-80 border-l border-slate-800 bg-[#020617] overflow-y-auto">
-            {/* Manager Chat */}
+          <aside className="w-80 border-l border-slate-800 bg-[#020617]">
+            {/* Manager Chat - Full screen height */}
             <ManagerChat teamId={currentTeam.id.toString()} />
-
-            {/* Live Payroll */}
-            <LivePayroll teamId={currentTeam.id.toString()} />
           </aside>
         )}
       </div>
