@@ -32,23 +32,45 @@ export default function GraphVisualizer({
   const canvasRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<NodePosition[]>([]);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [dimensions, setDimensions] = useState({ width: 1600, height: 1000 });
   const animationRef = useRef<number>();
+
+  // Handle resize and initialize dimensions
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (canvasRef.current) {
+        const width = Math.min(canvasRef.current.clientWidth, 3000); // Max cap at 3000px
+        const height = Math.min(canvasRef.current.clientHeight, 2000); // Max cap at 2000px
+        setDimensions({ width, height });
+      }
+    };
+
+    updateDimensions();
+
+    const resizeObserver = new ResizeObserver(updateDimensions);
+    if (canvasRef.current) {
+      resizeObserver.observe(canvasRef.current);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   // Initialize node positions
   useEffect(() => {
-    const width = canvasRef.current?.clientWidth || 800;
-    const height = canvasRef.current?.clientHeight || 600;
+    const { width, height } = dimensions;
 
     const initialNodes: NodePosition[] = graph.nodes.map((node, i) => ({
       ...node,
-      x: width / 2 + Math.random() * 200 - 100,
-      y: height / 2 + Math.random() * 200 - 100,
+      x: width / 2 + Math.random() * 600 - 300,
+      y: height / 2 + Math.random() * 600 - 300,
       vx: 0,
       vy: 0,
     }));
 
     setNodes(initialNodes);
-  }, [graph.nodes]);
+  }, [graph.nodes, dimensions]);
 
   // Simple force-directed layout simulation
   useEffect(() => {
@@ -57,8 +79,7 @@ export default function GraphVisualizer({
     const simulate = () => {
       setNodes((prevNodes) => {
         const newNodes = [...prevNodes];
-        const width = canvasRef.current?.clientWidth || 800;
-        const height = canvasRef.current?.clientHeight || 600;
+        const { width, height } = dimensions;
 
         // Apply forces
         for (let i = 0; i < newNodes.length; i++) {
@@ -71,7 +92,7 @@ export default function GraphVisualizer({
             const dx = newNodes[i].x - newNodes[j].x;
             const dy = newNodes[i].y - newNodes[j].y;
             const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            const force = 5000 / (dist * dist);
+            const force = 10000 / (dist * dist);
             fx += (dx / dist) * force;
             fy += (dy / dist) * force;
           }
@@ -112,8 +133,8 @@ export default function GraphVisualizer({
           newNodes[i].y += newNodes[i].vy;
 
           // Boundary constraints
-          newNodes[i].x = Math.max(50, Math.min(width - 50, newNodes[i].x));
-          newNodes[i].y = Math.max(50, Math.min(height - 50, newNodes[i].y));
+          newNodes[i].x = Math.max(80, Math.min(width - 80, newNodes[i].x));
+          newNodes[i].y = Math.max(80, Math.min(height - 80, newNodes[i].y));
         }
 
         return newNodes;
@@ -129,7 +150,7 @@ export default function GraphVisualizer({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [nodes.length, graph.edges]);
+  }, [nodes.length, graph.edges, dimensions]);
 
   const getConnectedNodes = (nodeId: string): Set<string> => {
     const connected = new Set<string>();
@@ -143,7 +164,7 @@ export default function GraphVisualizer({
   const connectedNodes = hoveredNodeId ? getConnectedNodes(hoveredNodeId) : new Set();
 
   return (
-    <div ref={canvasRef} className="relative w-full h-full bg-[#020617]">
+    <div ref={canvasRef} className="absolute inset-0 w-full h-full bg-[#0B0E14]">
       <svg className="w-full h-full">
         {/* Draw edges */}
         <g>
@@ -194,7 +215,7 @@ export default function GraphVisualizer({
             const isConnected = connectedNodes.has(node.id);
             const isDimmed = hoveredNodeId && !isHovered && !isConnected;
 
-            const radius = isSelected ? 30 : isHovered ? 25 : 20;
+            const radius = isSelected ? 40 : isHovered ? 35 : 28;
             const opacity = isDimmed ? 0.2 : 1;
 
             return (
@@ -232,23 +253,23 @@ export default function GraphVisualizer({
                 {/* Node icon */}
                 <text
                   x={node.x}
-                  y={node.y + 5}
+                  y={node.y + 7}
                   textAnchor="middle"
                   fill="#020617"
-                  fontSize="16"
+                  fontSize="22"
                   fontWeight="bold"
                   className="pointer-events-none select-none"
                 >
-                  {node.type === 'agent' ? '👤' : node.type === 'risk' ? '⚠️' : node.type === 'policy' ? '📋' : node.type === 'document' ? '📄' : node.type === 'decision' ? '✓' : '📍'}
+                  {node.type === 'agent' ? '👤' : node.type === 'risk' ? '⚠️' : node.type === 'policy' ? '📋' : node.type === 'document' ? '📄' : node.type === 'decision' ? '✓' : node.type === 'preference' ? '💡' : node.type === 'concept' ? '🎯' : '📍'}
                 </text>
 
                 {/* Node label */}
                 <text
                   x={node.x}
-                  y={node.y + radius + 15}
+                  y={node.y + radius + 18}
                   textAnchor="middle"
                   fill="#E2E8F0"
-                  fontSize="11"
+                  fontSize="13"
                   fontWeight={isHovered ? 'bold' : 'normal'}
                   className="pointer-events-none select-none"
                   opacity={isDimmed ? 0.3 : 1}

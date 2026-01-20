@@ -82,15 +82,15 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
   ];
 
   return (
-    <aside className="w-20 bg-[#020617] border-r border-slate-800 flex flex-col items-center py-6 gap-4">
+    <aside className="w-20 bg-[#0B0E14] border-r border-[#161B22] flex flex-col items-center py-6 gap-4">
       {/* Logo / Home Button */}
       <button
         onClick={onGoHome}
         className="mb-2 group relative"
         title="Go to Home"
       >
-        <div className="w-10 h-10 bg-gradient-to-br from-[#6366F1] to-[#818CF8] rounded-lg flex items-center justify-center group-hover:shadow-lg group-hover:shadow-[#6366F1]/50 transition-all">
-          <span className="text-white font-bold text-lg">E</span>
+        <div className="w-10 h-10 bg-gradient-to-br from-[#00F5FF] to-[#A3FF12] rounded-lg flex items-center justify-center group-hover:shadow-lg group-hover:shadow-[#00F5FF]/50 transition-all">
+          <span className="text-[#0B0E14] font-bold text-lg">E</span>
         </div>
       </button>
 
@@ -99,7 +99,7 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
         <div className="mb-4 relative">
           <button
             onClick={() => setIsTeamDropdownOpen(!isTeamDropdownOpen)}
-            className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl transition-all hover:ring-2 hover:ring-[#6366F1]"
+            className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl transition-all hover:ring-2 hover:ring-[#00F5FF]"
             style={{ backgroundColor: currentTeam.color + '30' }}
             title={currentTeam.name}
           >
@@ -108,9 +108,9 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
 
           {/* Dropdown Menu */}
           {isTeamDropdownOpen && (
-            <div className="absolute left-20 top-0 ml-2 w-64 glass rounded-xl shadow-xl border border-slate-700/50 py-2 z-50">
-              <div className="px-3 py-2 border-b border-slate-700/50">
-                <div className="text-xs text-slate-500 uppercase tracking-wide">Switch Team</div>
+            <div className="absolute left-20 top-0 ml-2 w-64 glass rounded-xl shadow-xl border border-[#2D3748]/50 py-2 z-50">
+              <div className="px-3 py-2 border-b border-[#2D3748]/50">
+                <div className="text-xs text-slate-600 uppercase tracking-wide">Switch Team</div>
               </div>
               {teams.map((team) => (
                 <button
@@ -120,8 +120,8 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
                     setIsTeamDropdownOpen(false);
                     // Team switching will be handled by parent
                   }}
-                  className={`w-full px-3 py-2 flex items-center gap-3 hover:bg-[#1E293B]/60 transition-all ${
-                    currentTeam.id === team.id ? 'bg-[#1E293B]/40' : ''
+                  className={`w-full px-3 py-2 flex items-center gap-3 hover:bg-[#161B22]/60 transition-all ${
+                    currentTeam.id === team.id ? 'bg-[#161B22]/40' : ''
                   }`}
                 >
                   <div
@@ -131,13 +131,13 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
                     {team.icon}
                   </div>
                   <div className="flex-1 text-left">
-                    <div className="text-sm font-medium text-white">{team.name}</div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-sm font-medium text-[#E2E8F0]">{team.name}</div>
+                    <div className="text-xs text-slate-600">
                       {team.stats.activeAgents} active agents
                     </div>
                   </div>
                   {currentTeam.id === team.id && (
-                    <svg className="w-4 h-4 text-[#6366F1]" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-4 h-4 text-[#00F5FF]" fill="currentColor" viewBox="0 0 20 20">
                       <path
                         fillRule="evenodd"
                         d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -164,15 +164,15 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
               onClick={() => setActiveView(item.id)}
               className={`group relative flex flex-col items-center gap-1 p-3 rounded-lg transition-all ${
                 isActive
-                  ? 'bg-[#6366F1] text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-[#1E293B]'
+                  ? 'bg-[#00F5FF]/10 text-[#00F5FF]'
+                  : 'text-slate-600 hover:text-[#E2E8F0] hover:bg-[#161B22]'
               }`}
               title={item.label}
             >
               <div className="relative">
                 <Icon className="w-6 h-6" />
                 {item.badge && item.badge > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#FFB800] text-[#0B0E14] text-[9px] font-bold rounded-full flex items-center justify-center">
                     {item.badge}
                   </span>
                 )}
@@ -180,7 +180,7 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
               <span className="text-[10px] font-medium">{item.label}</span>
 
               {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-[#6366F1] rounded-r-full -ml-2"></div>
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-[#00F5FF] rounded-r-full -ml-2"></div>
               )}
             </button>
           );
@@ -191,7 +191,7 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
       <div className="flex-1"></div>
 
       {/* Settings */}
-      <button className="p-3 text-slate-400 hover:text-white hover:bg-[#1E293B] rounded-lg transition-all" title="Settings">
+      <button className="p-3 text-slate-600 hover:text-[#E2E8F0] hover:bg-[#161B22] rounded-lg transition-all" title="Settings">
         <SettingsIcon className="w-6 h-6" />
       </button>
 
@@ -199,7 +199,7 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
       {onLogout && (
         <button
           onClick={onLogout}
-          className="p-3 text-slate-400 hover:text-red-400 hover:bg-[#1E293B] rounded-lg transition-all"
+          className="p-3 text-slate-600 hover:text-[#FFB800] hover:bg-[#161B22] rounded-lg transition-all"
           title="Logout"
         >
           <LogoutIcon className="w-6 h-6" />

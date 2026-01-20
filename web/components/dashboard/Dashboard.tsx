@@ -130,7 +130,7 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#020617] flex flex-col">
+    <div className="min-h-screen w-full bg-[#0B0E14] flex flex-col">
       {/* Corporate Status Bar */}
       <CorporateStatusBar
         teamId={currentTeam?.id.toString()}
@@ -149,10 +149,10 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
         />
 
         {/* Main Workspace */}
-        <main className="flex-1 overflow-y-auto flex flex-col">
+        <main className="flex-1 overflow-y-auto flex flex-col bg-[#0B0E14]">
           {/* Breadcrumb Navigation - Show when not on home, inbox, or billing */}
           {activeView !== 'home' && activeView !== 'inbox' && activeView !== 'billing' && (
-            <div className="bg-[#020617]/50 border-b border-slate-800 px-6 py-3">
+            <div className="bg-[#0B0E14]/50 border-b border-[#161B22] px-6 py-3">
               <Breadcrumb items={getBreadcrumbItems()} />
             </div>
           )}
@@ -183,28 +183,28 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
             <div className="max-w-7xl mx-auto space-y-6">
               {/* Quick Stats Overview */}
               <div className="grid grid-cols-4 gap-4">
-                <div className="glass rounded-xl p-4 border border-slate-700/50">
-                  <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Total Agents</div>
-                  <div className="text-3xl font-bold text-white mb-1">{currentTeam.stats.totalAgents}</div>
-                  <div className="text-xs text-[#10B981]">{currentTeam.stats.activeAgents} active</div>
+                <div className="glass rounded-xl p-5 border border-[#2D3748]/50 hover:border-[#A3FF12]/30 transition-all group">
+                  <div className="text-xs text-slate-600 uppercase tracking-[0.1em] mb-2">Total Agents</div>
+                  <div className="text-3xl font-bold text-[#E2E8F0] mb-1 group-hover:text-[#A3FF12] transition-colors">{currentTeam.stats.totalAgents}</div>
+                  <div className="text-xs text-[#A3FF12]">{currentTeam.stats.activeAgents} active</div>
                 </div>
 
-                <div className="glass rounded-xl p-4 border border-slate-700/50">
-                  <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">This Week</div>
-                  <div className="text-3xl font-bold text-white mb-1">{currentTeam.stats.operationsThisWeek}</div>
-                  <div className="text-xs text-slate-400">operations</div>
+                <div className="glass rounded-xl p-5 border border-[#2D3748]/50 hover:border-[#00F5FF]/30 transition-all group">
+                  <div className="text-xs text-slate-600 uppercase tracking-[0.1em] mb-2">This Week</div>
+                  <div className="text-3xl font-bold text-[#E2E8F0] mb-1 group-hover:text-[#00F5FF] transition-colors">{currentTeam.stats.operationsThisWeek}</div>
+                  <div className="text-xs text-slate-600">operations</div>
                 </div>
 
-                <div className="glass rounded-xl p-4 border border-slate-700/50">
-                  <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">This Month</div>
-                  <div className="text-3xl font-bold text-[#FDE047] mb-1">${currentTeam.stats.spendThisMonth.toFixed(0)}</div>
-                  <div className="text-xs text-slate-400">total spend</div>
+                <div className="glass rounded-xl p-5 border border-[#2D3748]/50 hover:border-[#FFB800]/30 transition-all group">
+                  <div className="text-xs text-slate-600 uppercase tracking-[0.1em] mb-2">This Month</div>
+                  <div className="text-3xl font-bold text-[#FFB800] mb-1 group-hover:scale-105 transition-transform">${currentTeam.stats.spendThisMonth.toFixed(0)}</div>
+                  <div className="text-xs text-slate-600">total spend</div>
                 </div>
 
-                <div className="glass rounded-xl p-4 border border-slate-700/50">
-                  <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Avg Cost</div>
-                  <div className="text-3xl font-bold text-white mb-1">${currentTeam.stats.avgOperationCost.toFixed(0)}</div>
-                  <div className="text-xs text-slate-400">per operation</div>
+                <div className="glass rounded-xl p-5 border border-[#2D3748]/50 hover:border-[#00F5FF]/30 transition-all group">
+                  <div className="text-xs text-slate-600 uppercase tracking-[0.1em] mb-2">Avg Cost</div>
+                  <div className="text-3xl font-bold text-[#E2E8F0] mb-1 group-hover:text-[#00F5FF] transition-colors">${currentTeam.stats.avgOperationCost.toFixed(0)}</div>
+                  <div className="text-xs text-slate-600">per operation</div>
                 </div>
               </div>
 
@@ -219,52 +219,6 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
 
                 {/* Right: Active Operations */}
                 <ActiveOperations teamId={currentTeam.id.toString()} />
-              </div>
-
-              {/* Quick Actions */}
-              <div className="glass rounded-xl p-6 border border-slate-700/50">
-                <h3 className="text-lg font-semibold text-white mb-4">Quick Actions</h3>
-                <div className="grid grid-cols-4 gap-3">
-                  <button
-                    onClick={() => handleViewChange('inbox')}
-                    className="p-4 bg-[#020617]/50 border border-slate-700/50 rounded-lg hover:border-[#6366F1] hover:bg-[#6366F1]/10 transition-all group"
-                  >
-                    <svg className="w-6 h-6 text-slate-400 group-hover:text-[#6366F1] mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                    </svg>
-                    <div className="text-sm font-medium text-white">Inbox</div>
-                  </button>
-
-                  <button
-                    onClick={() => handleViewChange('board')}
-                    className="p-4 bg-[#020617]/50 border border-slate-700/50 rounded-lg hover:border-[#6366F1] hover:bg-[#6366F1]/10 transition-all group"
-                  >
-                    <svg className="w-6 h-6 text-slate-400 group-hover:text-[#6366F1] mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
-                    </svg>
-                    <div className="text-sm font-medium text-white">Board</div>
-                  </button>
-
-                  <button
-                    onClick={() => handleViewChange('office')}
-                    className="p-4 bg-[#020617]/50 border border-slate-700/50 rounded-lg hover:border-[#6366F1] hover:bg-[#6366F1]/10 transition-all group"
-                  >
-                    <svg className="w-6 h-6 text-slate-400 group-hover:text-[#6366F1] mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    <div className="text-sm font-medium text-white">Office</div>
-                  </button>
-
-                  <button
-                    onClick={() => handleViewChange('store')}
-                    className="p-4 bg-[#020617]/50 border border-slate-700/50 rounded-lg hover:border-[#6366F1] hover:bg-[#6366F1]/10 transition-all group"
-                  >
-                    <svg className="w-6 h-6 text-slate-400 group-hover:text-[#6366F1] mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                    </svg>
-                    <div className="text-sm font-medium text-white">Store</div>
-                  </button>
-                </div>
               </div>
             </div>
           )}
@@ -281,7 +235,7 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
 
         {/* Right Sidebar - Contextual - Only show when in a team and not in inbox or billing */}
         {currentTeam && activeView !== 'home' && activeView !== 'inbox' && activeView !== 'billing' && (
-          <aside className="w-80 border-l border-slate-800 bg-[#020617]">
+          <aside className="w-80 border-l border-[#161B22] bg-[#0B0E14]">
             {/* Manager Chat - Full screen height */}
             <ManagerChat teamId={currentTeam.id.toString()} />
           </aside>

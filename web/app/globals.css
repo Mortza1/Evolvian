@@ -1,14 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  /* Evolvian Color Palette */
+  /* Neural Midnight Color Palette */
+  --neural-primary: #0B0E14;
+  --neural-surface: #161B22;
+  --neural-accent: #00F5FF;
+  --neural-success: #A3FF12;
+  --neural-alert: #FFB800;
+  --neural-subtle: #2D3748;
+  --neural-foreground: #E2E8F0;
+
+  /* Legacy colors for backward compatibility */
   --ink: #020617;
   --carbon: #1E293B;
   --electric-indigo: #6366F1;
   --soft-gold: #FDE047;
 
-  --background: var(--ink);
-  --foreground: #F1F5F9;
+  --background: var(--neural-primary);
+  --foreground: var(--neural-foreground);
 }
 
 @theme inline {
@@ -18,30 +27,53 @@
   --color-carbon: var(--carbon);
   --color-electric-indigo: var(--electric-indigo);
   --color-soft-gold: var(--soft-gold);
+  --color-neural-primary: var(--neural-primary);
+  --color-neural-surface: var(--neural-surface);
+  --color-neural-accent: var(--neural-accent);
+  --color-neural-success: var(--neural-success);
+  --color-neural-alert: var(--neural-alert);
+  --color-neural-subtle: var(--neural-subtle);
+  --color-neural-foreground: var(--neural-foreground);
   --font-sans: var(--font-inter);
 }
 
 body {
-  background: var(--ink);
-  color: var(--foreground);
+  background: var(--neural-primary);
+  color: var(--neural-foreground);
   font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
   font-feature-settings: 'liga' 1, 'calt' 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Glassmorphism utilities */
+/* Glassmorphism utilities - Neural Midnight */
 .glass {
-  background: rgba(30, 41, 59, 0.6);
+  background: rgba(22, 27, 34, 0.6);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(0, 245, 255, 0.1);
 }
 
 .glass-light {
-  background: rgba(30, 41, 59, 0.4);
+  background: rgba(22, 27, 34, 0.4);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+}
+
+/* Fade in animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out forwards;
 }
 
 /* Subtle glow animation */
@@ -159,4 +191,162 @@ body {
 
 .animate-blink {
   animation: blink 0.8s ease-in-out infinite;
+}
+
+/* Neural Midnight Animations */
+
+/* Rolling digit animation for ticker */
+@keyframes roll-digit {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-100%);
+  }
+}
+
+.animate-roll-digit {
+  animation: roll-digit 0.3s ease-out;
+}
+
+/* Breathing glow for briefing bar */
+@keyframes breathe-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(0, 245, 255, 0.3), 0 0 40px rgba(0, 245, 255, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(0, 245, 255, 0.5), 0 0 60px rgba(0, 245, 255, 0.2);
+  }
+}
+
+.animate-breathe-glow {
+  animation: breathe-glow 3s ease-in-out infinite;
+}
+
+/* Topographical wave for mission cards */
+@keyframes topo-wave {
+  0% {
+    background-position: 0% 0%;
+  }
+  100% {
+    background-position: 100% 100%;
+  }
+}
+
+.animate-topo-wave {
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 10px,
+      rgba(0, 245, 255, 0.03) 10px,
+      rgba(0, 245, 255, 0.03) 20px
+    );
+  background-size: 200% 200%;
+  animation: topo-wave 20s linear infinite;
+}
+
+/* Pulse ripple for agent avatars */
+@keyframes pulse-ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.animate-pulse-ripple {
+  animation: pulse-ripple 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Particle stream */
+@keyframes particle-stream {
+  0% {
+    transform: translateX(0) translateY(0);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100px) translateY(-50px);
+    opacity: 0;
+  }
+}
+
+.animate-particle-stream {
+  animation: particle-stream 2s ease-out infinite;
+}
+
+/* Solidify effect */
+@keyframes solidify {
+  0% {
+    opacity: 0.5;
+    backdrop-filter: blur(8px);
+  }
+  100% {
+    opacity: 1;
+    backdrop-filter: blur(0px);
+    box-shadow: 0 0 20px rgba(163, 255, 18, 0.5);
+  }
+}
+
+.animate-solidify {
+  animation: solidify 0.4s ease-out forwards;
+}
+
+/* Golden shimmer glitch */
+@keyframes shimmer-glitch {
+  0%, 100% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+    transform: translateX(-2px);
+  }
+  20% {
+    opacity: 0.8;
+    transform: translateX(2px);
+  }
+  30% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+}
+
+.animate-shimmer-glitch {
+  animation: shimmer-glitch 3s ease-in-out infinite;
+}
+
+/* Slide in from right */
+@keyframes slide-in-right {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+/* Rotate for geometric shapes */
+@keyframes rotate-geometric {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-rotate-geometric {
+  animation: rotate-geometric 20s linear infinite;
 }

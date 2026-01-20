@@ -124,16 +124,16 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="glass rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0B0E14]/90 backdrop-blur-sm">
+      <div className="glass rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden border border-[#2D3748]/50">
         {/* Header */}
-        <div className="p-6 border-b border-slate-700/50">
+        <div className="p-6 border-b border-[#2D3748]/50">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-white">
+              <h2 className="text-2xl font-bold text-[#E2E8F0]">
                 {step === 'blueprint' ? 'Choose a Blueprint' : 'Create New Team'}
               </h2>
-              <p className="text-sm text-slate-400 mt-1">
+              <p className="text-sm text-slate-600 mt-1">
                 {step === 'blueprint'
                   ? 'Start with a pre-built team or build custom'
                   : 'Set up your AI workforce'}
@@ -141,7 +141,7 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-lg bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white transition-all"
+              className="w-8 h-8 rounded-lg bg-[#161B22] hover:bg-[#2D3748] text-slate-600 hover:text-[#E2E8F0] transition-all"
             >
               ✕
             </button>
@@ -156,7 +156,7 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
                 <button
                   key={blueprint.id}
                   onClick={() => handleBlueprintSelect(blueprint.id)}
-                  className="w-full p-6 glass rounded-xl border-2 border-slate-700/50 hover:border-slate-600 text-left transition-all group"
+                  className="w-full p-6 glass rounded-xl border border-[#2D3748]/50 hover:border-[#00F5FF]/30 text-left transition-all group"
                 >
                   <div className="flex items-start gap-4">
                     <div
@@ -166,22 +166,22 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
                       {blueprint.icon}
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-xl font-bold text-white mb-2 group-hover:text-[#6366F1] transition-colors">
+                      <h3 className="text-xl font-bold text-[#E2E8F0] mb-2 group-hover:text-[#00F5FF] transition-colors">
                         {blueprint.name}
                       </h3>
-                      <p className="text-sm text-slate-400 mb-3">{blueprint.description}</p>
+                      <p className="text-sm text-slate-600 mb-3">{blueprint.description}</p>
                       <div className="flex flex-wrap gap-2">
                         {blueprint.features.map((feature) => (
                           <span
                             key={feature}
-                            className="px-2 py-1 bg-[#6366F1]/20 border border-[#6366F1]/30 text-[#6366F1] text-xs rounded-md"
+                            className="px-2 py-1 bg-[#00F5FF]/10 border border-[#00F5FF]/20 text-[#00F5FF] text-xs rounded-md"
                           >
                             {feature}
                           </span>
                         ))}
                       </div>
                     </div>
-                    <div className="text-slate-600 group-hover:text-slate-400 transition-colors">
+                    <div className="text-slate-600 group-hover:text-[#00F5FF] transition-colors">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
@@ -194,33 +194,33 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
             <div className="space-y-6">
             {/* Team Name */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Team Name <span className="text-red-400">*</span>
+              <label className="block text-sm font-medium text-[#E2E8F0] mb-2">
+                Team Name <span className="text-[#FFB800]">*</span>
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Legal Department"
-                className="w-full px-4 py-3 bg-[#020617]/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#6366F1] focus:border-transparent transition-all"
+                className="w-full px-4 py-3 bg-[#0B0E14]/50 border border-[#2D3748]/50 rounded-lg text-[#E2E8F0] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-[#00F5FF] focus:border-transparent transition-all"
               />
             </div>
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
+              <label className="block text-sm font-medium text-[#E2E8F0] mb-2">Description</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="What will this team focus on?"
                 rows={3}
-                className="w-full px-4 py-3 bg-[#020617]/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#6366F1] focus:border-transparent transition-all resize-none"
+                className="w-full px-4 py-3 bg-[#0B0E14]/50 border border-[#2D3748]/50 rounded-lg text-[#E2E8F0] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-[#00F5FF] focus:border-transparent transition-all resize-none"
               />
             </div>
 
             {/* Icon Selection */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Team Icon</label>
+              <label className="block text-sm font-medium text-[#E2E8F0] mb-2">Team Icon</label>
               <div className="grid grid-cols-6 gap-2">
                 {TEAM_ICONS.map((icon) => (
                   <button
@@ -228,8 +228,8 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
                     onClick={() => setSelectedIcon(icon)}
                     className={`p-3 rounded-lg text-2xl transition-all ${
                       selectedIcon === icon
-                        ? 'bg-[#6366F1] ring-2 ring-[#6366F1] ring-offset-2 ring-offset-[#020617]'
-                        : 'bg-[#020617]/50 hover:bg-[#020617]/70'
+                        ? 'bg-[#00F5FF]/20 border-2 border-[#00F5FF]'
+                        : 'bg-[#0B0E14]/50 border border-[#2D3748]/50 hover:border-[#00F5FF]/30'
                     }`}
                   >
                     {icon}
@@ -240,16 +240,16 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
 
             {/* Color Selection */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Team Color</label>
+              <label className="block text-sm font-medium text-[#E2E8F0] mb-2">Team Color</label>
               <div className="grid grid-cols-6 gap-2">
                 {TEAM_COLORS.map((color) => (
                   <button
                     key={color}
                     onClick={() => setSelectedColor(color)}
-                    className={`w-full h-10 rounded-lg transition-all ${
+                    className={`w-full h-10 rounded-lg transition-all border-2 ${
                       selectedColor === color
-                        ? 'ring-2 ring-white ring-offset-2 ring-offset-[#020617]'
-                        : ''
+                        ? 'border-[#00F5FF] ring-2 ring-[#00F5FF]/30'
+                        : 'border-[#2D3748]/50 hover:border-[#2D3748]'
                     }`}
                     style={{ backgroundColor: color }}
                   />
@@ -258,8 +258,8 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
             </div>
 
             {/* Preview */}
-            <div className="p-4 bg-[#020617]/50 rounded-lg border border-slate-700/50">
-              <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Preview</div>
+            <div className="p-4 bg-[#0B0E14]/50 rounded-lg border border-[#2D3748]/50">
+              <div className="text-xs text-slate-600 uppercase tracking-wide mb-2">Preview</div>
               <div className="flex items-center gap-3">
                 <div
                   className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
@@ -268,48 +268,48 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
                   {selectedIcon}
                 </div>
                 <div>
-                  <div className="text-lg font-semibold text-white">{name || 'Team Name'}</div>
-                  <div className="text-xs text-slate-400">{description || 'Team description'}</div>
+                  <div className="text-lg font-semibold text-[#E2E8F0]">{name || 'Team Name'}</div>
+                  <div className="text-xs text-slate-600">{description || 'Team description'}</div>
                 </div>
               </div>
             </div>
 
             {/* Budget Settings */}
-            <div className="pt-4 border-t border-slate-700/50">
-              <h3 className="text-sm font-semibold text-white mb-3">Budget Settings</h3>
+            <div className="pt-4 border-t border-[#2D3748]/50">
+              <h3 className="text-sm font-semibold text-[#E2E8F0] mb-3">Budget Settings</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-[#E2E8F0] mb-2">
                     Daily Budget Cap
                   </label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600">$</span>
                     <input
                       type="number"
                       value={dailyBudgetCap}
                       onChange={(e) => setDailyBudgetCap(e.target.value)}
                       placeholder="Unlimited"
-                      className="w-full pl-8 pr-4 py-2 bg-[#020617]/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#6366F1]"
+                      className="w-full pl-8 pr-4 py-2 bg-[#0B0E14]/50 border border-[#2D3748]/50 rounded-lg text-[#E2E8F0] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-[#00F5FF]"
                     />
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">Max spend per day</p>
+                  <p className="text-xs text-slate-600 mt-1">Max spend per day</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-[#E2E8F0] mb-2">
                     Approval Threshold
                   </label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600">$</span>
                     <input
                       type="number"
                       value={requireApprovalThreshold}
                       onChange={(e) => setRequireApprovalThreshold(e.target.value)}
                       placeholder="None"
-                      className="w-full pl-8 pr-4 py-2 bg-[#020617]/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#6366F1]"
+                      className="w-full pl-8 pr-4 py-2 bg-[#0B0E14]/50 border border-[#2D3748]/50 rounded-lg text-[#E2E8F0] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-[#00F5FF]"
                     />
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">Require approval if exceeded</p>
+                  <p className="text-xs text-slate-600 mt-1">Require approval if exceeded</p>
                 </div>
               </div>
             </div>
@@ -318,10 +318,10 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-slate-700/50">
+        <div className="p-6 border-t border-[#2D3748]/50">
           {/* Error Message */}
           {error && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+            <div className="mb-4 p-3 bg-[#FFB800]/10 border border-[#FFB800]/30 rounded-lg text-[#FFB800] text-sm">
               {error}
             </div>
           )}
@@ -337,7 +337,7 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
                 }
               }}
               disabled={isCreating}
-              className="px-6 py-2.5 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-2.5 text-slate-600 hover:text-[#E2E8F0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {step === 'details' ? 'Back' : 'Cancel'}
             </button>
@@ -346,7 +346,7 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
               <button
                 onClick={handleCreate}
                 disabled={isCreating}
-                className="px-6 py-2.5 bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white font-medium rounded-lg shadow-lg shadow-[#6366F1]/30 hover:shadow-[#6366F1]/50 transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                className="px-6 py-2.5 bg-gradient-to-r from-[#00F5FF] to-[#A3FF12] text-[#0B0E14] font-semibold rounded-lg shadow-lg shadow-[#00F5FF]/30 hover:shadow-[#00F5FF]/50 transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
                 {isCreating ? 'Creating...' : 'Create Team'}
               </button>

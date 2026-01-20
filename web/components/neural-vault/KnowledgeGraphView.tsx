@@ -69,40 +69,39 @@ export default function KnowledgeGraphView({ teamId }: KnowledgeGraphViewProps) 
   }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="flex-shrink-0 border-b border-slate-800 px-6 py-4">
+    <div className="h-full flex flex-col bg-[#0B0E14]">
+      {/* Compact Header */}
+      <div className="flex-shrink-0 border-b border-[#161B22] px-6 py-3">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-white mb-1">Knowledge Graph</h1>
-            <p className="text-sm text-slate-500">
-              {displayGraph.metadata.totalSize} of structured intelligence
-            </p>
+          <div className="flex items-center gap-6">
+            <h1 className="text-lg font-semibold text-[#E2E8F0]">Knowledge Graph</h1>
+
+            {/* Inline Stats */}
+            <div className="flex items-center gap-4 text-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-600">Nodes:</span>
+                <span className="font-semibold text-[#00F5FF]">{displayGraph.nodes.length}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-600">Connections:</span>
+                <span className="font-semibold text-[#A3FF12]">{displayGraph.edges.length}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-600">Evolutions:</span>
+                <span className="font-semibold text-[#FFB800]">{displayGraph.evolutionHistory.length}</span>
+              </div>
+            </div>
           </div>
 
-          {/* Stats */}
-          <div className="flex items-center gap-6">
-            <div className="text-center">
-              <div className="text-xl font-semibold text-[#06B6D4]">{displayGraph.nodes.length}</div>
-              <div className="text-[10px] text-slate-500 uppercase tracking-wide">Nodes</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-semibold text-[#6366F1]">{displayGraph.edges.length}</div>
-              <div className="text-[10px] text-slate-500 uppercase tracking-wide">Connections</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-semibold text-[#FDE047]">
-                {displayGraph.evolutionHistory.length}
-              </div>
-              <div className="text-[10px] text-slate-500 uppercase tracking-wide">Evolutions</div>
-            </div>
-          </div>
+          <p className="text-xs text-slate-600">
+            {displayGraph.metadata.totalSize} of intelligence
+          </p>
         </div>
       </div>
 
       {/* Main Layout */}
       <div className="flex-1 flex overflow-hidden min-h-0">
-        {/* Left/Center: Graph Visualizer */}
+        {/* Graph Visualizer - Takes most space */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Graph */}
           <div className="flex-1 overflow-hidden relative min-h-0">
@@ -114,8 +113,8 @@ export default function KnowledgeGraphView({ teamId }: KnowledgeGraphViewProps) 
             />
           </div>
 
-          {/* Time Travel Slider */}
-          <div className="flex-shrink-0 p-4 border-t border-slate-800">
+          {/* Time Travel Slider - Compact */}
+          <div className="flex-shrink-0 px-6 py-2 border-t border-[#161B22]">
             <TimeTravelSlider
               graph={fullGraph}
               onDateChange={handleDateChange}
@@ -123,8 +122,8 @@ export default function KnowledgeGraphView({ teamId }: KnowledgeGraphViewProps) 
           </div>
         </div>
 
-        {/* Right: RAG Chat */}
-        <div className="w-96 border-l border-slate-800 bg-slate-900/50 flex flex-col min-h-0">
+        {/* Right: RAG Chat - Smaller */}
+        <div className="w-80 border-l border-[#161B22] bg-[#161B22]/30 flex flex-col min-h-0">
           <RAGChat
             graph={displayGraph}
             onHighlightNodes={handleHighlightNodes}

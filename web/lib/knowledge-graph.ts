@@ -78,282 +78,711 @@ export interface KnowledgeGraph {
   };
 }
 
-// Sample Compliance Knowledge Graph for Demo
+// Personal Branding Knowledge Graph for Demo
 export const DEMO_KNOWLEDGE_GRAPH: KnowledgeGraph = {
   nodes: [
+    // Agents
     {
-      id: 'vendor-acme',
-      type: 'entity',
-      label: 'Acme Corp',
-      description: 'SaaS vendor providing analytics services',
-      metadata: {
-        created: new Date('2024-01-15'),
-        createdBy: 'agent-002',
-        department: 'compliance',
-        confidence: 0.95,
-        operationId: 'op-001',
-      },
-      properties: {
-        category: 'vendor',
-        contractValue: 120000,
-        region: 'EU',
-      },
-    },
-    {
-      id: 'policy-gdpr-art4',
-      type: 'policy',
-      label: 'GDPR Article 4',
-      description: 'Definitions of personal data and processing',
-      metadata: {
-        created: new Date('2024-01-10'),
-        createdBy: 'agent-001',
-        department: 'compliance',
-        confidence: 1.0,
-      },
-      properties: {
-        regulation: 'GDPR',
-        article: '4',
-        jurisdiction: 'EU',
-      },
-    },
-    {
-      id: 'risk-indemnification',
-      type: 'risk',
-      label: 'Indemnification Risk',
-      description: 'Liability cap below $1M threshold',
-      metadata: {
-        created: new Date('2024-01-15'),
-        createdBy: 'agent-001',
-        department: 'compliance',
-        confidence: 0.85,
-        operationId: 'op-001',
-      },
-      properties: {
-        severity: 'high',
-        category: 'financial',
-        amount: 500000,
-      },
-    },
-    {
-      id: 'agent-sarah',
+      id: 'agent-lead-manager',
       type: 'agent',
-      label: 'Sarah Mitchell',
-      description: 'Compliance Auditor - GDPR Specialist',
+      label: 'Elena Rodriguez',
+      description: 'Lead Manager - Brand Strategy Coordinator',
       metadata: {
         created: new Date('2024-01-01'),
         createdBy: 'system',
-        department: 'compliance',
+        department: 'branding',
         confidence: 1.0,
       },
       properties: {
-        role: 'Compliance Auditor',
-        level: 12,
-        specialization: 'GDPR',
+        role: 'Lead Manager',
+        level: 15,
+        specialization: 'Brand Strategy',
       },
     },
     {
-      id: 'doc-acme-contract',
+      id: 'agent-color-psych',
+      type: 'agent',
+      label: 'Marcus Chen',
+      description: 'Color Psychologist - Visual Identity Expert',
+      metadata: {
+        created: new Date('2024-01-01'),
+        createdBy: 'system',
+        department: 'branding',
+        confidence: 1.0,
+      },
+      properties: {
+        role: 'Color Psychologist',
+        level: 12,
+        specialization: 'Color Theory',
+      },
+    },
+    {
+      id: 'agent-typography',
+      type: 'agent',
+      label: 'Sofia Andersson',
+      description: 'Typography Specialist - Font Systems Designer',
+      metadata: {
+        created: new Date('2024-01-01'),
+        createdBy: 'system',
+        department: 'branding',
+        confidence: 1.0,
+      },
+      properties: {
+        role: 'Typography Specialist',
+        level: 11,
+        specialization: 'Font Design',
+      },
+    },
+    {
+      id: 'agent-viral-content',
+      type: 'agent',
+      label: 'Alex Thompson',
+      description: 'Viral Content Creator - Engagement Strategist',
+      metadata: {
+        created: new Date('2024-01-02'),
+        createdBy: 'system',
+        department: 'branding',
+        confidence: 1.0,
+      },
+      properties: {
+        role: 'Viral Content Creator',
+        level: 13,
+        specialization: 'Social Media',
+      },
+    },
+    {
+      id: 'agent-brand-strategist',
+      type: 'agent',
+      label: 'Priya Sharma',
+      description: 'Brand Strategist - Voice & Tone Architect',
+      metadata: {
+        created: new Date('2024-01-02'),
+        createdBy: 'system',
+        department: 'branding',
+        confidence: 1.0,
+      },
+      properties: {
+        role: 'Brand Strategist',
+        level: 14,
+        specialization: 'Brand Voice',
+      },
+    },
+    // Concepts
+    {
+      id: 'concept-color-psychology',
+      type: 'concept',
+      label: 'Color Psychology',
+      description: 'Strategic use of color to evoke emotions and build brand recognition',
+      metadata: {
+        created: new Date('2024-01-03'),
+        createdBy: 'agent-color-psych',
+        department: 'branding',
+        confidence: 0.95,
+      },
+      properties: {
+        category: 'visual-identity',
+        importance: 'high',
+      },
+    },
+    {
+      id: 'concept-typography-system',
+      type: 'concept',
+      label: 'Typography System',
+      description: 'Hierarchical font system for consistent brand communication',
+      metadata: {
+        created: new Date('2024-01-03'),
+        createdBy: 'agent-typography',
+        department: 'branding',
+        confidence: 0.93,
+      },
+      properties: {
+        category: 'visual-identity',
+        importance: 'high',
+      },
+    },
+    {
+      id: 'concept-viral-mechanics',
+      type: 'concept',
+      label: 'Viral Content Strategy',
+      description: 'Framework for creating shareable, engaging content that resonates',
+      metadata: {
+        created: new Date('2024-01-04'),
+        createdBy: 'agent-viral-content',
+        department: 'branding',
+        confidence: 0.88,
+      },
+      properties: {
+        category: 'content-strategy',
+        importance: 'high',
+      },
+    },
+    {
+      id: 'concept-brand-voice',
+      type: 'concept',
+      label: 'Brand Voice',
+      description: 'Consistent personality and tone across all communications',
+      metadata: {
+        created: new Date('2024-01-05'),
+        createdBy: 'agent-brand-strategist',
+        department: 'branding',
+        confidence: 0.92,
+      },
+      properties: {
+        category: 'messaging',
+        importance: 'critical',
+      },
+    },
+    {
+      id: 'concept-consistency',
+      type: 'concept',
+      label: 'Content Consistency',
+      description: 'Unified brand experience across all touchpoints and platforms',
+      metadata: {
+        created: new Date('2024-01-05'),
+        createdBy: 'agent-lead-manager',
+        department: 'branding',
+        confidence: 0.94,
+      },
+      properties: {
+        category: 'strategy',
+        importance: 'critical',
+      },
+    },
+    // Documents
+    {
+      id: 'doc-brand-guidelines',
       type: 'document',
-      label: 'Acme Corp - MSA',
-      description: 'Master Service Agreement with Acme Corp',
+      label: 'Brand Guidelines',
+      description: 'Comprehensive guide to visual identity, voice, and usage standards',
+      metadata: {
+        created: new Date('2024-01-10'),
+        createdBy: 'agent-lead-manager',
+        department: 'branding',
+        confidence: 1.0,
+      },
+      properties: {
+        documentType: 'guidelines',
+        pageCount: 42,
+        version: '1.0',
+      },
+    },
+    {
+      id: 'doc-style-guide',
+      type: 'document',
+      label: 'Visual Style Guide',
+      description: 'Color palettes, typography specs, and design system documentation',
+      metadata: {
+        created: new Date('2024-01-12'),
+        createdBy: 'agent-color-psych',
+        department: 'branding',
+        confidence: 1.0,
+      },
+      properties: {
+        documentType: 'style-guide',
+        pageCount: 28,
+        version: '1.0',
+      },
+    },
+    {
+      id: 'doc-content-calendar',
+      type: 'document',
+      label: 'Content Calendar Q1',
+      description: 'Strategic content schedule for maximum engagement',
       metadata: {
         created: new Date('2024-01-15'),
-        createdBy: 'user',
-        department: 'compliance',
-        confidence: 1.0,
+        createdBy: 'agent-viral-content',
+        department: 'branding',
+        confidence: 0.90,
       },
       properties: {
-        documentType: 'contract',
-        pageCount: 47,
-        signedDate: '2024-01-10',
+        documentType: 'calendar',
+        timeframe: 'Q1 2024',
+        platformCount: 5,
+      },
+    },
+    // Decisions
+    {
+      id: 'decision-color-scheme',
+      type: 'decision',
+      label: 'Neural Midnight Palette',
+      description: 'Approved color scheme: Deep charcoal, electric cyan, neon lime, warm amber',
+      metadata: {
+        created: new Date('2024-01-18'),
+        createdBy: 'agent-color-psych',
+        department: 'branding',
+        confidence: 0.96,
+        operationId: 'op-brand-001',
+      },
+      properties: {
+        approvedBy: 'user',
+        validUntil: '2025-01-18',
+        primaryColors: ['#0B0E14', '#00F5FF', '#A3FF12', '#FFB800'],
       },
     },
     {
-      id: 'decision-german-servers',
+      id: 'decision-typography',
       type: 'decision',
-      label: 'German Servers = Compliant',
-      description: 'EU data hosted on German servers meets GDPR requirements',
+      label: 'Inter + JetBrains Mono',
+      description: 'Typography system: Inter for UI, JetBrains Mono for technical content',
       metadata: {
         created: new Date('2024-01-20'),
-        createdBy: 'agent-001',
-        department: 'compliance',
-        confidence: 0.92,
-        operationId: 'op-002',
+        createdBy: 'agent-typography',
+        department: 'branding',
+        confidence: 0.94,
+        operationId: 'op-brand-002',
       },
       properties: {
         approvedBy: 'user',
         validUntil: '2025-01-20',
+        fonts: ['Inter', 'JetBrains Mono'],
       },
     },
     {
-      id: 'vendor-dataflow',
-      type: 'entity',
-      label: 'DataFlow Systems',
-      description: 'Data processing vendor',
+      id: 'decision-content-pillars',
+      type: 'decision',
+      label: 'Content Pillars',
+      description: 'Focus areas: AI innovation, productivity, behind-the-scenes, success stories',
       metadata: {
-        created: new Date('2024-02-01'),
-        createdBy: 'agent-002',
-        department: 'compliance',
-        confidence: 0.90,
+        created: new Date('2024-01-22'),
+        createdBy: 'agent-brand-strategist',
+        department: 'branding',
+        confidence: 0.91,
+        operationId: 'op-brand-003',
       },
       properties: {
-        category: 'vendor',
-        contractValue: 85000,
-        region: 'EU',
+        approvedBy: 'user',
+        pillars: ['AI Innovation', 'Productivity', 'Behind-the-Scenes', 'Success Stories'],
+      },
+    },
+    // Preferences (learned from user feedback)
+    {
+      id: 'pref-minimal-design',
+      type: 'preference',
+      label: 'Minimal Design',
+      description: 'User prefers clean, minimal interfaces with strategic use of color',
+      metadata: {
+        created: new Date('2024-01-25'),
+        createdBy: 'agent-lead-manager',
+        department: 'branding',
+        confidence: 0.89,
+      },
+      properties: {
+        category: 'design-philosophy',
+        appliedCount: 12,
+        learnedFrom: 'user-feedback',
       },
     },
     {
-      id: 'risk-liability-cap',
-      type: 'risk',
-      label: 'Low Liability Cap - DataFlow',
-      description: 'Liability cap of $750K below threshold',
+      id: 'pref-tech-aesthetic',
+      type: 'preference',
+      label: 'Tech-Forward Aesthetic',
+      description: 'Emphasis on digital, futuristic, tech-savvy visual language',
       metadata: {
-        created: new Date('2024-02-01'),
-        createdBy: 'agent-001',
-        department: 'compliance',
-        confidence: 0.88,
+        created: new Date('2024-01-26'),
+        createdBy: 'agent-color-psych',
+        department: 'branding',
+        confidence: 0.92,
       },
       properties: {
-        severity: 'medium',
-        category: 'financial',
-        amount: 750000,
+        category: 'visual-style',
+        appliedCount: 8,
+        learnedFrom: 'user-feedback',
+      },
+    },
+    {
+      id: 'pref-animation',
+      type: 'preference',
+      label: 'Subtle Animations',
+      description: 'User prefers smooth, purposeful animations (breathe-glow, topo-wave, etc.)',
+      metadata: {
+        created: new Date('2024-01-27'),
+        createdBy: 'agent-typography',
+        department: 'branding',
+        confidence: 0.87,
+      },
+      properties: {
+        category: 'interaction-design',
+        appliedCount: 15,
+        learnedFrom: 'user-feedback',
       },
     },
   ],
   edges: [
+    // Lead Manager coordinates all brand concepts
     {
       id: 'edge-1',
-      source: 'agent-sarah',
-      target: 'risk-indemnification',
+      source: 'agent-lead-manager',
+      target: 'concept-consistency',
       type: 'identified',
-      label: 'identified',
+      label: 'defines',
       metadata: {
-        created: new Date('2024-01-15'),
-        createdBy: 'agent-001',
-        confidence: 0.85,
-        operationId: 'op-001',
-        evidence: 'Clause 7.2: Liability limited to $500,000',
+        created: new Date('2024-01-05'),
+        createdBy: 'agent-lead-manager',
+        confidence: 0.94,
       },
     },
     {
       id: 'edge-2',
-      source: 'risk-indemnification',
-      target: 'doc-acme-contract',
-      type: 'within',
-      label: 'found within',
+      source: 'agent-lead-manager',
+      target: 'doc-brand-guidelines',
+      type: 'references',
+      label: 'authored',
       metadata: {
-        created: new Date('2024-01-15'),
-        createdBy: 'agent-002',
+        created: new Date('2024-01-10'),
+        createdBy: 'agent-lead-manager',
         confidence: 1.0,
-        evidence: 'Page 23, Section 7.2',
       },
     },
+    // Color Psychologist's expertise
     {
       id: 'edge-3',
-      source: 'risk-indemnification',
-      target: 'vendor-acme',
-      type: 'references',
-      label: 'affects',
+      source: 'agent-color-psych',
+      target: 'concept-color-psychology',
+      type: 'identified',
+      label: 'defines',
       metadata: {
-        created: new Date('2024-01-15'),
-        createdBy: 'agent-001',
+        created: new Date('2024-01-03'),
+        createdBy: 'agent-color-psych',
         confidence: 0.95,
       },
     },
     {
       id: 'edge-4',
-      source: 'decision-german-servers',
-      target: 'policy-gdpr-art4',
+      source: 'agent-color-psych',
+      target: 'decision-color-scheme',
       type: 'references',
-      label: 'complies with',
+      label: 'proposed',
       metadata: {
-        created: new Date('2024-01-20'),
-        createdBy: 'agent-001',
-        confidence: 0.92,
-        operationId: 'op-002',
+        created: new Date('2024-01-18'),
+        createdBy: 'agent-color-psych',
+        confidence: 0.96,
+        operationId: 'op-brand-001',
       },
     },
     {
       id: 'edge-5',
-      source: 'decision-german-servers',
-      target: 'agent-sarah',
-      type: 'learned_from',
-      label: 'learned from feedback',
+      source: 'decision-color-scheme',
+      target: 'doc-style-guide',
+      type: 'within',
+      label: 'documented in',
       metadata: {
-        created: new Date('2024-01-20'),
-        createdBy: 'system',
+        created: new Date('2024-01-18'),
+        createdBy: 'agent-color-psych',
         confidence: 1.0,
-        evidence: 'CEO correction in Operation #442',
       },
     },
+    // Typography Specialist's work
     {
       id: 'edge-6',
-      source: 'agent-sarah',
-      target: 'risk-liability-cap',
+      source: 'agent-typography',
+      target: 'concept-typography-system',
       type: 'identified',
-      label: 'identified',
+      label: 'defines',
       metadata: {
-        created: new Date('2024-02-01'),
-        createdBy: 'agent-001',
-        confidence: 0.88,
+        created: new Date('2024-01-03'),
+        createdBy: 'agent-typography',
+        confidence: 0.93,
       },
     },
     {
       id: 'edge-7',
-      source: 'risk-liability-cap',
-      target: 'vendor-dataflow',
+      source: 'agent-typography',
+      target: 'decision-typography',
       type: 'references',
-      label: 'affects',
+      label: 'proposed',
       metadata: {
-        created: new Date('2024-02-01'),
-        createdBy: 'agent-001',
+        created: new Date('2024-01-20'),
+        createdBy: 'agent-typography',
+        confidence: 0.94,
+        operationId: 'op-brand-002',
+      },
+    },
+    {
+      id: 'edge-8',
+      source: 'decision-typography',
+      target: 'doc-style-guide',
+      type: 'within',
+      label: 'documented in',
+      metadata: {
+        created: new Date('2024-01-20'),
+        createdBy: 'agent-typography',
+        confidence: 1.0,
+      },
+    },
+    // Viral Content Creator's strategy
+    {
+      id: 'edge-9',
+      source: 'agent-viral-content',
+      target: 'concept-viral-mechanics',
+      type: 'identified',
+      label: 'defines',
+      metadata: {
+        created: new Date('2024-01-04'),
+        createdBy: 'agent-viral-content',
+        confidence: 0.88,
+      },
+    },
+    {
+      id: 'edge-10',
+      source: 'agent-viral-content',
+      target: 'doc-content-calendar',
+      type: 'references',
+      label: 'authored',
+      metadata: {
+        created: new Date('2024-01-15'),
+        createdBy: 'agent-viral-content',
         confidence: 0.90,
+      },
+    },
+    {
+      id: 'edge-11',
+      source: 'concept-viral-mechanics',
+      target: 'decision-content-pillars',
+      type: 'requires',
+      label: 'informs',
+      metadata: {
+        created: new Date('2024-01-22'),
+        createdBy: 'agent-brand-strategist',
+        confidence: 0.91,
+      },
+    },
+    // Brand Strategist's voice work
+    {
+      id: 'edge-12',
+      source: 'agent-brand-strategist',
+      target: 'concept-brand-voice',
+      type: 'identified',
+      label: 'defines',
+      metadata: {
+        created: new Date('2024-01-05'),
+        createdBy: 'agent-brand-strategist',
+        confidence: 0.92,
+      },
+    },
+    {
+      id: 'edge-13',
+      source: 'agent-brand-strategist',
+      target: 'decision-content-pillars',
+      type: 'references',
+      label: 'proposed',
+      metadata: {
+        created: new Date('2024-01-22'),
+        createdBy: 'agent-brand-strategist',
+        confidence: 0.91,
+        operationId: 'op-brand-003',
+      },
+    },
+    {
+      id: 'edge-14',
+      source: 'concept-brand-voice',
+      target: 'doc-brand-guidelines',
+      type: 'within',
+      label: 'documented in',
+      metadata: {
+        created: new Date('2024-01-10'),
+        createdBy: 'agent-lead-manager',
+        confidence: 1.0,
+      },
+    },
+    // Learned preferences
+    {
+      id: 'edge-15',
+      source: 'agent-lead-manager',
+      target: 'pref-minimal-design',
+      type: 'learned_from',
+      label: 'learned preference',
+      metadata: {
+        created: new Date('2024-01-25'),
+        createdBy: 'system',
+        confidence: 0.89,
+        evidence: 'User feedback: "make it more minimal"',
+      },
+    },
+    {
+      id: 'edge-16',
+      source: 'agent-color-psych',
+      target: 'pref-tech-aesthetic',
+      type: 'learned_from',
+      label: 'learned preference',
+      metadata: {
+        created: new Date('2024-01-26'),
+        createdBy: 'system',
+        confidence: 0.92,
+        evidence: 'User approved Neural Midnight palette',
+      },
+    },
+    {
+      id: 'edge-17',
+      source: 'agent-typography',
+      target: 'pref-animation',
+      type: 'learned_from',
+      label: 'learned preference',
+      metadata: {
+        created: new Date('2024-01-27'),
+        createdBy: 'system',
+        confidence: 0.87,
+        evidence: 'User requested animations: topo-wave, pulse-ripple, etc.',
+      },
+    },
+    // Cross-concept relationships
+    {
+      id: 'edge-18',
+      source: 'concept-consistency',
+      target: 'concept-brand-voice',
+      type: 'requires',
+      label: 'depends on',
+      metadata: {
+        created: new Date('2024-01-05'),
+        createdBy: 'agent-lead-manager',
+        confidence: 0.93,
+      },
+    },
+    {
+      id: 'edge-19',
+      source: 'concept-consistency',
+      target: 'concept-color-psychology',
+      type: 'requires',
+      label: 'depends on',
+      metadata: {
+        created: new Date('2024-01-05'),
+        createdBy: 'agent-lead-manager',
+        confidence: 0.93,
+      },
+    },
+    {
+      id: 'edge-20',
+      source: 'concept-consistency',
+      target: 'concept-typography-system',
+      type: 'requires',
+      label: 'depends on',
+      metadata: {
+        created: new Date('2024-01-05'),
+        createdBy: 'agent-lead-manager',
+        confidence: 0.93,
+      },
+    },
+    // Preferences inform decisions
+    {
+      id: 'edge-21',
+      source: 'pref-minimal-design',
+      target: 'decision-color-scheme',
+      type: 'references',
+      label: 'influenced',
+      metadata: {
+        created: new Date('2024-01-25'),
+        createdBy: 'agent-lead-manager',
+        confidence: 0.89,
+      },
+    },
+    {
+      id: 'edge-22',
+      source: 'pref-tech-aesthetic',
+      target: 'decision-color-scheme',
+      type: 'references',
+      label: 'influenced',
+      metadata: {
+        created: new Date('2024-01-26'),
+        createdBy: 'agent-color-psych',
+        confidence: 0.92,
       },
     },
   ],
   evolutionHistory: [
     {
       id: 'evt-1',
-      timestamp: new Date('2024-01-10'),
+      timestamp: new Date('2024-01-03'),
       type: 'node_added',
-      nodeId: 'policy-gdpr-art4',
-      agentId: 'agent-001',
-      description: 'Added GDPR Article 4 policy from knowledge base',
+      nodeId: 'concept-color-psychology',
+      agentId: 'agent-color-psych',
+      description: 'Color Psychologist established color psychology framework',
     },
     {
       id: 'evt-2',
-      timestamp: new Date('2024-01-15'),
+      timestamp: new Date('2024-01-03'),
       type: 'node_added',
-      nodeId: 'risk-indemnification',
-      agentId: 'agent-001',
-      operationId: 'op-001',
-      description: 'Identified indemnification risk in Acme Corp contract',
+      nodeId: 'concept-typography-system',
+      agentId: 'agent-typography',
+      description: 'Typography Specialist defined hierarchical font system',
     },
     {
       id: 'evt-3',
-      timestamp: new Date('2024-01-20'),
-      type: 'learning',
-      nodeId: 'decision-german-servers',
-      agentId: 'agent-001',
-      operationId: 'op-002',
-      description: 'Learned that German servers meet GDPR compliance',
-      userFeedback: 'CEO confirmed: EU data on German servers is compliant',
+      timestamp: new Date('2024-01-04'),
+      type: 'node_added',
+      nodeId: 'concept-viral-mechanics',
+      agentId: 'agent-viral-content',
+      description: 'Viral Content Creator proposed engagement framework',
     },
     {
       id: 'evt-4',
-      timestamp: new Date('2024-02-01'),
+      timestamp: new Date('2024-01-05'),
       type: 'node_added',
-      nodeId: 'risk-liability-cap',
-      agentId: 'agent-001',
-      description: 'Identified similar liability cap issue with DataFlow Systems',
+      nodeId: 'concept-brand-voice',
+      agentId: 'agent-brand-strategist',
+      description: 'Brand Strategist defined consistent brand voice',
+    },
+    {
+      id: 'evt-5',
+      timestamp: new Date('2024-01-18'),
+      type: 'node_added',
+      nodeId: 'decision-color-scheme',
+      agentId: 'agent-color-psych',
+      operationId: 'op-brand-001',
+      description: 'Neural Midnight color palette approved',
+      userFeedback: 'User approved: Deep charcoal, electric cyan, neon lime, warm amber',
+    },
+    {
+      id: 'evt-6',
+      timestamp: new Date('2024-01-20'),
+      type: 'node_added',
+      nodeId: 'decision-typography',
+      agentId: 'agent-typography',
+      operationId: 'op-brand-002',
+      description: 'Typography system approved: Inter + JetBrains Mono',
+      userFeedback: 'User approved: Inter for UI, JetBrains Mono for code',
+    },
+    {
+      id: 'evt-7',
+      timestamp: new Date('2024-01-22'),
+      type: 'node_added',
+      nodeId: 'decision-content-pillars',
+      agentId: 'agent-brand-strategist',
+      operationId: 'op-brand-003',
+      description: 'Content pillars established for brand consistency',
+    },
+    {
+      id: 'evt-8',
+      timestamp: new Date('2024-01-25'),
+      type: 'learning',
+      nodeId: 'pref-minimal-design',
+      agentId: 'agent-lead-manager',
+      description: 'Learned user preference for minimal design',
+      userFeedback: 'User feedback: "make it more minimal"',
+    },
+    {
+      id: 'evt-9',
+      timestamp: new Date('2024-01-26'),
+      type: 'learning',
+      nodeId: 'pref-tech-aesthetic',
+      agentId: 'agent-color-psych',
+      description: 'Learned user preference for tech-forward aesthetic',
+      userFeedback: 'User approved Neural Midnight palette with tech emphasis',
+    },
+    {
+      id: 'evt-10',
+      timestamp: new Date('2024-01-27'),
+      type: 'learning',
+      nodeId: 'pref-animation',
+      agentId: 'agent-typography',
+      description: 'Learned user preference for subtle, purposeful animations',
+      userFeedback: 'User requested: topo-wave, pulse-ripple, particle-stream animations',
     },
   ],
   metadata: {
-    totalSize: '1.2GB',
-    nodeCount: 8,
-    edgeCount: 7,
-    lastUpdated: new Date('2024-02-01'),
-    departments: ['compliance', 'legal', 'finance'],
+    totalSize: '856MB',
+    nodeCount: 19,
+    edgeCount: 22,
+    lastUpdated: new Date('2024-01-27'),
+    departments: ['branding', 'design', 'content', 'strategy'],
   },
 };
 
@@ -378,33 +807,33 @@ export function getGraphAtTime(graph: KnowledgeGraph, date: Date): KnowledgeGrap
   };
 }
 
-// Helper to get node color by type
+// Helper to get node color by type (Neural Midnight palette)
 export function getNodeColor(type: NodeType): string {
   const colors: Record<NodeType, string> = {
-    entity: '#06B6D4',      // Electric Teal
-    policy: '#6366F1',      // Electric Indigo
-    risk: '#EF4444',        // Red
-    agent: '#FDE047',       // Soft Gold
-    document: '#8B5CF6',    // Purple
-    decision: '#10B981',    // Green
-    concept: '#F59E0B',     // Amber
+    entity: '#00F5FF',      // Neural Accent (Electric Cyan)
+    policy: '#6366F1',      // Electric Indigo (kept for variety)
+    risk: '#EF4444',        // Red (warning color)
+    agent: '#FFB800',       // Neural Alert (Warm Amber)
+    document: '#8B5CF6',    // Purple (kept for variety)
+    decision: '#A3FF12',    // Neural Success (Neon Lime)
+    concept: '#F59E0B',     // Amber (kept for variety)
     preference: '#EC4899',  // Pink (for learned preferences)
   };
   return colors[type];
 }
 
-// Helper to get relationship color
+// Helper to get relationship color (Neural Midnight palette)
 export function getRelationshipColor(type: RelationshipType): string {
   const colors: Record<RelationshipType, string> = {
-    identified: '#06B6D4',      // Teal (Data)
-    within: '#6B7280',          // Gray (Reference)
-    approved_by: '#10B981',     // Green (Approval)
-    contradicts: '#EF4444',     // Red (Conflict)
-    references: '#8B5CF6',      // Purple (Link)
-    requires: '#F59E0B',        // Amber (Dependency)
-    mitigates: '#10B981',       // Green (Mitigation)
-    learned_from: '#A855F7',    // Purple (Evolution)
-    supersedes: '#F59E0B',      // Amber (Replacement)
+    identified: '#00F5FF',      // Neural Accent - Cyan (Data discovery)
+    within: '#2D3748',          // Neural Subtle (Reference)
+    approved_by: '#A3FF12',     // Neural Success - Lime (Approval)
+    contradicts: '#EF4444',     // Red (Conflict/Warning)
+    references: '#8B5CF6',      // Purple (Link - kept for variety)
+    requires: '#FFB800',        // Neural Alert - Amber (Dependency)
+    mitigates: '#A3FF12',       // Neural Success - Lime (Mitigation)
+    learned_from: '#EC4899',    // Pink (Evolution/Learning)
+    supersedes: '#FFB800',      // Neural Alert - Amber (Replacement)
   };
   return colors[type];
 }
