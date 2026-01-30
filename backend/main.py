@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 
-from routers import auth, teams, agents, chat, operations, evo, knowledge_graph, tools, marketplace, assumptions, user_preferences
+from routers import auth, teams, agents, chat, operations, evo, knowledge, tools, marketplace, assumptions, users
 from database import engine, Base
 
 
@@ -32,17 +32,17 @@ def read_root():
     """Health check endpoint"""
     return {"status": "ok", "message": "Evolvian API is running"}
 
-app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(teams.router, prefix="/api/teams", tags=["Teams"])
-app.include_router(agents.router, prefix="/api/agents", tags=["Agents"])
-app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
-app.include_router(operations.router, prefix="/api/operations", tags=["Operations"])
-app.include_router(evo.router, prefix="/api/evo", tags=["Evo"])
-app.include_router(knowledge_graph.router, prefix="/api/knowledge", tags=["Knowledge Graph"])
-app.include_router(tools.router, prefix="/api/tools", tags=["Tools"])
-app.include_router(marketplace.router, prefix="/api/marketplace", tags=["Marketplace"])
-app.include_router(assumptions.router, prefix="/api/assumptions", tags=["Assumptions"])
-app.include_router(user_preferences.router, prefix="/api/user/preferences", tags=["User Preferences"])
+app.include_router(auth.router)
+app.include_router(teams.router)
+app.include_router(agents.router)
+app.include_router(chat.router)
+app.include_router(operations.router)
+app.include_router(evo.router)
+app.include_router(knowledge.router)
+app.include_router(tools.router)
+app.include_router(marketplace.router)
+app.include_router(assumptions.router)
+app.include_router(users.router)
 
 
 

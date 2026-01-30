@@ -1,36 +1,54 @@
 'use client';
 
 import { useState } from 'react';
-import { Agent, hireAgent, isAgentHired } from '@/lib/agents';
+import { useTeamAgents, type AgentTemplate, agentService } from '@/lib/services/agents';
 
 interface AgentSuggestionCardsProps {
-  agents: Agent[];
+  agents: AgentTemplate[];
   teamId: string;
-  onAgentHired?: (agent: Agent) => void;
+  onAgentHired?: (agent: AgentTemplate) => void;
 }
 
 export default function AgentSuggestionCards({ agents, teamId, onAgentHired }: AgentSuggestionCardsProps) {
   const [hiringAgentId, setHiringAgentId] = useState<string | null>(null);
 
-  const handleHire = async (agent: Agent) => {
+  // Get team's hired agents to check hire status
+  const { agents: hiredAgents, refresh: refreshHired } = useTeamAgents({
+    teamId: parseInt(teamId, 10),
+    autoFetch: true
+  });
+
+  // Check if agent template is already hired (by matching avatar_seed to template id)
+  const isAgentHired = (templateId: string) => {
+    return hiredAgents.some((a) => a.avatar_seed === templateId);
+  };
+
+  const handleHire = async (agent: AgentTemplate) => {
     // Check if already hired
-    if (isAgentHired(agent.id, teamId)) {
+    if (isAgentHired(agent.id)) {
       return;
     }
 
     setHiringAgentId(agent.id);
 
-    // Simulate hiring delay
-    await new Promise(resolve => setTimeout(resolve, 800));
+    try {
+      // Hire the agent via API
+      const hired = await agentService.hireAgent({
+        team_id: parseInt(teamId, 10),
+        template_id: agent.id,
+      });
 
-    // Hire the agent
-    hireAgent(agent, teamId, { isOnline: true });
-
-    setHiringAgentId(null);
-
-    // Callback
-    if (onAgentHired) {
-      onAgentHired(agent);
+      if (hired) {
+        await refreshHired();
+        // Callback
+        if (onAgentHired) {
+          onAgentHired(agent);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to hire agent:', err);
+    } finally {
+      setHiringAgentId(null);
     }
   };
 
@@ -47,7 +65,7 @@ export default function AgentSuggestionCards({ agents, teamId, onAgentHired }: A
       {/* Agent Cards */}
       <div className="grid grid-cols-1 gap-2">
         {agents.map((agent) => {
-          const alreadyHired = isAgentHired(agent.id, teamId);
+          const alreadyHired = isAgentHired(agent.id);
           const isHiring = hiringAgentId === agent.id;
 
           return (
@@ -58,9 +76,9 @@ export default function AgentSuggestionCards({ agents, teamId, onAgentHired }: A
               <div className="flex items-start gap-3">
                 {/* Avatar */}
                 <div className="w-10 h-10 rounded-lg bg-slate-700 flex-shrink-0 border border-slate-600 overflow-hidden">
-                  {agent.photo_url ? (
+                  {agent.avatar_url ? (
                     <img
-                      src={agent.photo_url}
+                      src={agent.avatar_url}
                       alt={agent.name}
                       className="w-full h-full object-cover"
                     />
@@ -82,24 +100,24 @@ export default function AgentSuggestionCards({ agents, teamId, onAgentHired }: A
                     </div>
                     <div className="text-right flex-shrink-0">
                       <div className="text-xs font-semibold text-[#FDE047]">
-                        ${agent.price_per_hour}/hr
+                        ${agent.base_cost_per_hour}/hr
                       </div>
                     </div>
                   </div>
 
                   <p className="text-xs text-slate-400 mb-2 line-clamp-2">
-                    {agent.specialization}
+                    {agent.specialty}
                   </p>
 
-                  {/* Tags */}
+                  {/* Skills */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex flex-wrap gap-1">
-                      {agent.tags.slice(0, 2).map((tag) => (
+                      {agent.skills.slice(0, 2).map((skill) => (
                         <span
-                          key={tag}
+                          key={skill}
                           className="px-1.5 py-0.5 bg-slate-700/50 rounded text-xs text-slate-400"
                         >
-                          {tag}
+                          {skill}
                         </span>
                       ))}
                     </div>

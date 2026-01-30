@@ -1,4 +1,21 @@
 import { apiRequest } from './api';
+import type { WorkflowNode, WorkflowNodeStatus } from './services/workflows';
+
+export interface TaskWorkflowNode {
+  id: string;
+  name: string;
+  description: string;
+  agentId?: string;
+  agentName?: string;
+  agentPhoto?: string;
+  agentRole: string;
+  action: string;
+  inputs: string[];
+  outputs: string[];
+  dependsOn: string[];
+  status: WorkflowNodeStatus;
+  order: number;
+}
 
 export interface Task {
   id: number;
@@ -11,15 +28,9 @@ export interface Task {
   startedAt?: Date;
   completedAt?: Date;
   cost: number;
-  workflowNodes: {
-    id: string;
-    agentId: string;
-    agentName: string;
-    agentPhoto: string;
-    agentRole: string;
-    action: string;
-    order: number;
-  }[];
+  estimatedTime?: number;
+  estimatedCost?: number;
+  workflowNodes: TaskWorkflowNode[];
 }
 
 export async function getTasks(teamId: number): Promise<Task[]> {
@@ -28,23 +39,54 @@ export async function getTasks(teamId: number): Promise<Task[]> {
       method: 'GET',
     });
 
-    return response.map((op: any) => ({
-      id: op.id,
-      title: op.title,
-      description: op.description,
-      teamId: op.team_id,
-      status: op.status,
-      progress: 0, // We'll calculate this based on current phase
-      createdAt: new Date(op.created_at),
-      startedAt: op.started_at ? new Date(op.started_at) : undefined,
-      completedAt: op.completed_at ? new Date(op.completed_at) : undefined,
-      cost: op.actual_cost || 0,
-      workflowNodes: op.workflow_config?.nodes || [],
-    }));
+    return response.map((op: any) => mapOperationToTask(op));
   } catch (error) {
     console.error('Failed to load tasks:', error);
     return [];
   }
+}
+
+function mapOperationToTask(op: any): Task {
+  // Map workflow nodes from backend format
+  const workflowNodes: TaskWorkflowNode[] = (op.workflow_config?.nodes || []).map(
+    (node: any, index: number) => ({
+      id: node.id || String(index + 1),
+      name: node.name || `Step ${index + 1}`,
+      description: node.description || node.action || '',
+      agentId: node.agentId,
+      agentName: node.agentName || node.agent_role,
+      agentPhoto: node.agentPhoto,
+      agentRole: node.agentRole || node.agent_role || 'Agent',
+      action: node.action || node.description || '',
+      inputs: node.inputs || [],
+      outputs: node.outputs || [],
+      dependsOn: node.dependsOn || node.depends_on || [],
+      status: (node.status || 'pending') as WorkflowNodeStatus,
+      order: node.order || index,
+    })
+  );
+
+  // Calculate progress from node statuses
+  const completedNodes = workflowNodes.filter(
+    (n) => n.status === 'completed' || n.status === 'failed' || n.status === 'skipped'
+  ).length;
+  const progress = workflowNodes.length > 0 ? Math.round((completedNodes / workflowNodes.length) * 100) : 0;
+
+  return {
+    id: op.id,
+    title: op.title,
+    description: op.description,
+    teamId: op.team_id,
+    status: op.status,
+    progress,
+    createdAt: new Date(op.created_at),
+    startedAt: op.started_at ? new Date(op.started_at) : undefined,
+    completedAt: op.completed_at ? new Date(op.completed_at) : undefined,
+    cost: op.actual_cost || 0,
+    estimatedTime: op.workflow_config?.estimated_time,
+    estimatedCost: op.workflow_config?.estimated_cost,
+    workflowNodes,
+  };
 }
 
 export async function getTask(taskId: number): Promise<Task | null> {

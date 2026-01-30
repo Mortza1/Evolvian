@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import SpecialistChat from './SpecialistChat';
 import EvoChat from './EvoChat';
 import AriaChat from './AriaChat';
-import { getHiredAgents, HiredAgent, hireAgent, Agent } from '@/lib/agents';
+import { useTeamAgents, agentService, type Agent } from '@/lib/services/agents';
 
 interface SpecialistAgent {
   id: string;
@@ -33,6 +33,13 @@ export default function InboxView({ teamId }: InboxViewProps) {
   const [ariaHired, setAriaHired] = useState(false);
   const [readSpecialists, setReadSpecialists] = useState<Set<string>>(new Set());
 
+  // Fetch team agents from API
+  const {
+    agents: hiredAgents,
+    isLoading: loadingAgents,
+    refresh: refreshAgents,
+  } = useTeamAgents({ teamId: parseInt(teamId, 10), autoFetch: true });
+
   // Load read specialists from localStorage
   useEffect(() => {
     const storedRead = localStorage.getItem(`readSpecialists_${teamId}`);
@@ -53,34 +60,25 @@ export default function InboxView({ teamId }: InboxViewProps) {
     localStorage.setItem(`readSpecialists_${teamId}`, JSON.stringify([...newReadSet]));
   };
 
-  const handleAriaHired = () => {
+  const handleAriaHired = async () => {
     // Set flag to show Aria
     setAriaHired(true);
 
-    // Create Aria as a hired agent (add to employees)
-    const ariaAgent: Agent = {
-      id: 'aria-manager',
-      name: 'Aria Martinez',
-      role: 'Senior Brand Lead',
-      category: 'Management',
-      specialization: 'Personal Branding & Executive Positioning',
-      description: 'Senior Brand Lead specializing in personal branding for C-suite executives, thought leaders, and entrepreneurs. Expert in team coordination and brand strategy.',
-      model: 'gpt-4',
-      price_per_hour: 85,
-      level: 10,
-      rating: 4.9,
-      total_reviews: 342,
-      creator: 'Evolvian',
-      creator_type: 'official',
-      tools: ['brand_strategy', 'team_management', 'stakeholder_communication'],
-      photo_url: 'https://i.pravatar.cc/150?img=45',
-      tags: ['management', 'branding', 'strategy', 'leadership'],
-    };
+    try {
+      // Hire Aria via API using her template ID
+      await agentService.hireAgent({
+        team_id: parseInt(teamId, 10),
+        template_id: 'agent-aria-martinez',
+        custom_name: 'Aria Martinez',
+      });
 
-    // Add Aria to hired agents list
-    hireAgent(ariaAgent, teamId, { isOnline: true });
+      // Refresh agents list
+      await refreshAgents();
+    } catch (err) {
+      console.error('Failed to hire Aria:', err);
+    }
 
-    // Create Aria contact
+    // Create Aria contact for UI
     const ariaContact: SpecialistAgent = {
       id: 'aria-manager',
       name: 'Aria Martinez',
@@ -111,10 +109,14 @@ export default function InboxView({ teamId }: InboxViewProps) {
   };
 
   useEffect(() => {
-    const hiredAgents = getHiredAgents(teamId);
+    // Don't run until agents are loaded
+    if (loadingAgents) return;
 
-    // Check if Aria is hired FOR THIS SPECIFIC TEAM
-    const ariaAgent = hiredAgents.find(a => a.id === 'aria-manager' && a.teamId === teamId);
+    // Check if Aria is hired (look for agent with name 'Aria Martinez' or avatar_seed matching template)
+    const ariaAgent = hiredAgents.find(a =>
+      a.name === 'Aria Martinez' ||
+      a.avatar_seed === 'agent-aria-martinez'
+    );
     const isAriaHired = !!ariaAgent;
 
     // Add Evo (General Manager) as first contact
@@ -154,15 +156,15 @@ export default function InboxView({ teamId }: InboxViewProps) {
       setAriaHired(true);
     }
 
-    // Filter for all agents (Branding and Management)
+    // Filter for agents that aren't Aria (she's already added above)
     const teamSpecialists = hiredAgents.filter(a =>
-      (a.category === 'Branding' || a.category === 'Management') &&
-      a.id !== 'aria-manager' // Aria already added above
+      a.name !== 'Aria Martinez' &&
+      a.avatar_seed !== 'agent-aria-martinez'
     );
 
     // Map hired agents to specialist format
     const mappedSpecialists: SpecialistAgent[] = teamSpecialists.map((agent) => {
-      // Map agent IDs to specialist data
+      // Map agent avatar_seed/name to specialist data
       const specialistMap: Record<string, { avatar: string; color: string; specialty: string; defaultQuestions: number; lastMessage: string }> = {
         'agent-031': { // Aurora
           avatar: '🎨',
@@ -194,10 +196,12 @@ export default function InboxView({ teamId }: InboxViewProps) {
         },
       };
 
-      const specialistData = specialistMap[agent.id] || {
+      // Use avatar_seed to match template, fallback to generic
+      const templateKey = agent.avatar_seed || '';
+      const specialistData = specialistMap[templateKey] || {
         avatar: '👤',
         color: '#6366F1',
-        specialty: agent.specialization,
+        specialty: agent.specialty,
         defaultQuestions: 0,
         lastMessage: 'Ready to assist you',
       };
@@ -205,32 +209,33 @@ export default function InboxView({ teamId }: InboxViewProps) {
       // Check for recent evolution (XP gain or specialization update)
       let evolutionNotification: { type: 'xp' | 'specialization' | 'level_up'; message: string } | undefined;
 
-      // Check if specialization was recently updated (different from default)
-      const defaultSpecialty = specialistMap[agent.id]?.specialty || agent.specialization;
-      if (agent.specialization !== defaultSpecialty && agent.specialization) {
+      // Check if specialty was recently updated (different from default)
+      const defaultSpecialty = specialistMap[templateKey]?.specialty || agent.specialty;
+      if (agent.specialty !== defaultSpecialty && agent.specialty) {
         evolutionNotification = {
           type: 'specialization',
-          message: `Specialized in: ${agent.specialization}`,
+          message: `Specialized in: ${agent.specialty}`,
         };
       }
 
-      // Check for high XP (50+ means recent gain)
-      if (agent.experience >= 50 && !evolutionNotification) {
+      // Check for high XP (levelProgress 50+ means recent gain)
+      const levelProgress = (agent as Agent & { levelProgress?: number }).levelProgress || 0;
+      if (levelProgress >= 50 && !evolutionNotification) {
         evolutionNotification = {
           type: 'xp',
-          message: `Gained ${agent.experience} XP`,
+          message: `Gained ${agent.experience_points} XP`,
         };
       }
 
       return {
-        id: agent.id,
+        id: String(agent.id),
         name: agent.name,
         role: agent.role,
         specialty: specialistData.specialty,
         avatar: specialistData.avatar,
         color: specialistData.color,
         pendingQuestions: specialistData.defaultQuestions,
-        isOnline: agent.isOnline,
+        isOnline: agent.is_online,
         lastMessage: specialistData.lastMessage,
         lastMessageTime: new Date(Date.now() - Math.random() * 60 * 60 * 1000), // Random time within last hour
         evolutionNotification,
@@ -267,7 +272,7 @@ export default function InboxView({ teamId }: InboxViewProps) {
         }
       }
     }
-  }, [teamId, ariaHired, readSpecialists]);
+  }, [teamId, ariaHired, readSpecialists, hiredAgents, loadingAgents]);
 
   const totalPending = specialists.reduce((sum, s) => sum + s.pendingQuestions, 0);
 

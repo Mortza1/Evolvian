@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { HiredAgent, addLearnedPreference, levelUpAgent, addExperience } from '@/lib/agents';
+import { type HiredAgent, agentService } from '@/lib/services/agents';
 import { syncPreferencesToGraph } from '@/lib/knowledge-graph';
 
 interface AgentEvolutionModalProps {
@@ -24,7 +24,7 @@ export default function AgentEvolutionModal({
   const [rule, setRule] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showLevelUpAnimation, setShowLevelUpAnimation] = useState(false);
-  const [newLevel, setNewLevel] = useState(agent.agentLevel);
+  const [newLevel, setNewLevel] = useState(agent.level || 1);
 
   if (!isOpen) return null;
 
@@ -35,38 +35,40 @@ export default function AgentEvolutionModal({
     setIsProcessing(true);
     setStep('learning');
 
-    // Simulate learning process
-    setTimeout(() => {
-      // Add learned preference
-      const success = addLearnedPreference(agent.id, teamId, category, rule, 95);
+    try {
+      // Submit feedback/preference via API
+      await agentService.submitFeedback(agent.id, {
+        rating: 5,
+        feedback: `[${category}] ${rule}`,
+      });
 
-      if (success) {
-        // Sync the new preference to the knowledge graph
-        syncPreferencesToGraph(teamId);
+      // Sync the new preference to the knowledge graph
+      syncPreferencesToGraph(teamId);
 
-        // Add experience (30 XP per learned preference)
-        addExperience(agent.id, teamId, 30);
+      // Calculate if agent should level up based on XP progress
+      // levelProgress is 0-100, and we add 30% for each learned preference
+      const newProgress = (agent.levelProgress || 0) + 30;
+      if (newProgress >= 100) {
+        setNewLevel((agent.level || 1) + 1);
+        setShowLevelUpAnimation(true);
+        setStep('levelup');
 
-        // Check if agent should level up (at 100 XP)
-        if ((agent.experience + 30) >= 100) {
-          setNewLevel(agent.agentLevel + 1);
-          setShowLevelUpAnimation(true);
-          setStep('levelup');
-
-          // Level up after animation
+        // Show level up animation, then complete
+        setTimeout(() => {
           setTimeout(() => {
-            levelUpAgent(agent.id, teamId);
-            setTimeout(() => {
-              setStep('complete');
-              setIsProcessing(false);
-            }, 1000);
-          }, 2000);
-        } else {
-          setStep('complete');
-          setIsProcessing(false);
-        }
+            setStep('complete');
+            setIsProcessing(false);
+          }, 1000);
+        }, 2000);
+      } else {
+        setStep('complete');
+        setIsProcessing(false);
       }
-    }, 1500);
+    } catch (err) {
+      console.error('Error saving preference:', err);
+      setStep('complete');
+      setIsProcessing(false);
+    }
   };
 
   const handleClose = () => {
@@ -95,7 +97,7 @@ export default function AgentEvolutionModal({
                 <div className={`absolute -top-1 -right-1 w-7 h-7 bg-[#FDE047] rounded-full flex items-center justify-center text-sm font-bold text-[#020617] transition-all duration-500 ${
                   showLevelUpAnimation ? 'scale-150 rotate-360' : ''
                 }`}>
-                  {showLevelUpAnimation ? newLevel : agent.agentLevel}
+                  {showLevelUpAnimation ? newLevel : agent.level}
                 </div>
               </div>
               <div>

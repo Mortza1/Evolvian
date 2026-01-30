@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getHiredAgents, HiredAgent } from '@/lib/agents';
+import { useState } from 'react';
+import { useTeamAgents, type HiredAgent } from '@/lib/services/agents';
 import AgentEvolutionModal from '@/components/office/AgentEvolutionModal';
 
 interface OfficeViewProps {
@@ -9,26 +9,74 @@ interface OfficeViewProps {
 }
 
 export default function OfficeView({ teamId }: OfficeViewProps) {
-  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
-  const [employees, setEmployees] = useState<HiredAgent[]>([]);
+  const [selectedEmployee, setSelectedEmployee] = useState<number | null>(null);
   const [evolvingAgent, setEvolvingAgent] = useState<HiredAgent | null>(null);
 
-  const loadEmployees = () => {
-    const teamAgents = getHiredAgents(teamId);
-    setEmployees(teamAgents);
-  };
-
-  useEffect(() => {
-    loadEmployees();
-  }, [teamId]);
+  // Fetch team agents from API
+  const {
+    agents: employees,
+    isLoading,
+    error,
+    refresh: refreshEmployees,
+  } = useTeamAgents({ teamId: parseInt(teamId, 10), autoFetch: true });
 
   const handleEvolveAgent = (agent: HiredAgent) => {
     setEvolvingAgent(agent);
   };
 
   const handleEvolutionComplete = () => {
-    loadEmployees(); // Refresh the list
+    refreshEmployees(); // Refresh the list from API
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2">The Office</h1>
+          <p className="text-slate-400">Manage your workforce</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="glass rounded-xl p-6 animate-pulse">
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-14 h-14 bg-slate-700 rounded-xl" />
+                <div className="w-16 h-6 bg-slate-700 rounded-full" />
+              </div>
+              <div className="h-6 bg-slate-700 rounded w-2/3 mb-2" />
+              <div className="h-4 bg-slate-700 rounded w-1/2 mb-4" />
+              <div className="h-2 bg-slate-700 rounded mb-4" />
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="h-16 bg-slate-700 rounded-lg" />
+                <div className="h-16 bg-slate-700 rounded-lg" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2">The Office</h1>
+          <p className="text-slate-400">Manage your workforce</p>
+        </div>
+        <div className="glass rounded-xl p-6 text-center">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button
+            onClick={() => refreshEmployees()}
+            className="px-4 py-2 bg-[#6366F1] text-white rounded-lg hover:bg-[#5558E3] transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Empty state - no agents hired for this team
   if (employees.length === 0) {
@@ -75,21 +123,21 @@ export default function OfficeView({ teamId }: OfficeViewProps) {
         </div>
         <div className="glass rounded-lg p-4">
           <div className="text-2xl font-bold text-green-400 mb-1">
-            {employees.filter(e => e.isOnline).length}
+            {employees.filter(e => e.is_online).length}
           </div>
           <div className="text-sm text-slate-400">Currently Online</div>
         </div>
         <div className="glass rounded-lg p-4">
           <div className="text-2xl font-bold text-[#FDE047] mb-1">
-            ${employees.reduce((acc, e) => acc + e.price_per_hour, 0).toFixed(2)}
+            ${employees.reduce((acc, e) => acc + e.cost_per_hour, 0).toFixed(2)}
           </div>
           <div className="text-sm text-slate-400">Total Hourly Cost</div>
         </div>
         <div className="glass rounded-lg p-4">
           <div className="text-2xl font-bold text-[#6366F1] mb-1">
-            {employees.reduce((acc, e) => acc + (e.learnedPreferences?.length || 0), 0)}
+            {employees.reduce((acc, e) => acc + (e.skills?.length || 0), 0)}
           </div>
-          <div className="text-sm text-slate-400">Learned Preferences</div>
+          <div className="text-sm text-slate-400">Skills Learned</div>
         </div>
       </div>
 
@@ -110,22 +158,22 @@ export default function OfficeView({ teamId }: OfficeViewProps) {
                   </span>
                 </div>
                 <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#FDE047] rounded-full flex items-center justify-center text-xs font-bold text-[#020617]">
-                  {employee.agentLevel || 1}
+                  {employee.level || 1}
                 </div>
               </div>
               <div
                 className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                  employee.isOnline
+                  employee.is_online
                     ? 'bg-green-500/20 text-green-400'
                     : 'bg-slate-700/50 text-slate-400'
                 }`}
               >
                 <div
                   className={`w-1.5 h-1.5 rounded-full ${
-                    employee.isOnline ? 'bg-green-500 animate-pulse' : 'bg-slate-600'
+                    employee.is_online ? 'bg-green-500 animate-pulse' : 'bg-slate-600'
                   }`}
                 ></div>
-                {employee.isOnline ? 'online' : 'offline'}
+                {employee.is_online ? 'online' : 'offline'}
               </div>
             </div>
 
@@ -137,12 +185,12 @@ export default function OfficeView({ teamId }: OfficeViewProps) {
             <div className="mb-4">
               <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
                 <span>Level Progress</span>
-                <span>{employee.experience || 0}%</span>
+                <span>{Math.round(employee.levelProgress || 0)}%</span>
               </div>
               <div className="w-full h-2 bg-[#020617]/50 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-[#6366F1] to-[#818CF8] transition-all duration-500"
-                  style={{ width: `${employee.experience || 0}%` }}
+                  style={{ width: `${employee.levelProgress || 0}%` }}
                 ></div>
               </div>
             </div>
@@ -150,12 +198,12 @@ export default function OfficeView({ teamId }: OfficeViewProps) {
             {/* Stats */}
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="bg-[#020617]/30 rounded-lg p-2 text-center">
-                <div className="text-lg font-bold text-white">{employee.tasksCompleted}</div>
+                <div className="text-lg font-bold text-white">{employee.tasks_completed}</div>
                 <div className="text-xs text-slate-400">Tasks</div>
               </div>
               <div className="bg-[#020617]/30 rounded-lg p-2 text-center">
-                <div className="text-lg font-bold text-[#6366F1]">{employee.learnedPreferences?.length || 0}</div>
-                <div className="text-xs text-slate-400">Preferences</div>
+                <div className="text-lg font-bold text-[#6366F1]">{employee.skills?.length || 0}</div>
+                <div className="text-xs text-slate-400">Skills</div>
               </div>
             </div>
 
@@ -183,7 +231,7 @@ export default function OfficeView({ teamId }: OfficeViewProps) {
             {/* Salary */}
             <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-700/50">
               <span className="text-xs text-slate-400">Hourly Rate</span>
-              <span className="text-sm font-bold text-[#FDE047]">${employee.price_per_hour.toFixed(2)}/hr</span>
+              <span className="text-sm font-bold text-[#FDE047]">${employee.cost_per_hour.toFixed(2)}/hr</span>
             </div>
           </div>
         ))}

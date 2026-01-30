@@ -30,6 +30,7 @@ async def signup(user_data: UserCreate, response: Response, db: Session = Depend
     # Check if email already exists
     existing_user = get_user_by_email(db, user_data.email)
     if existing_user:
+        print("Existing user found with email:", user_data.email)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
@@ -38,18 +39,26 @@ async def signup(user_data: UserCreate, response: Response, db: Session = Depend
     # Check if username already exists
     existing_username = get_user_by_username(db, user_data.username)
     if existing_username:
+        print("Existing user found with username:", user_data.username)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already taken"
         )
 
-    # Create new user
-    user = create_user(
-        db=db,
-        email=user_data.email,
-        username=user_data.username,
-        password=user_data.password
-    )
+    try:
+        # Create new user
+        user = create_user(
+            db=db,
+            email=user_data.email,
+            username=user_data.username,
+            password=user_data.password
+        )
+    except Exception as e:
+        print("Error creating user:", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error creating user"
+        )
 
     # Create access token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)

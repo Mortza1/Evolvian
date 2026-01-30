@@ -4,6 +4,8 @@
 This document tracks the implementation status of the Evolvian backend APIs.
 The platform uses a hierarchical AI workforce model with Evo as the COO.
 
+**Architecture**: Modular FastAPI with separate routers per domain (see File Structure below).
+
 ---
 
 ## DONE - Implemented & Working
@@ -97,11 +99,30 @@ Core Evolvian feature - agents ask clarifying questions instead of hallucinating
 
 ---
 
-## TODO - Phase 3: Agent Execution (Priority: HIGH)
+## IN PROGRESS - Phase 3: Agent Execution (Priority: HIGH)
 
 Connect to EvoAgentX framework for actual agent execution.
 
-### Workflow Execution
+### Core Agent Layer (DONE)
+- [x] `EvolvianAgent` - Wraps EvoAgentX Agent with Evolvian metadata
+- [x] `AgentMetadata` - Role, specialty, level, XP, evolution tracking
+- [x] `AgentCapabilities` - Skills, tools, actions
+- [x] `AgentRegistry` - Template storage, instance management, factory
+- [x] `AgentService` - High-level operations, DB sync
+- [x] Built-in agent templates (6 agents)
+- [x] Simple execution via llm_service
+- [x] Full EvoAgentX execution (optional, needs deps)
+
+### Workflow Layer (DONE)
+- [x] `WorkflowNode` - Single step with status, inputs/outputs, dependencies
+- [x] `WorkflowGraph` - DAG of nodes with dependency tracking
+- [x] `EvolvianWorkflow` - Workflow execution wrapper
+- [x] `WorkflowBuilder` - Evo's brain: task → workflow decomposition via LLM
+- [x] `WorkflowExecutor` - Sequential execution with agent assignment
+- [x] `AsyncWorkflowExecutor` - Parallel execution of independent nodes
+- [x] `ExecutionResult` - Structured execution output
+
+### Workflow API Endpoints (TODO)
 - [ ] `POST /api/operations/{id}/execute` - Start workflow execution
 - [ ] `GET /api/operations/{id}/status` - Get execution status
 - [ ] `POST /api/operations/{id}/pause` - Pause execution
@@ -109,10 +130,10 @@ Connect to EvoAgentX framework for actual agent execution.
 - [ ] `POST /api/operations/{id}/cancel` - Cancel execution
 - [ ] WebSocket `/ws/operations/{id}` - Real-time execution updates
 
-### Agent Integration with EvoAgentX
-- [ ] Bridge Evolvian Agent model → EvoAgentX Agent class
+### Remaining EvoAgentX Integration (TODO)
+- [x] Bridge Evolvian Agent model → EvoAgentX Agent class
+- [x] Connect WorkFlowGraph to operations (via WorkflowBuilder)
 - [ ] Map team tools → EvoAgentX Toolkit
-- [ ] Connect WorkFlowGraph to operations
 - [ ] Implement agent short-term memory per operation
 - [ ] Implement long-term memory per team (knowledge graph)
 
@@ -231,12 +252,106 @@ The EvoAgentX framework (in `/evoAgentX/`) provides:
 
 ---
 
+## DONE - Frontend Dynamic Integration (Completed)
+
+Connected frontend components to backend APIs via service layer.
+
+### Agent Service Layer (web/lib/services/agents/)
+- [x] `types.ts` - TypeScript interfaces (Agent, AgentTemplate, HiredAgent, etc.)
+- [x] `agent.service.ts` - API client (getMarketplaceAgents, hireAgent, getTeamAgents, etc.)
+- [x] `useAgents.ts` - React hooks (useMarketplace, useTeamAgents, useAgents)
+- [x] `index.ts` - Module exports
+
+### Updated Components
+- [x] `TalentHubView.tsx` - Uses useMarketplace() hook for agent marketplace
+- [x] `OfficeView.tsx` - Uses useTeamAgents() hook for hired agents display
+- [x] `AgentEvolutionModal.tsx` - Uses agentService.submitFeedback() API
+- [x] `AgentSuggestionCards.tsx` - Uses useTeamAgents() + agentService.hireAgent()
+- [x] `InboxView.tsx` - Uses useTeamAgents() for specialist contacts
+
+### Not Updated (Self-contained)
+- [ ] `ManagerMarketplaceModal.tsx` - Uses hardcoded manager data (acceptable for demo)
+- [ ] `SpecialistRecruitment.tsx` - Uses hardcoded specialist data (acceptable for demo)
+
+---
+
 ## Current Tech Stack
 
 - **Backend**: FastAPI + SQLAlchemy + SQLite
 - **LLM**: OpenRouter (DeepSeek, others)
 - **Frontend**: Next.js 16 + React 19 + Tailwind
 - **Agent Framework**: EvoAgentX (to be integrated)
+
+---
+
+## Backend File Structure
+
+```
+backend/
+├── main.py              # App entry, router registration, CORS
+├── database.py          # SQLAlchemy engine & session
+├── models.py            # All database models
+├── schemas.py           # Pydantic request/response schemas
+├── auth.py              # JWT authentication logic
+├── llm_service.py       # OpenRouter LLM integration
+├── evo_service.py       # Evo AI COO service
+├── TODO.md              # This file
+│
+├── core/                # EvoAgentX primitives (extracted)
+│   ├── __init__.py
+│   ├── agents/          # Agent domain
+│   │   ├── __init__.py
+│   │   ├── base.py      # EvolvianAgent, AgentMetadata, AgentCapabilities
+│   │   ├── registry.py  # AgentRegistry, AgentTemplate, AGENT_REGISTRY
+│   │   └── service.py   # AgentService, agent_service singleton
+│   │
+│   └── workflows/       # Workflow domain
+│       ├── __init__.py
+│       ├── base.py      # WorkflowNode, WorkflowGraph, EvolvianWorkflow
+│       ├── builder.py   # WorkflowBuilder (Evo's task decomposition brain)
+│       └── executor.py  # WorkflowExecutor, AsyncWorkflowExecutor
+│
+└── routers/             # Modular API routers
+    ├── __init__.py      # Router exports
+    ├── auth.py          # /api/auth/* endpoints
+    ├── teams.py         # /api/teams/* endpoints
+    ├── agents.py        # /api/agents/* endpoints
+    ├── chat.py          # /api/chat/* endpoints
+    ├── operations.py    # /api/operations/* endpoints
+    ├── evo.py           # /api/evo/* endpoints
+    ├── knowledge.py     # /api/knowledge/* endpoints
+    ├── tools.py         # /api/tools/* endpoints
+    ├── marketplace.py   # /api/marketplace/* endpoints
+    ├── assumptions.py   # /api/assumptions/* endpoints
+    └── users.py         # /api/user/* endpoints
+```
+
+---
+
+## Frontend File Structure (Key Files)
+
+```
+web/
+├── lib/
+│   └── services/
+│       ├── api/
+│       │   └── client.ts        # Base API client (fetch wrapper)
+│       └── agents/              # Agent service module
+│           ├── index.ts         # Module exports
+│           ├── types.ts         # TypeScript interfaces
+│           ├── agent.service.ts # API methods
+│           └── useAgents.ts     # React hooks
+│
+└── components/
+    ├── dashboard/views/
+    │   ├── TalentHubView.tsx    # Agent marketplace (useMarketplace)
+    │   └── OfficeView.tsx       # Hired agents (useTeamAgents)
+    ├── inbox/
+    │   ├── InboxView.tsx        # Specialist chat (useTeamAgents)
+    │   └── AgentSuggestionCards.tsx  # Hire suggestions
+    └── office/
+        └── AgentEvolutionModal.tsx   # Agent evolution UI
+```
 
 ---
 
