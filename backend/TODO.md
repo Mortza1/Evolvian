@@ -262,12 +262,20 @@ Connected frontend components to backend APIs via service layer.
 - [x] `useAgents.ts` - React hooks (useMarketplace, useTeamAgents, useAgents)
 - [x] `index.ts` - Module exports
 
+### Workflow Service Layer (web/lib/services/workflows/)
+- [x] `types.ts` - TypeScript interfaces (WorkflowNode, WorkflowGraph, ExecutionResult, etc.)
+- [x] `workflow.service.ts` - API client (analyzeTask, buildWorkflow, executeWorkflow, etc.)
+- [x] `useWorkflows.ts` - React hooks (useBuildWorkflow, useExecuteWorkflow, useWorkflowGraph)
+- [x] `index.ts` - Module exports
+
 ### Updated Components
 - [x] `TalentHubView.tsx` - Uses useMarketplace() hook for agent marketplace
 - [x] `OfficeView.tsx` - Uses useTeamAgents() hook for hired agents display
 - [x] `AgentEvolutionModal.tsx` - Uses agentService.submitFeedback() API
 - [x] `AgentSuggestionCards.tsx` - Uses useTeamAgents() + agentService.hireAgent()
 - [x] `InboxView.tsx` - Uses useTeamAgents() for specialist contacts
+- [x] `WorkflowVisualizer.tsx` - Updated to use WorkflowDesign/WorkflowGraph types
+- [x] `tasks.ts` - Updated with TaskWorkflowNode type and proper mapping
 
 ### Not Updated (Self-contained)
 - [ ] `ManagerMarketplaceModal.tsx` - Uses hardcoded manager data (acceptable for demo)
@@ -333,14 +341,20 @@ backend/
 ```
 web/
 ├── lib/
+│   ├── tasks.ts                 # Task/operation API client
 │   └── services/
 │       ├── api/
 │       │   └── client.ts        # Base API client (fetch wrapper)
-│       └── agents/              # Agent service module
+│       ├── agents/              # Agent service module
+│       │   ├── index.ts         # Module exports
+│       │   ├── types.ts         # TypeScript interfaces
+│       │   ├── agent.service.ts # API methods
+│       │   └── useAgents.ts     # React hooks
+│       └── workflows/           # Workflow service module
 │           ├── index.ts         # Module exports
-│           ├── types.ts         # TypeScript interfaces
-│           ├── agent.service.ts # API methods
-│           └── useAgents.ts     # React hooks
+│           ├── types.ts         # WorkflowNode, WorkflowGraph, ExecutionResult
+│           ├── workflow.service.ts  # analyzeTask, buildWorkflow, executeWorkflow
+│           └── useWorkflows.ts  # useBuildWorkflow, useExecuteWorkflow hooks
 │
 └── components/
     ├── dashboard/views/
@@ -349,8 +363,12 @@ web/
     ├── inbox/
     │   ├── InboxView.tsx        # Specialist chat (useTeamAgents)
     │   └── AgentSuggestionCards.tsx  # Hire suggestions
-    └── office/
-        └── AgentEvolutionModal.tsx   # Agent evolution UI
+    ├── office/
+    │   └── AgentEvolutionModal.tsx   # Agent evolution UI
+    └── operations/
+        ├── WorkflowVisualizer.tsx    # Workflow plan display
+        ├── LiveOffice.tsx            # Real-time execution view
+        └── WarRoomLive.tsx           # Live execution theater
 ```
 
 ---

@@ -6,14 +6,64 @@ Handles team CRUD operations.
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
 
 from database import get_db
 from auth import get_current_user
 from schemas import TeamCreate, TeamUpdate, TeamResponse
-from models import User, Team
+from models import User, Team, Agent, Operation
 
 router = APIRouter(prefix="/api/teams", tags=["Teams"])
+
+
+def calculate_team_stats(db: Session, team_id: int) -> dict:
+    """Calculate real-time stats for a team from the database"""
+    from datetime import datetime, timedelta
+
+    # Count agents
+    total_agents = db.query(func.count(Agent.id)).filter(Agent.team_id == team_id).scalar() or 0
+    active_agents = db.query(func.count(Agent.id)).filter(
+        Agent.team_id == team_id,
+        Agent.is_online == True
+    ).scalar() or 0
+
+    # Count operations
+    total_operations = db.query(func.count(Operation.id)).filter(
+        Operation.team_id == team_id
+    ).scalar() or 0
+
+    # Operations this week
+    week_ago = datetime.utcnow() - timedelta(days=7)
+    operations_this_week = db.query(func.count(Operation.id)).filter(
+        Operation.team_id == team_id,
+        Operation.created_at >= week_ago
+    ).scalar() or 0
+
+    # Calculate spend (from operations)
+    total_spend = db.query(func.sum(Operation.actual_cost)).filter(
+        Operation.team_id == team_id
+    ).scalar() or 0.0
+
+    # Spend this month
+    month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    spend_this_month = db.query(func.sum(Operation.actual_cost)).filter(
+        Operation.team_id == team_id,
+        Operation.created_at >= month_start
+    ).scalar() or 0.0
+
+    # Average operation cost
+    avg_cost = total_spend / total_operations if total_operations > 0 else 0.0
+
+    return {
+        "totalAgents": total_agents,
+        "activeAgents": active_agents,
+        "totalOperations": total_operations,
+        "operationsThisWeek": operations_this_week,
+        "totalSpend": float(total_spend),
+        "spendThisMonth": float(spend_this_month),
+        "avgOperationCost": float(avg_cost)
+    }
 
 
 @router.post("", response_model=TeamResponse, status_code=status.HTTP_201_CREATED)
@@ -60,8 +110,13 @@ async def get_teams(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all teams for the current user"""
+    """Get all teams for the current user with real-time stats"""
     teams = db.query(Team).filter(Team.user_id == current_user.id).all()
+
+    # Calculate real-time stats for each team
+    for team in teams:
+        team.stats = calculate_team_stats(db, team.id)
+
     return teams
 
 
@@ -71,7 +126,7 @@ async def get_team(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get a specific team by ID"""
+    """Get a specific team by ID with real-time stats"""
     team = db.query(Team).filter(
         Team.id == team_id,
         Team.user_id == current_user.id
@@ -82,6 +137,9 @@ async def get_team(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Team not found"
         )
+
+    # Calculate real-time stats
+    team.stats = calculate_team_stats(db, team.id)
 
     return team
 

@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getHiredAgents, HiredAgent } from '@/lib/agents';
+import { useTeamAgents } from '@/lib/services/agents';
 
 interface TeamOverviewProps {
   teamId: string;
@@ -10,15 +9,14 @@ interface TeamOverviewProps {
 }
 
 export default function TeamOverview({ teamId, onViewOffice, onViewStore }: TeamOverviewProps) {
-  const [team, setTeam] = useState<HiredAgent[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Fetch team agents from API
+  const {
+    agents: allAgents,
+    isLoading: loading,
+  } = useTeamAgents({ teamId: parseInt(teamId, 10), autoFetch: true });
 
-  useEffect(() => {
-    // Get team-specific hired agents
-    const teamAgents = getHiredAgents(teamId);
-    setTeam(teamAgents.slice(0, 6));
-    setLoading(false);
-  }, [teamId]);
+  // Show only first 6 agents in overview
+  const team = allAgents.slice(0, 6);
 
   if (loading) {
     return (
@@ -81,7 +79,7 @@ export default function TeamOverview({ teamId, onViewOffice, onViewStore }: Team
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-bold text-[#E2E8F0]">The Office</h2>
         <span className="text-sm text-slate-600">
-          {team.filter(a => a.isOnline).length} online
+          {team.filter(a => a.is_online).length} online
         </span>
       </div>
 
@@ -93,13 +91,19 @@ export default function TeamOverview({ teamId, onViewOffice, onViewStore }: Team
           >
             {/* Avatar */}
             <div className="relative">
-              <img
-                src={agent.photo_url}
-                alt={agent.name}
-                className="w-12 h-12 rounded-full object-cover"
-              />
+              {agent.photo_url ? (
+                <img
+                  src={agent.photo_url}
+                  alt={agent.name}
+                  className="w-12 h-12 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#6366F1] to-[#818CF8] flex items-center justify-center text-white font-bold">
+                  {agent.name.substring(0, 2).toUpperCase()}
+                </div>
+              )}
               {/* Online Status */}
-              {agent.isOnline ? (
+              {agent.is_online ? (
                 <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#A3FF12] rounded-full border-2 border-[#0B0E14]">
                   <div className="absolute inset-0 rounded-full bg-[#A3FF12] animate-pulse-ripple"></div>
                 </div>

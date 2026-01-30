@@ -95,19 +95,7 @@ export async function getTask(taskId: number): Promise<Task | null> {
       method: 'GET',
     });
 
-    return {
-      id: response.id,
-      title: response.title,
-      description: response.description,
-      teamId: response.team_id,
-      status: response.status,
-      progress: 0,
-      createdAt: new Date(response.created_at),
-      startedAt: response.started_at ? new Date(response.started_at) : undefined,
-      completedAt: response.completed_at ? new Date(response.completed_at) : undefined,
-      cost: response.actual_cost || 0,
-      workflowNodes: response.workflow_config?.nodes || [],
-    };
+    return mapOperationToTask(response);
   } catch (error) {
     console.error('Failed to load task:', error);
     return null;
@@ -116,6 +104,28 @@ export async function getTask(taskId: number): Promise<Task | null> {
 
 export async function createTask(task: Omit<Task, 'id' | 'createdAt'>): Promise<Task> {
   try {
+    // Convert workflow nodes to backend format
+    const workflowConfig = {
+      title: task.title,
+      description: task.description,
+      nodes: task.workflowNodes.map((node) => ({
+        id: node.id,
+        name: node.name,
+        description: node.description,
+        agentId: node.agentId,
+        agentName: node.agentName,
+        agentRole: node.agentRole,
+        action: node.action,
+        inputs: node.inputs,
+        outputs: node.outputs,
+        dependsOn: node.dependsOn,
+        status: node.status,
+        order: node.order,
+      })),
+      estimated_time: task.estimatedTime,
+      estimated_cost: task.estimatedCost,
+    };
+
     const response = await apiRequest('/api/operations', {
       method: 'POST',
       body: JSON.stringify({
@@ -123,25 +133,11 @@ export async function createTask(task: Omit<Task, 'id' | 'createdAt'>): Promise<
         title: task.title,
         description: task.description,
         status: task.status,
-        progress: task.progress || 0,
-        cost: task.cost,
-        workflowNodes: task.workflowNodes,
+        workflow_config: workflowConfig,
       }),
     });
 
-    return {
-      id: response.id,
-      title: response.title,
-      description: response.description,
-      teamId: response.team_id,
-      status: response.status,
-      progress: 0,
-      createdAt: new Date(response.created_at),
-      startedAt: response.started_at ? new Date(response.started_at) : undefined,
-      completedAt: response.completed_at ? new Date(response.completed_at) : undefined,
-      cost: response.actual_cost || 0,
-      workflowNodes: response.workflow_config?.nodes || [],
-    };
+    return mapOperationToTask(response);
   } catch (error) {
     console.error('Failed to create task:', error);
     throw error;
