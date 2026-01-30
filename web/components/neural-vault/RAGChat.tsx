@@ -26,12 +26,14 @@ export default function RAGChat({ graph, onHighlightNodes, onSelectNode }: RAGCh
     {
       id: '1',
       role: 'assistant',
-      content: `Hello! I'm your Knowledge Graph assistant. I can help you query the ${graph.metadata.departments.join(', ')} team's institutional memory.
+      content: `Hello! I'm your Personal Brand Intelligence assistant. I can help you explore your brand's knowledge graph and strategic decisions.
 
 Try asking:
-• "Have we ever accepted a liability cap below $1M?"
-• "What risks has Sarah Mitchell identified?"
-• "Show me all GDPR-related decisions"`,
+• "What are my brand colors and why were they chosen?"
+• "What's my target audience profile?"
+• "Show me my brand personality traits"
+• "What content pillars have we defined?"
+• "What makes my brand unique?"`,
     },
   ]);
   const [input, setInput] = useState('');
@@ -69,15 +71,15 @@ Try asking:
       {/* Context Bar */}
       <div className="flex-shrink-0 p-4 border-b border-slate-700/50">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#6366F1] to-[#06B6D4] flex items-center justify-center">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#A3FF12] to-[#FFB800] flex items-center justify-center">
+            <svg className="w-6 h-6 text-[#0B0E14]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
             </svg>
           </div>
           <div className="flex-1">
-            <div className="text-sm font-semibold text-white">Querying Neural Vault</div>
+            <div className="text-sm font-semibold text-white">Brand Intelligence</div>
             <div className="text-xs text-slate-400">
-              {graph.metadata.departments.join(', ')} • {graph.metadata.totalSize} of structured data
+              Personal Branding • {graph.metadata.totalSize} of brand knowledge
             </div>
           </div>
         </div>
@@ -126,11 +128,11 @@ Try asking:
             <div className="glass rounded-lg p-4">
               <div className="flex items-center gap-2">
                 <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-[#06B6D4] rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-[#06B6D4] rounded-full animate-bounce delay-100"></div>
-                  <div className="w-2 h-2 bg-[#06B6D4] rounded-full animate-bounce delay-200"></div>
+                  <div className="w-2 h-2 bg-[#A3FF12] rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-[#FFB800] rounded-full animate-bounce delay-100"></div>
+                  <div className="w-2 h-2 bg-[#A3FF12] rounded-full animate-bounce delay-200"></div>
                 </div>
-                <span className="text-xs text-slate-400">Searching knowledge graph...</span>
+                <span className="text-xs text-slate-400">Analyzing your brand intelligence...</span>
               </div>
             </div>
           </div>
@@ -144,13 +146,13 @@ Try asking:
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask anything about your company's knowledge..."
-            className="w-full px-4 py-3 pr-12 bg-[#020617]/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#6366F1] focus:border-transparent transition-all"
+            placeholder="Ask about your brand strategy, colors, audience, personality..."
+            className="w-full px-4 py-3 pr-12 bg-[#020617]/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#A3FF12] focus:border-transparent transition-all"
           />
           <button
             type="submit"
             disabled={!input.trim()}
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-[#6366F1] text-white flex items-center justify-center hover:bg-[#5558E3] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-[#A3FF12] text-[#0B0E14] flex items-center justify-center hover:bg-[#8FE010] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -166,80 +168,199 @@ Try asking:
 function simulateRAGQuery(query: string, graph: KnowledgeGraph): Message {
   const lowerQuery = query.toLowerCase();
 
-  // Example: liability cap query
-  if (lowerQuery.includes('liability') && lowerQuery.includes('1m')) {
-    const riskNodes = graph.nodes.filter((n) => n.type === 'risk' && n.properties.category === 'financial');
+  // Brand colors query
+  if (lowerQuery.includes('color') || lowerQuery.includes('palette')) {
+    const colorNodes = graph.nodes.filter((n) => n.type === 'decision' && n.label.toLowerCase().includes('color'));
     return {
       id: Date.now().toString(),
       role: 'assistant',
-      content: `Yes, we have accepted liability caps below $1M in **two** cases:
+      content: `Your brand color palette has been strategically designed:
 
-1. **Acme Corp**: $500,000 limitation of liability
-2. **DataFlow Systems**: $750,000 limitation of liability
+**Primary Colors:**
+• **Neon Lime (#A3FF12)**: Represents growth, innovation, and forward-thinking energy
+• **Electric Cyan (#00F5FF)**: Symbolizes clarity, trust, and digital expertise
 
-Both were flagged as risks by Sarah Mitchell during compliance audits.`,
+**Supporting Colors:**
+• **Warm Amber (#FFB800)**: Conveys approachability and optimism
+• **Deep Charcoal (#0B0E14)**: Provides sophistication and professional grounding
+
+Aurora (Color Oracle) recommended this palette because it balances bold, modern energy with professional credibility - perfect for standing out while maintaining authority in your space.`,
       sources: [
         {
-          nodeId: 'risk-indemnification',
-          label: 'Indemnification Risk - Acme Corp',
-          evidence: 'Clause 7.2: Liability limited to $500,000',
-        },
-        {
-          nodeId: 'risk-liability-cap',
-          label: 'Low Liability Cap - DataFlow',
-          evidence: 'Liability cap of $750K below threshold',
+          nodeId: 'decision-brand-colors',
+          label: 'Brand Color Palette Decision',
+          evidence: 'Vibrant, modern palette that stands out while maintaining professionalism',
         },
       ],
-      highlightNodes: riskNodes.map((n) => n.id),
+      highlightNodes: colorNodes.map((n) => n.id),
     };
   }
 
-  // Example: Sarah Mitchell query
-  if (lowerQuery.includes('sarah') || lowerQuery.includes('mitchell')) {
-    const sarahRisks = graph.edges
-      .filter((e) => e.source === 'agent-sarah' && e.type === 'identified')
-      .map((e) => graph.nodes.find((n) => n.id === e.target))
-      .filter((n) => n !== undefined);
-
+  // Target audience query
+  if (lowerQuery.includes('audience') || lowerQuery.includes('target') || lowerQuery.includes('who')) {
+    const audienceNodes = graph.nodes.filter((n) => n.type === 'concept' && n.label.toLowerCase().includes('audience'));
     return {
       id: Date.now().toString(),
       role: 'assistant',
-      content: `Sarah Mitchell (Compliance Auditor) has identified **${sarahRisks.length} risks** in the knowledge graph:
+      content: `Your target audience profile has been defined by Atlas (Brand Strategist):
 
-• Indemnification Risk in Acme Corp contract
-• Low Liability Cap in DataFlow Systems contract
+**Primary Audience:**
+• **Demographics**: 28-45 years old, digitally native professionals
+• **Psychographics**: Early adopters, innovation-seekers, value authenticity
+• **Pain Points**: Overwhelmed by generic advice, seeking personalized guidance
+• **Aspirations**: Building authority in their field, making meaningful impact
 
-She also learned the "German Servers = Compliant" decision from CEO feedback.`,
-      sources: sarahRisks.map((node) => ({
-        nodeId: node!.id,
-        label: node!.label,
-        evidence: node!.description,
-      })),
-      highlightNodes: ['agent-sarah', ...sarahRisks.map((n) => n!.id)],
+**Secondary Audience:**
+• Emerging leaders and solopreneurs (25-35)
+• Seeking mentorship and strategic direction
+
+Your brand speaks to people who are ready to level up and want a partner who gets the nuances of their journey.`,
+      sources: [
+        {
+          nodeId: 'concept-target-audience',
+          label: 'Target Audience Profile',
+          evidence: 'Digitally-native professionals seeking authentic, strategic guidance',
+        },
+      ],
+      highlightNodes: audienceNodes.map((n) => n.id),
     };
   }
 
-  // Example: GDPR query
-  if (lowerQuery.includes('gdpr')) {
-    const gdprNodes = graph.nodes.filter(
-      (n) => n.label.toLowerCase().includes('gdpr') || n.description.toLowerCase().includes('gdpr')
-    );
-
+  // Brand personality query
+  if (lowerQuery.includes('personality') || lowerQuery.includes('traits') || lowerQuery.includes('voice')) {
+    const personalityNodes = graph.nodes.filter((n) => n.type === 'preference' || (n.type === 'concept' && n.label.toLowerCase().includes('personality')));
     return {
       id: Date.now().toString(),
       role: 'assistant',
-      content: `I found **${gdprNodes.length} GDPR-related items** in the knowledge graph:
+      content: `Your brand personality has been crafted to resonate authentically:
 
-• **GDPR Article 4**: Definitions of personal data and processing
-• **German Servers Decision**: EU data hosted on German servers meets GDPR requirements
+**Core Traits:**
+• **Innovative**: Forward-thinking, embracing cutting-edge ideas
+• **Authentic**: Real, transparent, no corporate fluff
+• **Strategic**: Thoughtful, intentional, data-informed
+• **Empowering**: Uplifting, confidence-building, action-oriented
 
-This decision was learned from CEO feedback during Operation #442.`,
-      sources: gdprNodes.map((node) => ({
+**Brand Voice:**
+• Conversational yet professional
+• Direct without being harsh
+• Inspiring without being preachy
+• Knowledgeable without being condescending
+
+Aria (Senior Brand Lead) emphasized that your personality should feel like a trusted advisor who's been in the trenches and genuinely cares about your success.`,
+      sources: [
+        {
+          nodeId: 'preference-brand-voice',
+          label: 'Brand Voice & Personality',
+          evidence: 'Authentic, strategic, empowering - a trusted advisor approach',
+        },
+      ],
+      highlightNodes: personalityNodes.map((n) => n.id),
+    };
+  }
+
+  // Content pillars query
+  if (lowerQuery.includes('content') || lowerQuery.includes('pillar') || lowerQuery.includes('topics')) {
+    const contentNodes = graph.nodes.filter((n) => n.type === 'concept' && n.label.toLowerCase().includes('content'));
+    return {
+      id: Date.now().toString(),
+      role: 'assistant',
+      content: `Your content strategy is built on **4 core pillars** defined by Sage (Content Architect):
+
+**1. Strategic Insights** (40%)
+• Industry trends and analysis
+• Framework breakdowns
+• Strategic planning guidance
+
+**2. Personal Growth** (30%)
+• Mindset and leadership development
+• Skill-building resources
+• Career evolution stories
+
+**3. Behind-the-Scenes** (20%)
+• Your journey and lessons learned
+• Process reveals and case studies
+• Authentic vulnerability
+
+**4. Community Engagement** (10%)
+• Audience spotlights
+• Q&A and collaborative content
+• Celebrating wins together
+
+This balance positions you as both an expert guide and a relatable human on the same journey.`,
+      sources: [
+        {
+          nodeId: 'concept-content-pillars',
+          label: 'Content Pillar Strategy',
+          evidence: 'Strategic insights, personal growth, authenticity, community - balanced approach',
+        },
+      ],
+      highlightNodes: contentNodes.map((n) => n.id),
+    };
+  }
+
+  // Unique value query
+  if (lowerQuery.includes('unique') || lowerQuery.includes('different') || lowerQuery.includes('stand out')) {
+    const uniqueNodes = graph.nodes.filter((n) => n.type === 'decision' && n.label.toLowerCase().includes('positioning'));
+    return {
+      id: Date.now().toString(),
+      role: 'assistant',
+      content: `What makes your brand unique has been crystallized by your brand team:
+
+**Your Distinctive Edge:**
+• You don't just teach theory - you've built, scaled, and sold real businesses
+• You combine data-driven strategy with intuitive creativity
+• You're building a movement, not just an audience
+• You prioritize depth over virality, substance over trends
+
+**Market Differentiation:**
+Unlike generic "gurus" who recycle surface-level advice, you offer:
+• Battle-tested frameworks from actual experience
+• Nuanced takes that acknowledge complexity
+• A community-first approach over transactional relationships
+• Systems thinking applied to personal branding
+
+Atlas identified this positioning as your "unfair advantage" - you're speaking from scars, not scripts.`,
+      sources: [
+        {
+          nodeId: 'decision-brand-positioning',
+          label: 'Brand Positioning & Differentiation',
+          evidence: 'Experience-driven, strategic depth, community-focused approach',
+        },
+      ],
+      highlightNodes: uniqueNodes.map((n) => n.id),
+    };
+  }
+
+  // Agent/team member query
+  if (lowerQuery.includes('aurora') || lowerQuery.includes('atlas') || lowerQuery.includes('lexis') || lowerQuery.includes('sage') || lowerQuery.includes('aria')) {
+    const agentNodes = graph.nodes.filter((n) => n.type === 'agent');
+    return {
+      id: Date.now().toString(),
+      role: 'assistant',
+      content: `Your personal branding team consists of **5 specialized AI agents**:
+
+**🎨 Aurora** (Color Oracle)
+Expert in color psychology and visual identity
+
+**🗺️ Atlas** (Brand Strategist)
+Positioning, market analysis, and strategic direction
+
+**✍️ Lexis** (Naming Expert)
+Brand naming, taglines, and messaging architecture
+
+**📚 Sage** (Content Architect)
+Content strategy, pillars, and editorial planning
+
+**👑 Aria** (Senior Brand Lead)
+Overall coordination and strategic oversight
+
+Each agent learns your preferences over time and contributes their expertise to build a cohesive, authentic personal brand.`,
+      sources: agentNodes.map((node) => ({
         nodeId: node.id,
         label: node.label,
         evidence: node.description,
       })),
-      highlightNodes: gdprNodes.map((n) => n.id),
+      highlightNodes: agentNodes.map((n) => n.id),
     };
   }
 
@@ -247,12 +368,13 @@ This decision was learned from CEO feedback during Operation #442.`,
   return {
     id: Date.now().toString(),
     role: 'assistant',
-    content: `I searched through the knowledge graph but couldn't find specific information about "${query}".
+    content: `I searched your brand knowledge graph but couldn't find specific information about "${query}".
 
 Try asking about:
-• Specific vendors (e.g., "Acme Corp", "DataFlow")
-• Risk categories (e.g., "financial risks", "liability caps")
-• Policies and regulations (e.g., "GDPR")
-• Agent activities (e.g., "what has Sarah identified?")`,
+• **Brand Strategy**: "What's my unique positioning?" "Who's my target audience?"
+• **Visual Identity**: "What are my brand colors?" "Why these colors?"
+• **Content**: "What content pillars have we defined?" "What should I post about?"
+• **Personality**: "What's my brand voice?" "How should I communicate?"
+• **Team**: "Who's on my brand team?" "What does Aurora recommend?"`,
   };
 }

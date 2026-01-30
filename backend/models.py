@@ -214,3 +214,90 @@ class ChatMessage(Base):
     # Relationships
     team = relationship("Team")
     user = relationship("User")
+
+
+class Assumption(Base):
+    """
+    Assumptions Inbox - agents ask clarifying questions instead of hallucinating.
+    """
+    __tablename__ = "assumptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"))
+    operation_id = Column(Integer, ForeignKey("operations.id"), nullable=True)
+    agent_id = Column(Integer, ForeignKey("agents.id"), nullable=True)
+
+    # Question Details
+    question = Column(Text)
+    context = Column(Text, default="")
+    options = Column(JSON, default=[])  # Suggested answers
+
+    # Answer
+    answer = Column(Text, nullable=True)
+    answered_at = Column(DateTime, nullable=True)
+
+    # Priority and Status
+    priority = Column(String, default="normal")  # low, normal, high, critical
+    status = Column(String, default="pending")  # pending, answered, dismissed
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    team = relationship("Team")
+    operation = relationship("Operation")
+    agent = relationship("Agent")
+
+
+class UserPreference(Base):
+    """
+    User preferences and settings.
+    """
+    __tablename__ = "user_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+
+    # Appearance
+    theme = Column(String, default="dark")  # light, dark, system
+
+    # Notifications
+    notifications_enabled = Column(Boolean, default=True)
+    email_notifications = Column(Boolean, default=True)
+
+    # Defaults
+    default_team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
+
+    # Layout preferences (stored as JSON)
+    dashboard_layout = Column(JSON, default={})
+
+    # AI Interaction
+    ai_interaction_style = Column(String, default="conversational")  # concise, detailed, conversational
+
+    # Timestamps
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User")
+
+
+class UserObjective(Base):
+    """
+    Saved user objectives/goals for quick access.
+    """
+    __tablename__ = "user_objectives"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
+
+    # Objective Details
+    title = Column(String)
+    description = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User")
+    team = relationship("Team")

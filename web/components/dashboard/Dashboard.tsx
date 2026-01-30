@@ -150,8 +150,8 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
 
         {/* Main Workspace */}
         <main className="flex-1 overflow-y-auto flex flex-col bg-[#0B0E14]">
-          {/* Breadcrumb Navigation - Show when not on home, inbox, or billing */}
-          {activeView !== 'home' && activeView !== 'inbox' && activeView !== 'billing' && (
+          {/* Breadcrumb Navigation - Show when not on home, inbox, billing, or vault */}
+          {activeView !== 'home' && activeView !== 'inbox' && activeView !== 'billing' && activeView !== 'vault' && (
             <div className="bg-[#0B0E14]/50 border-b border-[#161B22] px-6 py-3">
               <Breadcrumb items={getBreadcrumbItems()} />
             </div>
@@ -174,8 +174,15 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
             </div>
           )}
 
+          {/* Vault gets full height without padding */}
+          {activeView === 'vault' && currentTeam && (
+            <div className="flex-1 overflow-hidden">
+              <NeuralVaultView />
+            </div>
+          )}
+
           {/* Other views get padding wrapper */}
-          {activeView !== 'inbox' && activeView !== 'billing' && (
+          {activeView !== 'inbox' && activeView !== 'billing' && activeView !== 'vault' && (
             <div className="p-6">
               {activeView === 'home' && <HomeView onSelectTeam={handleSelectTeam} />}
 
@@ -226,15 +233,14 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
               {activeView === 'board' && currentTeam && <BoardView teamId={currentTeam.id.toString()} />}
               {activeView === 'office' && currentTeam && <OfficeView teamId={currentTeam.id.toString()} />}
               {activeView === 'store' && currentTeam && <TalentHubView teamId={currentTeam.id.toString()} />}
-              {activeView === 'vault' && currentTeam && <NeuralVaultView />}
               {activeView === 'workshop' && currentTeam && <WorkshopView />}
               {activeView === 'war-room' && currentTeam && <OperationsView teamId={currentTeam.id.toString()} />}
             </div>
           )}
         </main>
 
-        {/* Right Sidebar - Contextual - Only show when in a team and not in inbox or billing */}
-        {currentTeam && activeView !== 'home' && activeView !== 'inbox' && activeView !== 'billing' && (
+        {/* Right Sidebar - Contextual - Only show when in a team and not in inbox, billing, or vault */}
+        {currentTeam && activeView !== 'home' && activeView !== 'inbox' && activeView !== 'billing' && activeView !== 'vault' && (
           <aside className="w-80 border-l border-[#161B22] bg-[#0B0E14]">
             {/* Manager Chat - Full screen height */}
             <ManagerChat teamId={currentTeam.id.toString()} />

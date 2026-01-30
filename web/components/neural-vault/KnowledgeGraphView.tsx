@@ -23,6 +23,31 @@ export default function KnowledgeGraphView({ teamId }: KnowledgeGraphViewProps) 
   const [selectedNode, setSelectedNode] = useState<KnowledgeNode | null>(null);
   const [highlightedNodes, setHighlightedNodes] = useState<string[]>([]);
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
+  const [isRagChatOpen, setIsRagChatOpen] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+        setIsFullscreen(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   useEffect(() => {
     // Sync learned preferences from agents to knowledge graph
@@ -93,9 +118,19 @@ export default function KnowledgeGraphView({ teamId }: KnowledgeGraphViewProps) 
             </div>
           </div>
 
-          <p className="text-xs text-slate-600">
-            {displayGraph.metadata.totalSize} of intelligence
-          </p>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={toggleFullscreen}
+              className="glass rounded-lg px-3 py-1.5 hover:bg-white/10 transition-all text-white text-xs font-medium flex items-center gap-2"
+              title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+            >
+              {isFullscreen ? '⤓ Exit' : '⤢ Fullscreen'}
+            </button>
+
+            <p className="text-xs text-slate-600">
+              {displayGraph.metadata.totalSize} of intelligence
+            </p>
+          </div>
         </div>
       </div>
 
@@ -111,6 +146,15 @@ export default function KnowledgeGraphView({ teamId }: KnowledgeGraphViewProps) 
               selectedNodeId={selectedNode?.id || null}
               highlightedQuery={highlightedNodes.length > 0 ? 'highlighted' : undefined}
             />
+
+            {/* Toggle RAG Chat Button */}
+            <button
+              onClick={() => setIsRagChatOpen(!isRagChatOpen)}
+              className="absolute bottom-6 right-6 glass rounded-lg px-4 py-2 hover:bg-white/10 transition-all text-white text-sm font-medium flex items-center gap-2"
+              title={isRagChatOpen ? 'Hide RAG Chat' : 'Show RAG Chat'}
+            >
+              {isRagChatOpen ? '→ Hide Chat' : '← Show Chat'}
+            </button>
           </div>
 
           {/* Time Travel Slider - Compact */}
@@ -122,14 +166,16 @@ export default function KnowledgeGraphView({ teamId }: KnowledgeGraphViewProps) 
           </div>
         </div>
 
-        {/* Right: RAG Chat - Smaller */}
-        <div className="w-80 border-l border-[#161B22] bg-[#161B22]/30 flex flex-col min-h-0">
-          <RAGChat
-            graph={displayGraph}
-            onHighlightNodes={handleHighlightNodes}
-            onSelectNode={handleSelectNodeById}
-          />
-        </div>
+        {/* Right: RAG Chat - Collapsible */}
+        {isRagChatOpen && (
+          <div className="w-80 border-l border-[#161B22] bg-[#161B22]/30 flex flex-col min-h-0 transition-all duration-300">
+            <RAGChat
+              graph={displayGraph}
+              onHighlightNodes={handleHighlightNodes}
+              onSelectNode={handleSelectNodeById}
+            />
+          </div>
+        )}
       </div>
 
       {/* Node Detail Panel (Slide-out) */}

@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { evoService } from '@/lib/services/evo';
 import { chatAPI } from '@/lib/api';
 import ManagerMarketplaceModal from './ManagerMarketplaceModal';
 
 interface Message {
   id: number;
-  from: 'user' | 'manager';
+  from: 'user' | 'evo';
   text: string;
   displayText: string;
   isTyping: boolean;
@@ -31,6 +32,9 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
+  // Convert teamId to number for API calls
+  const teamIdNum = parseInt(teamId, 10);
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (messagesContainerRef.current) {
@@ -38,10 +42,46 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
     }
   }, [messages]);
 
+  // Type out a message with animation
+  const typeMessage = useCallback((text: string, messageId: number, onComplete?: () => void) => {
+    let charIndex = 0;
+    const typingSpeed = 20;
+
+    const typeInterval = setInterval(() => {
+      if (charIndex < text.length) {
+        setMessages(prev => {
+          const updated = [...prev];
+          const msgIndex = updated.findIndex(m => m.id === messageId);
+          if (msgIndex !== -1) {
+            updated[msgIndex] = {
+              ...updated[msgIndex],
+              displayText: text.substring(0, charIndex + 1),
+            };
+          }
+          return updated;
+        });
+        charIndex++;
+      } else {
+        clearInterval(typeInterval);
+        setMessages(prev => {
+          const updated = [...prev];
+          const msgIndex = updated.findIndex(m => m.id === messageId);
+          if (msgIndex !== -1) {
+            updated[msgIndex] = { ...updated[msgIndex], isTyping: false };
+          }
+          return updated;
+        });
+        onComplete?.();
+      }
+    }, typingSpeed);
+
+    return () => clearInterval(typeInterval);
+  }, []);
+
   // Load chat history when component mounts or teamId changes
   useEffect(() => {
     const loadChatHistory = async () => {
-      if (!teamId || teamId === 'undefined' || teamId === 'null') {
+      if (!teamId || teamId === 'undefined' || teamId === 'null' || isNaN(teamIdNum)) {
         setIsLoadingHistory(false);
         return;
       }
@@ -53,10 +93,10 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
         if (history.messages && history.messages.length > 0) {
           // Filter for Evo's messages only (exclude Aria's messages)
           const loadedMessages: Message[] = history.messages
-            .filter((msg: any) => !msg.context?.ariaChat) // Only Evo's messages
-            .map((msg: any) => ({
+            .filter((msg: { context?: { ariaChat?: boolean } }) => !msg.context?.ariaChat)
+            .map((msg: { id: number; role: string; content: string; created_at: string }) => ({
               id: msg.id,
-              from: msg.role === 'user' ? 'user' : 'manager',
+              from: msg.role === 'user' ? 'user' : 'evo',
               text: msg.content,
               displayText: msg.content,
               isTyping: false,
@@ -66,19 +106,16 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
           if (loadedMessages.length > 0) {
             setMessages(loadedMessages);
           } else {
-            // No Evo messages, send initial message
             sendInitialMessage();
           }
         } else {
-          // New team - send initial onboarding message
           sendInitialMessage();
         }
-      } catch (err: any) {
-        // Suppress "Team not found" error for new teams - this is expected
-        if (!err.message?.includes('Team not found')) {
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        if (!errorMessage.includes('Team not found')) {
           console.error('Failed to load chat history:', err);
         }
-        // On error (like "Team not found" for new teams), send initial message
         sendInitialMessage();
       } finally {
         setIsLoadingHistory(false);
@@ -86,15 +123,14 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
     };
 
     loadChatHistory();
-  }, [teamId]);
+  }, [teamId, teamIdNum]);
 
-  const sendInitialMessage = async () => {
-    // Use a hardcoded welcome message for Stage 1 onboarding
-    const welcomeText = 'Welcome to your new Branding Department. I see we have a fresh workspace here, but no one\'s at their desks yet. To help me staff this team correctly, what is our primary objective for this department?';
+  const sendInitialMessage = () => {
+    const welcomeText = 'Welcome to your new team workspace. I\'m Evo, your AI Chief Operating Officer. I\'ll help you build and manage your digital workforce.\n\nTo get started, **what is the primary objective** for this team? What do you want to accomplish?';
 
     const welcomeMessage: Message = {
       id: 1,
-      from: 'manager',
+      from: 'evo',
       text: welcomeText,
       displayText: '',
       isTyping: true,
@@ -102,39 +138,14 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
     };
 
     setMessages([welcomeMessage]);
-
-    // Type out the message
-    let charIndex = 0;
-    const typingSpeed = 25;
-
-    const typeInterval = setInterval(() => {
-      if (charIndex < welcomeText.length) {
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[0] = {
-            ...updated[0],
-            displayText: welcomeText.substring(0, charIndex + 1),
-          };
-          return updated;
-        });
-        charIndex++;
-      } else {
-        clearInterval(typeInterval);
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[0] = { ...updated[0], isTyping: false };
-          return updated;
-        });
-      }
-    }, typingSpeed);
+    typeMessage(welcomeText, 1);
   };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || isLoading) return;
 
-    // Validate teamId
-    if (!teamId || teamId === 'undefined' || teamId === 'null') {
+    if (!teamId || teamId === 'undefined' || teamId === 'null' || isNaN(teamIdNum)) {
       setError('No team selected. Please select a team first.');
       return;
     }
@@ -156,9 +167,10 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
     setMessages(prev => [...prev, userMsg]);
 
     // Add loading message
+    const loadingId = Date.now() + 1;
     const loadingMsg: Message = {
-      id: Date.now() + 1,
-      from: 'manager',
+      id: loadingId,
+      from: 'evo',
       text: '...',
       displayText: '...',
       isTyping: false,
@@ -170,28 +182,16 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
     setIsLoading(true);
 
     try {
-      // Check if this is the first user response (only 1 message: welcome)
+      // Check conversation stage for onboarding flow
       const isFirstResponse = messages.length === 1;
-      // Check if this is the second user response (choosing path)
       const isSecondResponse = messages.length === 3;
 
-      let contextMessage = userMessage;
-
-      // For first response, store objective and add context about offering the two paths
+      // For first response, store objective
       if (isFirstResponse) {
         setUserObjective(userMessage);
-        contextMessage = `User's objective: "${userMessage}"
-
-Based on their objective, offer them two paths:
-
-1. **Hire a Lead Manager (Recommended)**: You'll bring on a specialist like Aria (Senior Brand Lead). She will handle the specialized agents, clear assumptions with them, and manage the workflow.
-
-2. **Direct Management (DIY)**: They hire the agents themselves from the Workforce Store and give them direct tasks.
-
-Parse keywords from their objective (e.g., "high-end", "personal brand", "AI consulting") and acknowledge them. Then present these two options clearly and ask which path they'd like to take. Keep it concise and professional.`;
       }
 
-      // For second response, detect if they chose Lead Manager
+      // For second response, check if choosing Lead Manager
       if (isSecondResponse) {
         const lowerMessage = userMessage.toLowerCase();
         const choosingLeadManager =
@@ -205,28 +205,44 @@ Parse keywords from their objective (e.g., "high-end", "personal brand", "AI con
           lowerMessage.includes('specialist');
 
         if (choosingLeadManager) {
-          // User chose Lead Manager path - show marketplace
           setShowManagerMarketplace(true);
-          // Don't send to LLM, we'll handle this with scripted response
           setIsLoading(false);
           setMessages(prev => prev.filter(m => !m.isLoading));
           return;
         }
       }
 
-      // Call the backend API with Evo context
-      const response = await chatAPI.sendManagerMessage(teamId, contextMessage, {
-        evoChat: true,
-      });
+      // Build context for Evo
+      let context: Record<string, unknown> = { source: 'evo_onboarding' };
 
-      // Remove loading message and add real response with typing animation
+      if (isFirstResponse) {
+        context = {
+          ...context,
+          isFirstResponse: true,
+          instruction: `The user just shared their objective: "${userMessage}".
+
+Based on their objective, offer them two paths:
+
+1. **Hire a Lead Manager (Recommended)**: Bring on a specialist like Aria Martinez (Senior Brand Lead). She will handle hiring specialized agents, clear assumptions with them, and manage the workflow.
+
+2. **Direct Management (DIY)**: They hire agents themselves from the Store and give them direct tasks.
+
+Parse keywords from their objective and acknowledge them. Then present these two options clearly. Keep it concise.`,
+        };
+      }
+
+      // Call Evo service
+      const response = await evoService.chat(teamIdNum, userMessage, context);
+
+      // Remove loading message and add response
       setMessages(prev => {
         const filtered = prev.filter(m => !m.isLoading);
+        const responseId = Date.now() + 2;
         return [
           ...filtered,
           {
-            id: Date.now() + 2,
-            from: 'manager',
+            id: responseId,
+            from: 'evo' as const,
             text: response.response,
             displayText: '',
             isTyping: true,
@@ -236,47 +252,23 @@ Parse keywords from their objective (e.g., "high-end", "personal brand", "AI con
       });
 
       // Type out the response
-      const responseText = response.response;
-      let charIndex = 0;
-      const typingSpeed = 25;
+      setTimeout(() => {
+        const responseId = Date.now() + 2;
+        typeMessage(response.response, responseId);
+      }, 50);
 
-      const typeInterval = setInterval(() => {
-        if (charIndex < responseText.length) {
-          setMessages(prev => {
-            const updated = [...prev];
-            const lastIndex = updated.length - 1;
-            updated[lastIndex] = {
-              ...updated[lastIndex],
-              displayText: responseText.substring(0, charIndex + 1),
-            };
-            return updated;
-          });
-          charIndex++;
-        } else {
-          clearInterval(typeInterval);
-          setMessages(prev => {
-            const updated = [...prev];
-            const lastIndex = updated.length - 1;
-            updated[lastIndex] = { ...updated[lastIndex], isTyping: false };
-            return updated;
-          });
-        }
-      }, typingSpeed);
-    } catch (err: any) {
-      // Remove loading message
+    } catch (err: unknown) {
       setMessages(prev => prev.filter(m => !m.isLoading));
+      const errorMessage = err instanceof Error ? err.message : 'Failed to get response';
+      setError(errorMessage);
 
-      // Show error
-      setError(err.message || 'Failed to get response');
-
-      // Add error message
       setMessages(prev => [
         ...prev,
         {
           id: Date.now() + 2,
-          from: 'manager',
-          text: 'Sorry, I\'m having trouble connecting right now. Please try again.',
-          displayText: 'Sorry, I\'m having trouble connecting right now. Please try again.',
+          from: 'evo',
+          text: 'I apologize, but I\'m having trouble connecting right now. Please try again.',
+          displayText: 'I apologize, but I\'m having trouble connecting right now. Please try again.',
           isTyping: false,
           timestamp: new Date(),
         },
@@ -287,14 +279,15 @@ Parse keywords from their objective (e.g., "high-end", "personal brand", "AI con
   };
 
   const handleAriaHired = () => {
-    // Close marketplace modal
     setShowManagerMarketplace(false);
 
-    // Add Evo's handover message
+    const handoverText = "Excellent choice. I'm bringing Aria Martinez onboard now. She's a Level 10 Senior Brand Lead with expertise in personal branding and executive positioning.\n\nI'm handing the floor to her. She'll review your objective and start building your team.";
+    const handoverId = Date.now();
+
     const handoverMessage: Message = {
-      id: Date.now(),
-      from: 'manager',
-      text: "Excellent. I'm handing the floor to Aria. She's currently reviewing your objective.",
+      id: handoverId,
+      from: 'evo',
+      text: handoverText,
       displayText: '',
       isTyping: true,
       timestamp: new Date(),
@@ -302,43 +295,12 @@ Parse keywords from their objective (e.g., "high-end", "personal brand", "AI con
 
     setMessages(prev => [...prev, handoverMessage]);
 
-    // Type out the handover message
-    let charIndex = 0;
-    const typingSpeed = 25;
-    const fullText = handoverMessage.text;
-
-    const typeInterval = setInterval(() => {
-      if (charIndex < fullText.length) {
-        setMessages(prev => {
-          const updated = [...prev];
-          const lastIndex = updated.length - 1;
-          updated[lastIndex] = {
-            ...updated[lastIndex],
-            displayText: fullText.substring(0, charIndex + 1),
-          };
-          return updated;
-        });
-        charIndex++;
-      } else {
-        clearInterval(typeInterval);
-        setMessages(prev => {
-          const updated = [...prev];
-          const lastIndex = updated.length - 1;
-          updated[lastIndex] = { ...updated[lastIndex], isTyping: false };
-          return updated;
-        });
-
-        // After typing completes, trigger Aria to appear in inbox
-        localStorage.setItem('userObjective', userObjective);
-
-        // Wait a moment then call the callback to add Aria
-        setTimeout(() => {
-          if (onAriaHired) {
-            onAriaHired();
-          }
-        }, 800);
-      }
-    }, typingSpeed);
+    typeMessage(handoverText, handoverId, () => {
+      localStorage.setItem('userObjective', userObjective);
+      setTimeout(() => {
+        onAriaHired?.();
+      }, 800);
+    });
   };
 
   return (
@@ -349,128 +311,133 @@ Parse keywords from their objective (e.g., "high-end", "personal brand", "AI con
         onHireAria={handleAriaHired}
         teamId={teamId}
       />
-    <div className="h-[calc(100vh-48px)] flex flex-col bg-[#020617]">
-      {/* Header */}
-      <div className="flex-shrink-0 px-6 py-4 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center text-lg border border-slate-700">
-              🧠
+      <div className="h-[calc(100vh-48px)] flex flex-col bg-slate-950">
+        {/* Header */}
+        <div className="flex-shrink-0 px-6 py-4 border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <span className="text-white font-bold text-sm">EVO</span>
+              </div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-950"></div>
             </div>
-            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#020617]"></div>
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-white">Evo</h3>
-            <p className="text-xs text-slate-500">General Manager AI</p>
+            <div>
+              <h3 className="text-sm font-semibold text-white">Evo</h3>
+              <p className="text-xs text-slate-400">AI Chief Operating Officer</p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Messages */}
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-3 bg-[#020617] min-h-0">
-        {isLoadingHistory ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <div className="w-8 h-8 border-2 border-slate-700 border-t-[#6366F1] rounded-full animate-spin mx-auto mb-2"></div>
-              <p className="text-sm text-slate-500">Loading conversation...</p>
-            </div>
-          </div>
-        ) : (
-          messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[70%] rounded-lg p-3 ${
-                msg.from === 'user'
-                  ? 'bg-[#6366F1] text-white'
-                  : 'bg-slate-800 text-slate-100 border border-slate-700'
-              }`}
-            >
-              {msg.isLoading ? (
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                  <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                </div>
-              ) : (
-                <div className="text-sm prose prose-invert prose-sm max-w-none">
-                  <ReactMarkdown
-                    components={{
-                      p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                      ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>,
-                      ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,
-                      li: ({ children }) => <li className="text-sm">{children}</li>,
-                      strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-                      em: ({ children }) => <em className="italic">{children}</em>,
-                      h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
-                      h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
-                      h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
-                      code: ({ children, className }) => {
-                        const isInline = !className;
-                        return isInline ? (
-                          <code className="bg-slate-700/50 px-1 py-0.5 rounded text-xs">{children}</code>
-                        ) : (
-                          <code className="block bg-slate-700/50 p-2 rounded text-xs overflow-x-auto">{children}</code>
-                        );
-                      },
-                      a: ({ children, href }) => (
-                        <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#6366F1] hover:underline">
-                          {children}
-                        </a>
-                      ),
-                    }}
-                  >
-                    {msg.displayText}
-                  </ReactMarkdown>
-                  {msg.isTyping && (
-                    <span className="inline-block w-0.5 h-4 bg-[#6366F1] ml-0.5 animate-blink"></span>
-                  )}
-                </div>
-              )}
-              <div className="text-xs opacity-50 mt-1">
-                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        {/* Messages */}
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
+          {isLoadingHistory ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="w-8 h-8 border-2 border-slate-700 border-t-indigo-500 rounded-full animate-spin mx-auto mb-2"></div>
+                <p className="text-sm text-slate-500">Loading conversation...</p>
               </div>
             </div>
-          </div>
-          ))
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input - Fixed at bottom */}
-      <form onSubmit={handleSend} className="flex-shrink-0 p-4 border-t border-slate-800 bg-[#0A0A0F]">
-        {error && (
-          <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400">
-            {error}
-          </div>
-        )}
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder={isLoading ? "Evo is typing..." : "Type a message..."}
-            disabled={isLoading}
-            className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-[#6366F1] focus:border-[#6366F1] disabled:opacity-50 disabled:cursor-not-allowed"
-          />
-          <button
-            type="submit"
-            disabled={isLoading || !message.trim()}
-            className="px-4 py-2.5 bg-[#6366F1] hover:bg-[#5558E3] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#6366F1] flex items-center justify-center"
-          >
-            {isLoading ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            )}
-          </button>
+          ) : (
+            messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[75%] rounded-2xl px-4 py-3 ${
+                    msg.from === 'user'
+                      ? 'bg-indigo-600 text-white rounded-br-md'
+                      : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-bl-md'
+                  }`}
+                >
+                  {msg.isLoading ? (
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                  ) : (
+                    <div className="text-sm prose prose-invert prose-sm max-w-none">
+                      <ReactMarkdown
+                        components={{
+                          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                          ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,
+                          li: ({ children }) => <li className="text-sm">{children}</li>,
+                          strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+                          em: ({ children }) => <em className="italic text-slate-300">{children}</em>,
+                          h1: ({ children }) => <h1 className="text-lg font-bold mb-2 text-white">{children}</h1>,
+                          h2: ({ children }) => <h2 className="text-base font-bold mb-2 text-white">{children}</h2>,
+                          h3: ({ children }) => <h3 className="text-sm font-bold mb-1 text-white">{children}</h3>,
+                          code: ({ children, className }) => {
+                            const isInline = !className;
+                            return isInline ? (
+                              <code className="bg-slate-700/50 px-1.5 py-0.5 rounded text-xs">{children}</code>
+                            ) : (
+                              <code className="block bg-slate-900/50 p-2 rounded text-xs overflow-x-auto">{children}</code>
+                            );
+                          },
+                          a: ({ children, href }) => (
+                            <a href={href} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">
+                              {children}
+                            </a>
+                          ),
+                        }}
+                      >
+                        {msg.displayText}
+                      </ReactMarkdown>
+                      {msg.isTyping && (
+                        <span className="inline-block w-0.5 h-4 bg-indigo-400 ml-0.5 animate-pulse"></span>
+                      )}
+                    </div>
+                  )}
+                  <div className={`text-xs mt-2 ${msg.from === 'user' ? 'text-indigo-200' : 'text-slate-500'}`}>
+                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+          <div ref={messagesEndRef} />
         </div>
-      </form>
-    </div>
+
+        {/* Input */}
+        <form onSubmit={handleSend} className="flex-shrink-0 p-4 border-t border-slate-800 bg-slate-900/50">
+          {error && (
+            <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-400 flex items-center justify-between">
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder={isLoading ? "Evo is thinking..." : "Message Evo..."}
+              disabled={isLoading}
+              className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+            <button
+              type="submit"
+              disabled={isLoading || !message.trim()}
+              className="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[48px]"
+            >
+              {isLoading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </>
   );
 }
