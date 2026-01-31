@@ -21,14 +21,15 @@ if str(EVOAGENTX_PATH) not in sys.path:
     sys.path.insert(0, str(EVOAGENTX_PATH))
 
 # Import from EvoAgentX (lazy to avoid import errors if deps missing)
+# Note: EvoAgentX requires additional deps (loguru, etc). We use llm_service instead for now.
 _evo_agent_available = False
 try:
     from evoagentx.agents import Agent as EvoAgent
     from evoagentx.agents import CustomizeAgent as EvoCustomizeAgent
     from evoagentx.models.model_configs import LiteLLMConfig
     _evo_agent_available = True
-except ImportError as e:
-    print(f"Warning: EvoAgentX not fully available: {e}")
+except ImportError:
+    # Silently fall back - we use llm_service instead
     EvoAgent = None
     EvoCustomizeAgent = None
     LiteLLMConfig = None

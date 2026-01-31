@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getTasks, Task, getTask } from '@/lib/tasks';
-import { getHiredAgents } from '@/lib/agents';
+import { useTeamAgents } from '@/lib/services/agents';
 import WarRoomLive from '@/components/operations/WarRoomLive';
 
 interface OperationsViewProps {
@@ -12,7 +12,14 @@ interface OperationsViewProps {
 export default function OperationsView({ teamId }: OperationsViewProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [showWarRoom, setShowWarRoom] = useState(false);
+
+  // Load hired agents from API
+  const { agents: hiredAgents } = useTeamAgents({
+    teamId: parseInt(teamId, 10),
+    autoFetch: true,
+  });
 
   useEffect(() => {
     const loadTasksAsync = async () => {
@@ -23,6 +30,20 @@ export default function OperationsView({ teamId }: OperationsViewProps) {
 
     loadTasksAsync();
   }, [teamId]);
+
+  // Load task details when activeTaskId changes
+  useEffect(() => {
+    if (activeTaskId) {
+      loadActiveTask(activeTaskId);
+    } else {
+      setActiveTask(null);
+    }
+  }, [activeTaskId]);
+
+  const loadActiveTask = async (taskId: number) => {
+    const task = await getTask(taskId);
+    setActiveTask(task);
+  };
 
   const formatTimeAgo = (date: Date) => {
     const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -39,52 +60,86 @@ export default function OperationsView({ teamId }: OperationsViewProps) {
     setShowWarRoom(true);
   };
 
-  if (showWarRoom && activeTaskId) {
-    const task = tasks.find(t => t.id === activeTaskId);
-    if (task) {
-      const hiredAgents = getHiredAgents(teamId);
-      const workflowNodes = task.workflowNodes.map(node => {
-        const agent = hiredAgents.find(a => a.id === node.agentId);
-        return {
-          id: node.id,
-          agent: agent || {
-            id: node.agentId,
-            name: node.agentName,
-            photo_url: node.agentPhoto,
-            role: node.agentRole,
-          } as any,
-          action: node.action,
-          order: node.order,
-        };
-      });
+  // Find best matching agent for a role
+  const findAgentForRole = useCallback((agentRole: string, agentName?: string) => {
+    if (!hiredAgents.length) return undefined;
 
-      return (
-        <div className="h-full flex flex-col">
-          <div className="flex-shrink-0 px-6 py-4 border-b border-slate-800 flex items-center gap-4">
-            <button
-              onClick={async () => {
-                setShowWarRoom(false);
-                setActiveTaskId(null);
-                // Reload tasks when closing execution theatre
-                const teamTasks = await getTasks(parseInt(teamId));
-                setTasks(teamTasks);
-              }}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded transition-all"
-            >
-              ← Back to Operations
-            </button>
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <WarRoomLive
-              taskId={task.id}
-              teamId={teamId}
-              workflowNodes={workflowNodes}
-              taskDescription={task.description}
-            />
-          </div>
-        </div>
-      );
+    // Try exact name match first
+    if (agentName) {
+      const nameMatch = hiredAgents.find(a => a.name.toLowerCase() === agentName.toLowerCase());
+      if (nameMatch) return nameMatch;
     }
+
+    const roleLower = agentRole.toLowerCase();
+
+    // Try role match
+    let match = hiredAgents.find(a =>
+      a.role.toLowerCase().includes(roleLower) ||
+      roleLower.includes(a.role.toLowerCase())
+    );
+    if (match) return match;
+
+    // Try specialty match
+    match = hiredAgents.find(a =>
+      a.specialty.toLowerCase().includes(roleLower) ||
+      roleLower.includes(a.specialty.toLowerCase())
+    );
+    if (match) return match;
+
+    // Fallback to first agent
+    return hiredAgents[0];
+  }, [hiredAgents]);
+
+  if (showWarRoom && activeTaskId && activeTask) {
+    // Map workflow nodes with agent data from API
+    const workflowNodes = activeTask.workflowNodes.map((node, idx) => {
+      const matchedAgent = findAgentForRole(node.agentRole, node.agentName);
+      return {
+        id: node.id,
+        name: node.name,
+        description: node.description,
+        agentId: matchedAgent?.id?.toString(),
+        agentName: matchedAgent?.name || node.agentName || node.agentRole,
+        agentPhoto: matchedAgent?.photo_url || node.agentPhoto,
+        agentRole: node.agentRole,
+        action: node.action,
+        order: node.order || idx + 1,
+      };
+    });
+
+    return (
+      <div className="h-full flex flex-col">
+        <div className="flex-shrink-0 px-6 py-4 border-b border-slate-800 flex items-center gap-4">
+          <button
+            onClick={async () => {
+              setShowWarRoom(false);
+              setActiveTaskId(null);
+              setActiveTask(null);
+              // Reload tasks when closing execution theatre
+              const teamTasks = await getTasks(parseInt(teamId));
+              setTasks(teamTasks);
+            }}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded transition-all"
+          >
+            ← Back to Operations
+          </button>
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <WarRoomLive
+            taskId={activeTask.id}
+            teamId={teamId}
+            workflowNodes={workflowNodes}
+            taskDescription={activeTask.description}
+            initialStatus={activeTask.status}
+            onClose={() => {
+              setShowWarRoom(false);
+              setActiveTaskId(null);
+              setActiveTask(null);
+            }}
+          />
+        </div>
+      </div>
+    );
   }
 
   return (

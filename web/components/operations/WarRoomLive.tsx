@@ -1,20 +1,25 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { HiredAgent, addExperience, addLearnedPreference, updateHiredAgent } from '@/lib/agents';
-import { updateTask } from '@/lib/tasks';
-import { getKnowledgeGraph, saveKnowledgeGraph, KnowledgeNode, KnowledgeEdge, EvolutionEvent } from '@/lib/knowledge-graph';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTeamAgents, Agent } from '@/lib/services/agents';
 
 interface WarRoomLiveProps {
   taskId: number;
   teamId: string;
   workflowNodes: {
     id: string;
-    agent: HiredAgent;
-    action: string;
+    name?: string;
+    description?: string;
+    agentId?: string;
+    agentName?: string;
+    agentPhoto?: string;
+    agentRole: string;
+    action?: string;
     order: number;
   }[];
   taskDescription: string;
+  initialStatus?: 'pending' | 'active' | 'completed' | 'failed' | 'paused' | 'cancelled';
+  onClose?: () => void;
 }
 
 interface LogEntry {
@@ -22,45 +27,70 @@ interface LogEntry {
   timestamp: Date;
   agent: string;
   message: string;
-  type: 'info' | 'tool' | 'output' | 'complete' | 'file';
+  type: 'info' | 'tool' | 'output' | 'complete' | 'file' | 'error' | 'llm';
 }
 
 interface NodeStatus {
   nodeId: string;
-  status: 'pending' | 'active' | 'completed' | 'waiting';
+  status: 'pending' | 'active' | 'completed' | 'failed' | 'waiting';
   activeTool?: string;
   progress?: number;
-  waitingReason?: string;
+  output?: string;
 }
 
-interface IntermediateData {
-  fromNode: string;
-  toNode: string;
-  data: {
-    title: string;
-    content: string;
-  }[];
-}
-
-export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescription }: WarRoomLiveProps) {
+export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescription, initialStatus = 'pending', onClose }: WarRoomLiveProps) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [nodeStatuses, setNodeStatuses] = useState<NodeStatus[]>([]);
-  const [selectedConnection, setSelectedConnection] = useState<{ from: number; to: number } | null>(null);
-  const [intermediateData, setIntermediateData] = useState<IntermediateData | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [isComplete, setIsComplete] = useState(initialStatus === 'completed');
+  const [isPaused, setIsPaused] = useState(initialStatus === 'paused');
+  const [isCancelled, setIsCancelled] = useState(initialStatus === 'cancelled');
+  const [isPauseRequested, setIsPauseRequested] = useState(false);
+  const [isCancelRequested, setIsCancelRequested] = useState(false);
+  const [totalCost, setTotalCost] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [hasStarted, setHasStarted] = useState(false);
+  const [pausedAtNode, setPausedAtNode] = useState<number | null>(null);
+  const [savedFileId, setSavedFileId] = useState<number | null>(null);
+  const [savedFileName, setSavedFileName] = useState<string | null>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
-  // Initialize node statuses
+  // Get team agents for display
+  const { agents: hiredAgents } = useTeamAgents({
+    teamId: parseInt(teamId, 10),
+    autoFetch: true,
+  });
+
+  // Map agents by name/role for display
+  const getAgentPhoto = useCallback((agentName: string): string | undefined => {
+    const agent = hiredAgents.find(a =>
+      a.name.toLowerCase() === agentName.toLowerCase() ||
+      a.role.toLowerCase().includes(agentName.toLowerCase())
+    );
+    return agent?.photo_url;
+  }, [hiredAgents]);
+
+  // Initialize node statuses based on initial task status
   useEffect(() => {
-    const initialStatuses = workflowNodes.map((node, idx) => ({
+    const initialStatuses = workflowNodes.map((node) => ({
       nodeId: node.id,
-      status: idx === 0 ? 'active' : 'pending',
-      progress: idx === 0 ? 0 : undefined,
+      status: initialStatus === 'completed' ? 'completed' as const : 'pending' as const,
+      progress: initialStatus === 'completed' ? 100 : 0,
     }));
-    setNodeStatuses(initialStatuses as NodeStatus[]);
+    setNodeStatuses(initialStatuses);
 
-    // Start simulation
-    simulateExecution();
-  }, []);
+    // Add initial log for completed tasks
+    if (initialStatus === 'completed') {
+      addLog('System', 'This operation has already been completed.', 'complete');
+    } else if (initialStatus === 'active') {
+      addLog('System', 'This operation is in progress. Click "Start Execution" to resume.', 'info');
+    } else if (initialStatus === 'paused') {
+      addLog('System', 'This operation is paused. Click "Resume" to continue.', 'info');
+    } else if (initialStatus === 'cancelled') {
+      addLog('System', 'This operation was cancelled.', 'error');
+    }
+  }, [workflowNodes, initialStatus]);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -69,7 +99,7 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
     }
   }, [logs]);
 
-  const addLog = (agent: string, message: string, type: LogEntry['type'] = 'info') => {
+  const addLog = useCallback((agent: string, message: string, type: LogEntry['type'] = 'info') => {
     const newLog: LogEntry = {
       id: `log-${Date.now()}-${Math.random()}`,
       timestamp: new Date(),
@@ -78,284 +108,348 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
       type,
     };
     setLogs(prev => [...prev, newLog]);
-  };
+  }, []);
 
-  const updateNodeStatus = (nodeId: string, updates: Partial<NodeStatus>) => {
+  const updateNodeStatus = useCallback((nodeId: string, updates: Partial<NodeStatus>) => {
     setNodeStatuses(prev =>
       prev.map(status =>
         status.nodeId === nodeId ? { ...status, ...updates } : status
       )
     );
-  };
+  }, []);
 
-  const addPreferenceToGraph = (agentId: string, agentName: string, preference: string, context: string) => {
-    try {
-      const graph = getKnowledgeGraph();
+  // Start execution with SSE
+  const startExecution = useCallback(async () => {
+    if (isExecuting) return;
 
-      // Create preference node
-      const prefId = `pref-${Date.now()}`;
-      const prefNode: KnowledgeNode = {
-        id: prefId,
-        type: 'preference',
-        label: preference,
-        description: `CEO preference: ${context}`,
-        metadata: {
-          created: new Date(),
-          createdBy: agentId,
-          department: 'branding',
-          confidence: 1.0, // CEO decision = 100% confidence
-          operationId: `task-${taskId}`,
-        },
-        properties: {
-          category: 'Strategic Direction',
-          rule: context,
-          source: 'CEO Decision',
-        },
-      };
+    setIsExecuting(true);
+    setError(null);
+    addLog('System', 'Starting operation execution...', 'info');
 
-      graph.nodes.push(prefNode);
+    const token = localStorage.getItem('access_token');
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-      // Create edge from agent to preference
-      const edgeId = `edge-${agentId}-${prefId}`;
-      const edge: KnowledgeEdge = {
-        id: edgeId,
-        source: agentId,
-        target: prefId,
-        type: 'learned_from',
-        label: 'learned from CEO',
-        metadata: {
-          created: new Date(),
-          createdBy: 'system',
-          confidence: 1.0,
-          evidence: `CEO decision in Task #${taskId}`,
-          operationId: `task-${taskId}`,
-        },
-      };
-
-      graph.edges.push(edge);
-
-      // Add evolution event
-      const event: EvolutionEvent = {
-        id: `evt-${Date.now()}`,
-        timestamp: new Date(),
-        type: 'learning',
-        nodeId: prefId,
-        agentId: agentId,
-        operationId: `task-${taskId}`,
-        description: `${agentName} learned: ${preference} - ${context}`,
-        userFeedback: context,
-      };
-
-      graph.evolutionHistory.push(event);
-
-      // Update metadata
-      graph.metadata.nodeCount = graph.nodes.length;
-      graph.metadata.edgeCount = graph.edges.length;
-      graph.metadata.lastUpdated = new Date();
-
-      // Save to localStorage
-      saveKnowledgeGraph(graph);
-
-      addLog('System', `Knowledge Graph updated: "${preference}" preference stored`, 'complete');
-    } catch (error) {
-      console.error('Failed to add preference to graph:', error);
+    if (!token) {
+      setError('Not authenticated. Please log in again.');
+      addLog('System', 'Error: No authentication token found. Please log in again.', 'error');
+      setIsExecuting(false);
+      return;
     }
-  };
 
-  const simulateExecution = async () => {
-    // Simulate execution for demo purposes - extended duration
-    for (let i = 0; i < workflowNodes.length; i++) {
-      const node = workflowNodes[i];
-
-      // Start node
-      updateNodeStatus(node.id, { status: 'active', progress: 0 });
-      addLog(node.agent.name, `Starting: ${node.action}`, 'info');
-
-      await new Promise(resolve => setTimeout(resolve, 2500));
-
-      // Initial research/setup
-      updateNodeStatus(node.id, { progress: 8 });
-      addLog(node.agent.name, `Initializing workspace...`, 'info');
-
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      // Vault file retrieval
-      const templates = [
-        'Brand_Strategy_Template.docx',
-        'Color_Palette_Framework.pdf',
-        'Messaging_Guidelines.docx',
-      ];
-      updateNodeStatus(node.id, { progress: 15 });
-      addLog(node.agent.name, `Retrieved ${templates[i]} from Vault`, 'file');
-
-      await new Promise(resolve => setTimeout(resolve, 2500));
-
-      // Tool usage phase 1
-      const tools = ['Web Search Pro', 'Market Analyzer', 'Content Generator'];
-      const tool = tools[i % tools.length];
-      updateNodeStatus(node.id, { activeTool: tool, progress: 22 });
-      addLog(node.agent.name, `Using tool: ${tool}`, 'tool');
-
-      await new Promise(resolve => setTimeout(resolve, 4000));
-
-      // Data collection
-      updateNodeStatus(node.id, { progress: 32 });
-      addLog(node.agent.name, `Collecting and synthesizing data...`, 'info');
-
-      await new Promise(resolve => setTimeout(resolve, 4500));
-
-      // Analysis phase
-      updateNodeStatus(node.id, { progress: 45 });
-      addLog(node.agent.name, `Analyzing results...`, 'info');
-
-      await new Promise(resolve => setTimeout(resolve, 4000));
-
-      // Human-in-the-loop pause for 2nd agent (Color Oracle / Aurora)
-      if (i === 1) {
-        // Pause for decision
-        updateNodeStatus(node.id, { status: 'waiting', progress: 50 });
-        addLog(node.agent.name, `Needs CEO decision on strategic direction...`, 'info');
-
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Show the question in logs
-        addLog('System', `Inbox notification sent to CEO`, 'info');
-
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        // Simulate CEO response after a few seconds (hardcoded for demo)
-        addLog('System', `CEO responded: "Prioritize Authority"`, 'complete');
-
-        // Add preference to Knowledge Graph
-        addPreferenceToGraph(
-          node.agent.id,
-          node.agent.name,
-          'Authority over Innovation',
-          'For executive branding, prioritize authority and credibility over innovation and disruption'
-        );
-
-        // Add learned preference to agent
-        addLearnedPreference(
-          node.agent.id,
-          teamId,
-          'Strategic Direction',
-          'Prioritize Authority over Innovation for executive branding',
-          95
-        );
-
-        addLog(node.agent.name, `Proceeding with authority-focused approach`, 'info');
-
-        // Resume execution
-        updateNodeStatus(node.id, { status: 'active', progress: 50 });
-
-        await new Promise(resolve => setTimeout(resolve, 1500));
-      }
-
-      // Refinement
-      updateNodeStatus(node.id, { progress: 62 });
-      addLog(node.agent.name, `Refining output...`, 'info');
-
-      await new Promise(resolve => setTimeout(resolve, 3500));
-
-      // Quality check
-      updateNodeStatus(node.id, { progress: 72 });
-      addLog(node.agent.name, `Running quality checks...`, 'info');
-
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      // Output generation
-      updateNodeStatus(node.id, { progress: 82 });
-      addLog(node.agent.name, `Generating deliverable...`, 'output');
-
-      await new Promise(resolve => setTimeout(resolve, 3500));
-
-      // File output to Vault
-      const outputs = [
-        { name: 'Market_Analysis_Report.pdf', path: '/Workflow Outputs/Market_Analysis_Report.pdf' },
-        { name: 'Color_Strategy_Document.pdf', path: '/Workflow Outputs/Color_Strategy_Document.pdf' },
-        { name: 'Brand_Manifesto.docx', path: '/Workflow Outputs/Brand_Manifesto.docx' },
-      ];
-      updateNodeStatus(node.id, { progress: 92 });
-      addLog(node.agent.name, `Saved ${outputs[i].name} to ${outputs[i].path}`, 'file');
-
-      await new Promise(resolve => setTimeout(resolve, 2500));
-
-      // Final validation
-      updateNodeStatus(node.id, { progress: 97 });
-      addLog(node.agent.name, `Validating deliverable integrity...`, 'info');
-
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Complete
-      updateNodeStatus(node.id, { status: 'completed', progress: 100, activeTool: undefined });
-      addLog(node.agent.name, `Work completed successfully`, 'complete');
-
-      // Award XP and update agent (Knowledge Harvest)
-      const xpGained = 50;
-      addExperience(node.agent.id, teamId, xpGained);
-
-      // Update tasks completed count
-      updateHiredAgent(node.agent.id, teamId, {
-        tasksCompleted: (node.agent as any).tasksCompleted + 1,
+    try {
+      // Use fetch with SSE parsing since EventSource doesn't support auth headers
+      const response = await fetch(`${baseUrl}/api/operations/${taskId}/execute`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'text/event-stream',
+        },
       });
 
-      addLog('System', `${node.agent.name} gained ${xpGained} XP`, 'complete');
+      if (response.status === 401) {
+        setError('Session expired. Please log in again.');
+        addLog('System', 'Error: Session expired. Please log in again.', 'error');
+        setIsExecuting(false);
+        return;
+      }
 
-      // Special: Color Oracle gains specialization after human-in-the-loop learning
-      if (i === 1) {
-        updateHiredAgent(node.agent.id, teamId, {
-          specialization: 'Executive Branding',
+      if (!response.ok) {
+        throw new Error(`Execution failed: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              handleEvent(data);
+            } catch (e) {
+              console.warn('Failed to parse SSE event:', line);
+            }
+          }
+        }
+      }
+
+    } catch (err) {
+      console.error('Execution error:', err);
+      const message = err instanceof Error ? err.message : 'Execution failed';
+      setError(message);
+      addLog('System', `Error: ${message}`, 'error');
+    } finally {
+      setIsExecuting(false);
+      setIsPauseRequested(false);
+      setIsCancelRequested(false);
+    }
+  }, [taskId, isExecuting, addLog]);
+
+  // Pause execution
+  const pauseExecution = useCallback(async () => {
+    if (!isExecuting || isPauseRequested) return;
+
+    setIsPauseRequested(true);
+    addLog('System', 'Pause requested... will pause after current node completes.', 'info');
+
+    const token = localStorage.getItem('access_token');
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+    try {
+      const response = await fetch(`${baseUrl}/api/operations/${taskId}/pause`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      if (!data.success) {
+        addLog('System', `Pause failed: ${data.message}`, 'error');
+        setIsPauseRequested(false);
+      }
+    } catch (err) {
+      console.error('Pause error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to pause';
+      addLog('System', `Error: ${message}`, 'error');
+      setIsPauseRequested(false);
+    }
+  }, [taskId, isExecuting, isPauseRequested, addLog]);
+
+  // Cancel execution
+  const cancelExecution = useCallback(async () => {
+    if (isCancelRequested) return;
+
+    setIsCancelRequested(true);
+    addLog('System', 'Cancel requested...', 'info');
+
+    const token = localStorage.getItem('access_token');
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+    try {
+      const response = await fetch(`${baseUrl}/api/operations/${taskId}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        if (data.status === 'cancelled') {
+          // Immediately cancelled (was paused or pending)
+          setIsCancelled(true);
+          setIsPaused(false);
+          addLog('System', 'Operation cancelled.', 'error');
+        }
+      } else {
+        addLog('System', `Cancel failed: ${data.message}`, 'error');
+        setIsCancelRequested(false);
+      }
+    } catch (err) {
+      console.error('Cancel error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to cancel';
+      addLog('System', `Error: ${message}`, 'error');
+      setIsCancelRequested(false);
+    }
+  }, [taskId, isCancelRequested, addLog]);
+
+  // Resume execution
+  const resumeExecution = useCallback(async () => {
+    if (isExecuting || !isPaused) return;
+
+    setIsExecuting(true);
+    setIsPaused(false);
+    setError(null);
+    addLog('System', 'Resuming operation...', 'info');
+
+    const token = localStorage.getItem('access_token');
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+    try {
+      const response = await fetch(`${baseUrl}/api/operations/${taskId}/resume`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'text/event-stream',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Resume failed: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              handleEvent(data);
+            } catch (e) {
+              console.warn('Failed to parse SSE event:', line);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Resume error:', err);
+      const message = err instanceof Error ? err.message : 'Resume failed';
+      setError(message);
+      addLog('System', `Error: ${message}`, 'error');
+      setIsPaused(true);
+    } finally {
+      setIsExecuting(false);
+      setIsPauseRequested(false);
+      setIsCancelRequested(false);
+    }
+  }, [taskId, isExecuting, isPaused, addLog]);
+
+  // Handle SSE events
+  const handleEvent = useCallback((data: any) => {
+    console.log('[SSE Event]', data.type, data);
+
+    switch (data.type) {
+      case 'start':
+        addLog('System', `Operation started: ${data.title}`, 'info');
+        break;
+
+      case 'node_start':
+        updateNodeStatus(data.node_id, {
+          status: 'active',
+          progress: 0,
+          activeTool: undefined
         });
-        addLog('System', `${node.agent.name} specialized in: Executive Branding`, 'complete');
-      }
+        addLog(data.agent_name, `Starting: ${data.name || data.description}`, 'info');
+        break;
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      case 'tool_use':
+        if (data.status === 'running') {
+          updateNodeStatus(data.node_id, { activeTool: data.tool });
+          addLog(data.agent_name, `Using tool: ${data.tool}`, 'tool');
+        } else if (data.status === 'completed') {
+          addLog(data.agent_name, `Tool completed: ${data.tool}`, 'tool');
+        }
+        break;
+
+      case 'progress':
+        updateNodeStatus(data.node_id, { progress: data.progress });
+        break;
+
+      case 'llm_call':
+        if (data.status === 'calling') {
+          addLog(data.agent_name, data.message || 'Processing...', 'llm');
+        } else if (data.status === 'completed') {
+          addLog(data.agent_name, `Output generated`, 'output');
+          if (data.output_preview) {
+            updateNodeStatus(data.node_id, { output: data.output_preview });
+          }
+        } else if (data.status === 'error') {
+          addLog(data.agent_name, `Error: ${data.error}`, 'error');
+        }
+        break;
+
+      case 'node_complete':
+        updateNodeStatus(data.node_id, {
+          status: data.status === 'failed' ? 'failed' : 'completed',
+          progress: 100,
+          activeTool: undefined
+        });
+        addLog(data.agent_name, `Task completed`, 'complete');
+        break;
+
+      case 'agent_xp':
+        addLog('System', `${data.agent_name} gained ${data.xp_gained} XP`, 'complete');
+        break;
+
+      case 'file_saved':
+        setSavedFileId(data.file_id);
+        setSavedFileName(data.file_name);
+        addLog('System', `Results saved to vault: ${data.file_name}`, 'complete');
+        break;
+
+      case 'complete':
+        setIsComplete(true);
+        setTotalCost(data.total_cost || 0);
+        addLog('System', `Operation completed! Total cost: $${(data.total_cost || 0).toFixed(2)}`, 'complete');
+        break;
+
+      case 'paused':
+        setIsPaused(true);
+        setIsExecuting(false);
+        setIsPauseRequested(false);
+        setPausedAtNode(data.at_node);
+        setTotalCost(data.total_cost || 0);
+        addLog('System', `Operation paused at "${data.node_name}". Click Resume to continue.`, 'info');
+        break;
+
+      case 'cancelled':
+        setIsCancelled(true);
+        setIsExecuting(false);
+        setIsCancelRequested(false);
+        setTotalCost(data.total_cost || 0);
+        addLog('System', `Operation cancelled at "${data.node_name}". Total cost: $${(data.total_cost || 0).toFixed(2)}`, 'error');
+        break;
+
+      case 'resumed':
+        addLog('System', `Resuming from node ${data.from_node + 1}`, 'info');
+        break;
+
+      case 'error':
+        setError(data.message);
+        addLog('System', `Error: ${data.message}`, 'error');
+        break;
     }
+  }, [addLog, updateNodeStatus]);
 
-    // All nodes completed - update task status in backend
-    addLog('System', 'All agents have completed their work. Finalizing operation...', 'complete');
-
-    try {
-      await updateTask(taskId, {
-        status: 'completed',
-        progress: 100,
-      });
-      addLog('System', 'Operation completed successfully!', 'complete');
-    } catch (error) {
-      console.error('Failed to update task status:', error);
-      addLog('System', 'Failed to save completion status', 'info');
+  // Auto-start execution for pending tasks only
+  useEffect(() => {
+    // Only auto-start if:
+    // 1. We have workflow nodes
+    // 2. Not already executing
+    // 3. Not complete
+    // 4. Haven't started yet (prevents re-execution)
+    // 5. Initial status is pending (not already active or completed)
+    if (workflowNodes.length > 0 && !isExecuting && !isComplete && !hasStarted && initialStatus === 'pending') {
+      const timer = setTimeout(() => {
+        setHasStarted(true);
+        startExecution();
+      }, 1000);
+      return () => clearTimeout(timer);
     }
-  };
+  }, [workflowNodes, startExecution, isExecuting, isComplete, hasStarted, initialStatus]);
 
-  const handleConnectionClick = (fromIdx: number, toIdx: number) => {
-    const fromNode = workflowNodes[fromIdx];
-    const toNode = workflowNodes[toIdx];
-
-    // Generate mock intermediate data
-    const mockData: IntermediateData = {
-      fromNode: fromNode.agent.name,
-      toNode: toNode.agent.name,
-      data: [
-        {
-          title: 'Market Analysis',
-          content: 'Analyzed 14 competitors in AI consulting space. Key findings: emphasis on tech-forward aesthetics, blue/purple color schemes dominant.',
-        },
-        {
-          title: 'Trend Insights',
-          content: 'Current trends favor minimalist designs with bold typography. Gradient overlays and glassmorphism are prevalent.',
-        },
-        {
-          title: 'Color Signatures',
-          content: 'Extracted color palettes from top performers. Primary colors: #6366F1, #8B5CF6, #EC4899 showing strong engagement.',
-        },
-      ],
-    };
-
-    setIntermediateData(mockData);
-    setSelectedConnection({ from: fromIdx, to: toIdx });
-  };
-
-  const colors = ['#6366F1', '#8B5CF6', '#EC4899'];
+  const colors = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B'];
 
   return (
     <div className="h-full flex flex-col bg-[#020617]">
@@ -367,9 +461,106 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
             <p className="text-sm text-slate-500 mt-1">{taskDescription}</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="px-3 py-1.5 bg-[#6366F1]/20 border border-[#6366F1]/30 rounded text-sm">
-              <span className="text-[#6366F1] font-medium">Live</span>
-            </div>
+            {/* Status badges */}
+            {isExecuting && (
+              <div className="px-3 py-1.5 bg-[#6366F1]/20 border border-[#6366F1]/30 rounded text-sm flex items-center gap-2">
+                <div className="w-2 h-2 bg-[#6366F1] rounded-full animate-pulse"></div>
+                <span className="text-[#6366F1] font-medium">
+                  {isPauseRequested ? 'Pausing...' : isCancelRequested ? 'Cancelling...' : 'Live'}
+                </span>
+              </div>
+            )}
+            {isComplete && (
+              <div className="px-3 py-1.5 bg-green-500/20 border border-green-500/30 rounded text-sm">
+                <span className="text-green-500 font-medium">Completed</span>
+              </div>
+            )}
+            {isPaused && !isExecuting && (
+              <div className="px-3 py-1.5 bg-amber-500/20 border border-amber-500/30 rounded text-sm">
+                <span className="text-amber-500 font-medium">Paused</span>
+              </div>
+            )}
+            {isCancelled && (
+              <div className="px-3 py-1.5 bg-red-500/20 border border-red-500/30 rounded text-sm">
+                <span className="text-red-500 font-medium">Cancelled</span>
+              </div>
+            )}
+            {error && !isCancelled && (
+              <div className="px-3 py-1.5 bg-red-500/20 border border-red-500/30 rounded text-sm">
+                <span className="text-red-500 font-medium">Error</span>
+              </div>
+            )}
+
+            {/* Control buttons */}
+            {isExecuting && !isPauseRequested && !isCancelRequested && (
+              <>
+                <button
+                  onClick={pauseExecution}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  Pause
+                </button>
+                <button
+                  onClick={cancelExecution}
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                  Cancel
+                </button>
+              </>
+            )}
+
+            {/* Resume button for paused operations */}
+            {isPaused && !isExecuting && !isCancelled && (
+              <button
+                onClick={resumeExecution}
+                className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                </svg>
+                Resume
+              </button>
+            )}
+
+            {/* Cancel button for paused operations */}
+            {isPaused && !isExecuting && !isCancelled && (
+              <button
+                onClick={cancelExecution}
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                Cancel
+              </button>
+            )}
+
+            {/* Manual start button for non-pending tasks or when not auto-started */}
+            {!isExecuting && !isComplete && !isPaused && !isCancelled && initialStatus !== 'pending' && (
+              <button
+                onClick={() => {
+                  setHasStarted(true);
+                  startExecution();
+                }}
+                className="px-3 py-1.5 bg-[#6366F1] hover:bg-[#5558E3] text-white rounded text-sm font-medium transition-colors"
+              >
+                Start Execution
+              </button>
+            )}
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded text-sm transition-colors"
+              >
+                Close
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -377,22 +568,25 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Workflow Graph */}
-        <div className="flex-1 p-8 overflow-auto">
+        <div className="flex-1 p-8 overflow-auto scrollbar-hide">
           <div className="flex items-center justify-center gap-6 min-w-max">
             {workflowNodes.map((node, idx) => {
               const nodeStatus = nodeStatuses.find(s => s.nodeId === node.id);
               const nodeColor = colors[idx % colors.length];
               const isActive = nodeStatus?.status === 'active';
               const isCompleted = nodeStatus?.status === 'completed';
-              const isWaiting = nodeStatus?.status === 'waiting';
-              const displayColor = isWaiting ? '#F59E0B' : nodeColor; // Amber for waiting
+              const isFailed = nodeStatus?.status === 'failed';
+              const displayColor = isFailed ? '#EF4444' : nodeColor;
+
+              // Get agent photo
+              const agentPhoto = node.agentPhoto || getAgentPhoto(node.agentName || node.agentRole);
 
               return (
                 <div key={node.id} className="flex items-center">
                   {/* Node */}
                   <div className="relative">
-                    {/* Pulsing glow for active or waiting node */}
-                    {(isActive || isWaiting) && (
+                    {/* Pulsing glow for active node */}
+                    {isActive && (
                       <div
                         className="absolute -inset-4 rounded-lg blur-2xl opacity-40 animate-pulse"
                         style={{ backgroundColor: displayColor }}
@@ -402,41 +596,50 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
                     {/* Node card */}
                     <div
                       className={`relative bg-[#0A0A0F] border rounded-lg p-5 w-64 transition-all ${
-                        (isActive || isWaiting) ? 'border-opacity-100' : 'border-opacity-50'
-                      } ${isCompleted ? 'opacity-60' : ''}`}
-                      style={{ borderColor: (isActive || isWaiting) ? displayColor : '#334155' }}
+                        isActive ? 'border-opacity-100' : 'border-opacity-50'
+                      } ${isCompleted ? 'opacity-70' : ''}`}
+                      style={{ borderColor: isActive ? displayColor : '#334155' }}
                     >
                       {/* Order badge */}
                       <div
                         className={`absolute -top-2 -left-2 w-7 h-7 rounded-full flex items-center justify-center text-white font-semibold text-sm ${
-                          isCompleted ? 'bg-slate-700' : ''
+                          isCompleted ? 'bg-green-600' : isFailed ? 'bg-red-600' : ''
                         }`}
-                        style={{ backgroundColor: isCompleted ? undefined : displayColor }}
+                        style={{ backgroundColor: isCompleted || isFailed ? undefined : displayColor }}
                       >
-                        {isCompleted ? '✓' : isWaiting ? '⏸' : node.order}
+                        {isCompleted ? '✓' : isFailed ? '✕' : node.order}
                       </div>
 
                       {/* Agent Photo */}
                       <div className="mb-4">
-                        <img
-                          src={node.agent.photo_url}
-                          alt={node.agent.name}
-                          className={`w-16 h-16 rounded-full object-cover mx-auto border-2 ${
-                            (isActive || isWaiting) ? 'ring-2 ring-offset-2 ring-offset-[#0A0A0F]' : ''
-                          }`}
-                          style={{ borderColor: (isActive || isWaiting) ? displayColor : '#334155', ringColor: (isActive || isWaiting) ? displayColor : undefined }}
-                        />
+                        {agentPhoto ? (
+                          <img
+                            src={agentPhoto}
+                            alt={node.agentName || node.agentRole}
+                            className={`w-16 h-16 rounded-full object-cover mx-auto border-2 ${
+                              isActive ? 'ring-2 ring-offset-2 ring-offset-[#0A0A0F]' : ''
+                            }`}
+                            style={{ borderColor: displayColor }}
+                          />
+                        ) : (
+                          <div
+                            className={`w-16 h-16 rounded-full mx-auto flex items-center justify-center text-white text-xl font-bold border-2`}
+                            style={{ backgroundColor: `${displayColor}40`, borderColor: displayColor }}
+                          >
+                            {(node.agentName || node.agentRole).substring(0, 2).toUpperCase()}
+                          </div>
+                        )}
                       </div>
 
                       {/* Agent name */}
                       <h3 className="text-base font-semibold text-white text-center mb-1">
-                        {node.agent.name}
+                        {node.agentName || node.agentRole}
                       </h3>
-                      <div className="text-xs text-slate-500 text-center mb-3">{node.agent.role}</div>
+                      <div className="text-xs text-slate-500 text-center mb-3">{node.agentRole}</div>
 
                       {/* Action */}
                       <p className="text-xs text-slate-400 text-center leading-relaxed mb-3">
-                        {node.action}
+                        {node.name || node.action || node.description}
                       </p>
 
                       {/* Tool indicator */}
@@ -447,22 +650,14 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
                         </div>
                       )}
 
-                      {/* Waiting indicator */}
-                      {isWaiting && (
-                        <div className="flex items-center justify-center gap-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded mb-3">
-                          <div className="w-3 h-3 bg-amber-500 rounded-full animate-pulse"></div>
-                          <span className="text-xs text-amber-500 font-medium">Awaiting Decision</span>
-                        </div>
-                      )}
-
                       {/* Progress bar */}
-                      {isActive && nodeStatus?.progress !== undefined && (
+                      {(isActive || isCompleted) && nodeStatus?.progress !== undefined && (
                         <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
                           <div
                             className="h-full transition-all duration-500 rounded-full"
                             style={{
                               width: `${nodeStatus.progress}%`,
-                              backgroundColor: nodeColor,
+                              backgroundColor: isCompleted ? '#22C55E' : nodeColor,
                             }}
                           ></div>
                         </div>
@@ -472,98 +667,79 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
                       <div className="mt-3 pt-3 border-t border-slate-800">
                         <div className="text-xs text-center">
                           {isCompleted && <span className="text-green-500">Completed</span>}
-                          {isWaiting && <span className="text-amber-500">Waiting for Input</span>}
+                          {isFailed && <span className="text-red-500">Failed</span>}
                           {isActive && <span className="text-[#6366F1]">In Progress</span>}
                           {nodeStatus?.status === 'pending' && <span className="text-slate-500">Pending</span>}
                         </div>
                       </div>
+
+                      {/* Output preview */}
+                      {nodeStatus?.output && (
+                        <div className="mt-3 p-2 bg-slate-900 rounded text-xs text-slate-400 max-h-20 overflow-hidden">
+                          {nodeStatus.output.substring(0, 100)}...
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* Connection line */}
                   {idx < workflowNodes.length - 1 && (
-                    <button
-                      onClick={() => handleConnectionClick(idx, idx + 1)}
-                      className="group relative mx-4 hover:opacity-100 transition-opacity"
-                    >
-                      {/* Connection line */}
-                      <div className="flex items-center">
-                        <div className="w-12 h-0.5 bg-slate-700 group-hover:bg-[#6366F1] transition-colors"></div>
-                        <svg className="w-4 h-4 text-slate-700 group-hover:text-[#6366F1] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </div>
-                      {/* Hover hint */}
-                      <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                        <span className="text-xs text-slate-500">Click to view data</span>
-                      </div>
-                    </button>
+                    <div className="flex items-center mx-4">
+                      <div className="w-12 h-0.5 bg-slate-700"></div>
+                      <svg className="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
                   )}
                 </div>
               );
             })}
           </div>
 
-          {/* Vault Indicator */}
-          <div className="flex justify-center mt-12 pb-4">
-            <div className="px-6 py-4 bg-slate-900/50 border border-slate-700 rounded-lg flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#FDE047]/10 border border-[#FDE047]/30 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-[#FDE047]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <div>
-                <div className="text-sm font-medium text-white">Vault Storage</div>
-                <div className="text-xs text-slate-500">File outputs saved here</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Data Preview Panel */}
-        {selectedConnection !== null && intermediateData && (
-          <div className="w-96 border-l border-slate-800 bg-[#0A0A0F] flex flex-col animate-slide-in-right">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-white">Data Preview</h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  {intermediateData.fromNode} → {intermediateData.toNode}
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedConnection(null);
-                  setIntermediateData(null);
-                }}
-                className="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {intermediateData.data.map((item, idx) => (
-                <div key={idx} className="p-3 bg-[#020617] border border-slate-800 rounded">
-                  <h4 className="text-xs font-semibold text-white mb-2">{item.title}</h4>
-                  <p className="text-xs text-slate-400 leading-relaxed">{item.content}</p>
+          {/* Cost Summary */}
+          {isComplete && (
+            <div className="flex justify-center mt-12">
+              <div className="px-6 py-4 bg-green-900/20 border border-green-500/30 rounded-lg">
+                <div className="text-center">
+                  <div className="text-sm text-green-400 mb-1">Operation Complete</div>
+                  <div className="text-2xl font-bold text-white">${totalCost.toFixed(2)}</div>
+                  <div className="text-xs text-slate-400 mt-1">Total Cost</div>
+                  {savedFileId && (
+                    <div className="mt-4 pt-4 border-t border-green-500/30">
+                      <a
+                        href={`/dashboard?view=vault&fileId=${savedFileId}`}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-[#6366F1] hover:bg-[#5558E3] text-white rounded-lg text-sm font-medium transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        View Results
+                      </a>
+                      <div className="text-xs text-slate-500 mt-2">{savedFileName}</div>
+                    </div>
+                  )}
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Live Ticker */}
-      <div className="flex-shrink-0 h-48 border-t border-slate-800 bg-[#0A0A0F] flex flex-col">
+      {/* Live Activity Log */}
+      <div className="flex-shrink-0 h-56 border-t border-slate-800 bg-[#0A0A0F] flex flex-col">
         <div className="p-3 border-b border-slate-800 flex items-center justify-between">
           <h3 className="text-xs font-semibold text-slate-400">LIVE ACTIVITY LOG</h3>
-          <button
-            onClick={() => setLogs([])}
-            className="text-xs text-slate-500 hover:text-slate-400 transition-colors"
-          >
-            Clear
-          </button>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-500">{logs.length} events</span>
+            <button
+              onClick={() => setLogs([])}
+              className="text-xs text-slate-500 hover:text-slate-400 transition-colors"
+            >
+              Clear
+            </button>
+          </div>
         </div>
-        <div ref={logContainerRef} className="flex-1 overflow-y-auto p-3 space-y-1 font-mono">
+        <div ref={logContainerRef} className="flex-1 overflow-y-auto p-3 space-y-1 font-mono scrollbar-hide">
           {logs.map((log) => (
             <div key={log.id} className="flex items-start gap-3 text-xs">
               <span className="text-slate-600 flex-shrink-0">
@@ -577,34 +753,33 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
                     ? 'text-[#FDE047]'
                     : log.type === 'output'
                     ? 'text-[#EC4899]'
+                    : log.type === 'llm'
+                    ? 'text-[#8B5CF6]'
                     : log.type === 'complete'
                     ? 'text-green-500'
+                    : log.type === 'error'
+                    ? 'text-red-500'
                     : 'text-slate-400'
                 }`}
               >
                 [{log.agent}]
               </span>
-              <span className={`flex-1 ${log.type === 'file' ? 'text-[#FDE047]' : 'text-slate-400'}`}>{log.message}</span>
+              <span className={`flex-1 ${
+                log.type === 'error' ? 'text-red-400' :
+                log.type === 'complete' ? 'text-green-400' :
+                'text-slate-400'
+              }`}>
+                {log.message}
+              </span>
             </div>
           ))}
+          {logs.length === 0 && (
+            <div className="text-slate-600 text-center py-4">
+              Waiting for execution to start...
+            </div>
+          )}
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes slide-in-right {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-        .animate-slide-in-right {
-          animation: slide-in-right 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 }

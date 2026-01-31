@@ -1,158 +1,115 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface VaultFile {
-  id: string;
+  id: number;
   name: string;
   type: 'file' | 'folder';
-  size?: string;
-  modifiedAt: Date;
-  createdBy?: string;
-  extension?: string;
-  parentId?: string;
-  path: string;
-  preview?: string;
+  file_type?: string;
+  size_bytes?: number;
+  folder_path: string;
+  content?: string;
+  content_json?: any;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  operation_id?: number;
 }
 
 interface FileVaultViewProps {
   teamId?: string;
+  initialFileId?: number;
 }
 
-export default function FileVaultView({ teamId }: FileVaultViewProps) {
+export default function FileVaultView({ teamId, initialFileId }: FileVaultViewProps) {
   const [files, setFiles] = useState<VaultFile[]>([]);
+  const [folders, setFolders] = useState<string[]>([]);
   const [currentFolder, setCurrentFolder] = useState<string>('/');
   const [selectedFile, setSelectedFile] = useState<VaultFile | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load demo files
-  useEffect(() => {
-    const demoFiles: VaultFile[] = [
-      // Root folders
-      {
-        id: 'f1',
-        name: 'Workflow Outputs',
-        type: 'folder',
-        modifiedAt: new Date(Date.now() - 1000 * 60 * 30),
-        path: '/Workflow Outputs',
-      },
-      {
-        id: 'f2',
-        name: 'Brand Assets',
-        type: 'folder',
-        modifiedAt: new Date(Date.now() - 1000 * 60 * 60 * 2),
-        path: '/Brand Assets',
-      },
-      {
-        id: 'f3',
-        name: 'Documents',
-        type: 'folder',
-        modifiedAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
-        path: '/Documents',
-      },
-      {
-        id: 'f4',
-        name: 'Media',
-        type: 'folder',
-        modifiedAt: new Date(Date.now() - 1000 * 60 * 60 * 48),
-        path: '/Media',
-      },
+  // Fetch files from API
+  const fetchFiles = useCallback(async () => {
+    if (!teamId) return;
 
-      // Files in Workflow Outputs
-      {
-        id: 'file1',
-        name: 'Brand Identity Assembly - Final',
-        type: 'file',
-        extension: 'pdf',
-        size: '2.4 MB',
-        modifiedAt: new Date(Date.now() - 1000 * 60 * 15),
-        createdBy: 'Sage Chen',
-        parentId: 'f1',
-        path: '/Workflow Outputs/Brand Identity Assembly - Final.pdf',
-        preview: 'Complete brand identity package including color palette, typography, and messaging guidelines.',
-      },
-      {
-        id: 'file2',
-        name: 'Market Analysis Report',
-        type: 'file',
-        extension: 'pdf',
-        size: '1.8 MB',
-        modifiedAt: new Date(Date.now() - 1000 * 60 * 45),
-        createdBy: 'Atlas Rivera',
-        parentId: 'f1',
-        path: '/Workflow Outputs/Market Analysis Report.pdf',
-        preview: 'Comprehensive market analysis covering competitor landscape and positioning opportunities.',
-      },
-      {
-        id: 'file3',
-        name: 'Color Strategy Document',
-        type: 'file',
-        extension: 'pdf',
-        size: '892 KB',
-        modifiedAt: new Date(Date.now() - 1000 * 60 * 60),
-        createdBy: 'Aurora Blake',
-        parentId: 'f1',
-        path: '/Workflow Outputs/Color Strategy Document.pdf',
-        preview: 'Authority-focused color palette with psychological justifications and usage guidelines.',
-      },
+    setIsLoading(true);
+    setError(null);
 
-      // Files in Brand Assets
-      {
-        id: 'file4',
-        name: 'Logo Suite',
-        type: 'file',
-        extension: 'ai',
-        size: '5.2 MB',
-        modifiedAt: new Date(Date.now() - 1000 * 60 * 60 * 3),
-        createdBy: 'Design Team',
-        parentId: 'f2',
-        path: '/Brand Assets/Logo Suite.ai',
-      },
-      {
-        id: 'file5',
-        name: 'Brand Guidelines',
-        type: 'file',
-        extension: 'pdf',
-        size: '3.1 MB',
-        modifiedAt: new Date(Date.now() - 1000 * 60 * 60 * 5),
-        createdBy: 'Sage Chen',
-        parentId: 'f2',
-        path: '/Brand Assets/Brand Guidelines.pdf',
-      },
+    const token = localStorage.getItem('access_token');
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-      // Files in Documents
-      {
-        id: 'file6',
-        name: 'Project Brief',
-        type: 'file',
-        extension: 'docx',
-        size: '124 KB',
-        modifiedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2),
-        createdBy: 'You',
-        parentId: 'f3',
-        path: '/Documents/Project Brief.docx',
-      },
-    ];
+    try {
+      const response = await fetch(
+        `${baseUrl}/api/vault/folders?team_id=${teamId}&path=${encodeURIComponent(currentFolder)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
 
-    setFiles(demoFiles);
-  }, []);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch files: ${response.status}`);
+      }
 
-  const getCurrentFolderFiles = () => {
-    if (currentFolder === '/') {
-      return files.filter(f => !f.parentId);
+      const data = await response.json();
+      setFiles(data.files || []);
+      setFolders(data.folders || []);
+    } catch (err) {
+      console.error('Error fetching vault files:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load files');
+    } finally {
+      setIsLoading(false);
     }
-    const currentFolderId = files.find(f => f.path === currentFolder)?.id;
-    return files.filter(f => f.parentId === currentFolderId);
-  };
+  }, [teamId, currentFolder]);
+
+  // Load initial file if provided
+  const loadInitialFile = useCallback(async () => {
+    if (!initialFileId || !teamId) return;
+
+    const token = localStorage.getItem('access_token');
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+    try {
+      const response = await fetch(
+        `${baseUrl}/api/vault/files/${initialFileId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const file = await response.json();
+        setCurrentFolder(file.folder_path);
+        setSelectedFile(file);
+      }
+    } catch (err) {
+      console.error('Error loading initial file:', err);
+    }
+  }, [initialFileId, teamId]);
+
+  useEffect(() => {
+    fetchFiles();
+  }, [fetchFiles]);
+
+  useEffect(() => {
+    loadInitialFile();
+  }, [loadInitialFile]);
 
   const handleFileClick = (file: VaultFile) => {
-    if (file.type === 'folder') {
-      setCurrentFolder(file.path);
-      setSelectedFile(null);
-    } else {
-      setSelectedFile(file);
-    }
+    setSelectedFile(file);
+  };
+
+  const handleFolderClick = (folderName: string) => {
+    const newPath = currentFolder === '/' ? `/${folderName}` : `${currentFolder}/${folderName}`;
+    setCurrentFolder(newPath);
+    setSelectedFile(null);
   };
 
   const handleBackClick = () => {
@@ -162,7 +119,8 @@ export default function FileVaultView({ teamId }: FileVaultViewProps) {
     setSelectedFile(null);
   };
 
-  const formatTimeAgo = (date: Date) => {
+  const formatTimeAgo = (dateStr: string) => {
+    const date = new Date(dateStr);
     const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
     if (seconds < 60) return 'Just now';
     const minutes = Math.floor(seconds / 60);
@@ -172,17 +130,26 @@ export default function FileVaultView({ teamId }: FileVaultViewProps) {
     return `${Math.floor(hours / 24)}d ago`;
   };
 
-  const getFileIcon = (file: VaultFile) => {
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return '-';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getFileIcon = (file: VaultFile | { type: 'folder' }) => {
     if (file.type === 'folder') {
       return (
-        <svg className="w-full h-full text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-full h-full text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
         </svg>
       );
     }
 
-    // File type specific icons
-    if (file.extension === 'pdf') {
+    const vaultFile = file as VaultFile;
+    const ext = vaultFile.file_type?.toLowerCase();
+
+    if (ext === 'pdf') {
       return (
         <svg className="w-full h-full text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -190,23 +157,22 @@ export default function FileVaultView({ teamId }: FileVaultViewProps) {
       );
     }
 
-    if (file.extension === 'docx' || file.extension === 'doc') {
+    if (ext === 'md' || ext === 'txt') {
       return (
-        <svg className="w-full h-full text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-full h-full text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       );
     }
 
-    if (file.extension === 'ai' || file.extension === 'psd' || file.extension === 'fig') {
+    if (ext === 'json') {
       return (
-        <svg className="w-full h-full text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        <svg className="w-full h-full text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
         </svg>
       );
     }
 
-    // Default file icon
     return (
       <svg className="w-full h-full text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -214,8 +180,12 @@ export default function FileVaultView({ teamId }: FileVaultViewProps) {
     );
   };
 
-  const filteredFiles = getCurrentFolderFiles().filter(file =>
+  const filteredFiles = files.filter(file =>
     file.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredFolders = folders.filter(folder =>
+    folder.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const breadcrumbs = currentFolder === '/' ? ['Vault'] : ['Vault', ...currentFolder.split('/').filter(Boolean)];
@@ -228,17 +198,19 @@ export default function FileVaultView({ teamId }: FileVaultViewProps) {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-xl font-semibold text-white mb-1">File Storage</h1>
-              <p className="text-sm text-slate-500">Secure storage for all team files</p>
+              <p className="text-sm text-slate-500">Workflow outputs and team documents</p>
             </div>
 
             {/* Actions */}
             <div className="flex items-center gap-3">
-              <button className="px-4 py-2 bg-[#6366F1] hover:bg-[#5558E3] text-white text-sm font-medium rounded-lg transition-all">
-                Upload File
-              </button>
-
-              <button className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-all">
-                New Folder
+              <button
+                onClick={fetchFiles}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-lg transition-all flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
               </button>
 
               {/* View Toggle */}
@@ -314,7 +286,7 @@ export default function FileVaultView({ teamId }: FileVaultViewProps) {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* File Browser */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
           {/* Back Button */}
           {currentFolder !== '/' && (
             <button
@@ -328,8 +300,37 @@ export default function FileVaultView({ teamId }: FileVaultViewProps) {
             </button>
           )}
 
+          {/* Loading State */}
+          {isLoading && (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="w-8 h-8 border-2 border-[#6366F1] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-sm text-slate-500">Loading files...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Error State */}
+          {error && !isLoading && (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <svg className="w-16 h-16 mx-auto mb-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <h3 className="text-base font-medium text-white mb-1">Error loading files</h3>
+                <p className="text-sm text-slate-500">{error}</p>
+                <button
+                  onClick={fetchFiles}
+                  className="mt-4 px-4 py-2 bg-[#6366F1] hover:bg-[#5558E3] text-white text-sm font-medium rounded-lg transition-all"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Empty State */}
-          {filteredFiles.length === 0 && (
+          {!isLoading && !error && filteredFiles.length === 0 && filteredFolders.length === 0 && (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
                 <svg className="w-16 h-16 mx-auto mb-4 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -337,15 +338,29 @@ export default function FileVaultView({ teamId }: FileVaultViewProps) {
                 </svg>
                 <h3 className="text-base font-medium text-white mb-1">No files found</h3>
                 <p className="text-sm text-slate-500">
-                  {searchQuery ? 'Try a different search term' : 'This folder is empty'}
+                  {searchQuery ? 'Try a different search term' : 'Run a workflow to generate outputs'}
                 </p>
               </div>
             </div>
           )}
 
           {/* Grid View */}
-          {viewMode === 'grid' && filteredFiles.length > 0 && (
+          {!isLoading && !error && viewMode === 'grid' && (filteredFiles.length > 0 || filteredFolders.length > 0) && (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+              {/* Folders */}
+              {filteredFolders.map((folder) => (
+                <button
+                  key={folder}
+                  onClick={() => handleFolderClick(folder)}
+                  className="group p-3 rounded-lg border bg-slate-900/50 border-slate-800 hover:border-slate-700 hover:bg-slate-800/50 transition-all text-left"
+                >
+                  <div className="w-12 h-12 mb-2">{getFileIcon({ type: 'folder' })}</div>
+                  <h3 className="text-xs font-medium text-white mb-1 truncate">{folder}</h3>
+                  <div className="text-[10px] text-slate-500">Folder</div>
+                </button>
+              ))}
+
+              {/* Files */}
               {filteredFiles.map((file) => (
                 <button
                   key={file.id}
@@ -357,25 +372,37 @@ export default function FileVaultView({ teamId }: FileVaultViewProps) {
                   }`}
                 >
                   <div className="w-12 h-12 mb-2">{getFileIcon(file)}</div>
-                  <h3 className="text-xs font-medium text-white mb-1 truncate">
-                    {file.name}
-                  </h3>
-                  {file.type === 'file' && (
-                    <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                      <span>{file.extension?.toUpperCase()}</span>
-                      <span>·</span>
-                      <span>{file.size}</span>
-                    </div>
-                  )}
-                  <div className="text-[10px] text-slate-600 mt-0.5">{formatTimeAgo(file.modifiedAt)}</div>
+                  <h3 className="text-xs font-medium text-white mb-1 truncate">{file.name}</h3>
+                  <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                    <span>{file.file_type?.toUpperCase()}</span>
+                    <span>·</span>
+                    <span>{formatFileSize(file.size_bytes)}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-600 mt-0.5">{formatTimeAgo(file.created_at)}</div>
                 </button>
               ))}
             </div>
           )}
 
           {/* List View */}
-          {viewMode === 'list' && filteredFiles.length > 0 && (
+          {!isLoading && !error && viewMode === 'list' && (filteredFiles.length > 0 || filteredFolders.length > 0) && (
             <div className="space-y-px">
+              {/* Folders */}
+              {filteredFolders.map((folder) => (
+                <button
+                  key={folder}
+                  onClick={() => handleFolderClick(folder)}
+                  className="w-full px-4 py-3 hover:bg-slate-800/50 text-white transition-all text-left flex items-center gap-3"
+                >
+                  <div className="w-8 h-8 flex-shrink-0">{getFileIcon({ type: 'folder' })}</div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-medium truncate">{folder}</h3>
+                  </div>
+                  <div className="text-xs text-slate-500">Folder</div>
+                </button>
+              ))}
+
+              {/* Files */}
               {filteredFiles.map((file) => (
                 <button
                   key={file.id}
@@ -391,14 +418,10 @@ export default function FileVaultView({ teamId }: FileVaultViewProps) {
                     <h3 className="text-sm font-medium truncate">{file.name}</h3>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-slate-500">
-                    {file.type === 'file' && (
-                      <>
-                        <span className="w-12">{file.extension?.toUpperCase()}</span>
-                        <span className="w-16 text-right">{file.size}</span>
-                      </>
-                    )}
-                    <span className="w-20 text-right">{formatTimeAgo(file.modifiedAt)}</span>
-                    {file.createdBy && <span className="w-24 text-right truncate">{file.createdBy}</span>}
+                    <span className="w-12">{file.file_type?.toUpperCase()}</span>
+                    <span className="w-16 text-right">{formatFileSize(file.size_bytes)}</span>
+                    <span className="w-20 text-right">{formatTimeAgo(file.created_at)}</span>
+                    {file.created_by && <span className="w-24 text-right truncate">{file.created_by}</span>}
                   </div>
                 </button>
               ))}
@@ -408,7 +431,7 @@ export default function FileVaultView({ teamId }: FileVaultViewProps) {
 
         {/* File Preview Panel */}
         {selectedFile && (
-          <div className="w-80 border-l border-slate-800 bg-slate-900/50 flex flex-col">
+          <div className="w-96 border-l border-slate-800 bg-slate-900/50 flex flex-col">
             {/* Header */}
             <div className="p-4 border-b border-slate-800">
               <div className="flex items-start justify-between mb-3">
@@ -424,42 +447,45 @@ export default function FileVaultView({ teamId }: FileVaultViewProps) {
               </div>
               <h2 className="text-sm font-medium text-white mb-1 break-words">{selectedFile.name}</h2>
               <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span>{selectedFile.extension?.toUpperCase()}</span>
-                {selectedFile.size && (
-                  <>
-                    <span>·</span>
-                    <span>{selectedFile.size}</span>
-                  </>
-                )}
+                <span>{selectedFile.file_type?.toUpperCase()}</span>
+                <span>·</span>
+                <span>{formatFileSize(selectedFile.size_bytes)}</span>
               </div>
             </div>
 
-            {/* Details */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Preview */}
-              {selectedFile.preview && (
-                <div>
-                  <h3 className="text-xs font-medium text-slate-400 mb-2">Preview</h3>
-                  <p className="text-xs text-slate-300 leading-relaxed">{selectedFile.preview}</p>
+            {/* Content Preview */}
+            <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
+              {selectedFile.content && (
+                <div className="mb-4">
+                  <h3 className="text-xs font-medium text-slate-400 mb-2">Content</h3>
+                  <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 max-h-96 overflow-y-auto scrollbar-hide">
+                    <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono">{selectedFile.content}</pre>
+                  </div>
                 </div>
               )}
 
-              {/* Info */}
-              <div>
+              {/* Details */}
+              <div className="mb-4">
                 <h3 className="text-xs font-medium text-slate-400 mb-2">Details</h3>
                 <div className="space-y-2">
                   <div>
                     <div className="text-[10px] text-slate-600 mb-0.5">Created By</div>
-                    <div className="text-xs text-white">{selectedFile.createdBy || 'Unknown'}</div>
+                    <div className="text-xs text-white">{selectedFile.created_by || 'System'}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-slate-600 mb-0.5">Modified</div>
-                    <div className="text-xs text-white">{selectedFile.modifiedAt.toLocaleString()}</div>
+                    <div className="text-[10px] text-slate-600 mb-0.5">Created</div>
+                    <div className="text-xs text-white">{new Date(selectedFile.created_at).toLocaleString()}</div>
                   </div>
                   <div>
                     <div className="text-[10px] text-slate-600 mb-0.5">Path</div>
-                    <div className="text-xs text-slate-400 font-mono break-all">{selectedFile.path}</div>
+                    <div className="text-xs text-slate-400 font-mono break-all">{selectedFile.folder_path}/{selectedFile.name}</div>
                   </div>
+                  {selectedFile.operation_id && (
+                    <div>
+                      <div className="text-[10px] text-slate-600 mb-0.5">Operation ID</div>
+                      <div className="text-xs text-slate-400">#{selectedFile.operation_id}</div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -467,11 +493,21 @@ export default function FileVaultView({ teamId }: FileVaultViewProps) {
               <div>
                 <h3 className="text-xs font-medium text-slate-400 mb-2">Actions</h3>
                 <div className="space-y-2">
-                  <button className="w-full px-3 py-2 bg-[#6366F1] hover:bg-[#5558E3] text-white text-xs font-medium rounded-lg transition-all">
+                  <button
+                    onClick={() => {
+                      if (selectedFile.content) {
+                        const blob = new Blob([selectedFile.content], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = selectedFile.name;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-[#6366F1] hover:bg-[#5558E3] text-white text-xs font-medium rounded-lg transition-all"
+                  >
                     Download
-                  </button>
-                  <button className="w-full px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium rounded-lg transition-all">
-                    Share
                   </button>
                   <button className="w-full px-3 py-2 bg-slate-800 hover:bg-red-900/50 text-slate-400 hover:text-red-400 text-xs font-medium rounded-lg transition-all">
                     Delete

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 
-from routers import auth, teams, agents, chat, operations, evo, knowledge, tools, marketplace, assumptions, users
+from routers import auth, teams, agents, chat, operations, evo, knowledge, tools, marketplace, assumptions, users, vault
 from database import engine, Base
 
 
@@ -43,6 +43,7 @@ app.include_router(tools.router)
 app.include_router(marketplace.router)
 app.include_router(assumptions.router)
 app.include_router(users.router)
+app.include_router(vault.router)
 
 
 

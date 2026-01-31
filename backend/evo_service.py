@@ -115,8 +115,25 @@ Respond ONLY with valid JSON, no additional text or markdown."""
 def clean_json_response(response: str) -> str:
     """Clean LLM response to extract JSON"""
     clean = response.strip()
+    print(f"[clean_json] Raw response length: {len(clean)}")
 
-    # Remove markdown code blocks
+    # DeepSeek R1 often includes <think>...</think> tags with reasoning
+    # Remove everything before the JSON
+    if "<think>" in clean:
+        # Find the end of thinking section
+        think_end = clean.find("</think>")
+        if think_end != -1:
+            clean = clean[think_end + 8:].strip()
+            print(f"[clean_json] Removed <think> section, new length: {len(clean)}")
+
+    # Try to find JSON object boundaries
+    json_start = clean.find("{")
+    json_end = clean.rfind("}") + 1
+    if json_start != -1 and json_end > json_start:
+        clean = clean[json_start:json_end]
+        print(f"[clean_json] Extracted JSON object, length: {len(clean)}")
+
+    # Remove markdown code blocks if still present
     if clean.startswith("```"):
         lines = clean.split("\n")
         # Find the content between ``` markers
@@ -127,6 +144,7 @@ def clean_json_response(response: str) -> str:
                 end_idx = i
                 break
         clean = "\n".join(lines[start_idx:end_idx])
+        print(f"[clean_json] Removed markdown, new length: {len(clean)}")
 
     # Remove "json" language identifier if present
     if clean.startswith("json"):
@@ -139,8 +157,13 @@ def parse_json_safely(response: str, default: Dict = None) -> tuple[Dict, bool]:
     """Safely parse JSON from LLM response"""
     try:
         clean = clean_json_response(response)
-        return json.loads(clean), False
-    except json.JSONDecodeError:
+        print(f"[parse_json] Attempting to parse: {clean[:500]}...")
+        result = json.loads(clean)
+        print(f"[parse_json] Success! Keys: {list(result.keys())}")
+        return result, False
+    except json.JSONDecodeError as e:
+        print(f"[parse_json] FAILED to parse JSON: {e}")
+        print(f"[parse_json] Raw content: {response[:500]}...")
         return default or {}, True
 
 
@@ -272,6 +295,12 @@ Guide the user to accomplish their goals using the available agents, or suggest 
         Returns:
             Analysis result with subtasks, suggested agents, etc.
         """
+        print(f"\n{'='*60}")
+        print(f"[EVO] analyze_task called")
+        print(f"[EVO] Task: {task}")
+        print(f"[EVO] Team: {team_name} (ID: {team_id})")
+        print(f"[EVO] Agents: {len(agents) if agents else 0}")
+
         # Format agent info
         agent_info = "None available"
         if agents:
@@ -279,6 +308,7 @@ Guide the user to accomplish their goals using the available agents, or suggest 
                 f"{a.get('name', 'Agent')} ({a.get('specialty', 'General')})"
                 for a in agents[:10]
             ])
+        print(f"[EVO] Agent info: {agent_info}")
 
         prompt = TASK_ANALYSIS_PROMPT.format(
             task=task,
@@ -286,12 +316,16 @@ Guide the user to accomplish their goals using the available agents, or suggest 
             agents=agent_info,
             context=context or "No previous context"
         )
+        print(f"[EVO] Prompt length: {len(prompt)}")
 
         try:
+            print("[EVO] Calling LLM for analysis...")
             response = self._llm.simple_chat(
                 user_message=prompt,
                 system_prompt=EVO_SYSTEM_PROMPT
             )
+            print(f"[EVO] LLM response length: {len(response)}")
+            print(f"[EVO] LLM response preview: {response[:300]}...")
 
             # Parse JSON response
             analysis, parse_error = parse_json_safely(response, {
@@ -304,6 +338,14 @@ Guide the user to accomplish their goals using the available agents, or suggest 
                 "confidence": 0.5
             })
 
+            if parse_error:
+                print(f"[EVO] WARNING: JSON parse failed, using defaults")
+            else:
+                print(f"[EVO] Analysis parsed successfully:")
+                print(f"[EVO]   - Subtasks: {len(analysis.get('subtasks', []))}")
+                print(f"[EVO]   - Suggested agents: {len(analysis.get('suggested_agents', []))}")
+                print(f"[EVO]   - Assumptions: {len(analysis.get('assumptions', []))}")
+
             return {
                 "success": True,
                 "analysis": analysis,
@@ -313,6 +355,7 @@ Guide the user to accomplish their goals using the available agents, or suggest 
             }
 
         except Exception as e:
+            print(f"[EVO] ERROR in analyze_task: {e}")
             return {
                 "success": False,
                 "error": str(e),
@@ -336,6 +379,11 @@ Guide the user to accomplish their goals using the available agents, or suggest 
         Returns:
             Workflow suggestion with steps, costs, time estimates
         """
+        print(f"\n{'='*60}")
+        print(f"[EVO] suggest_workflow called")
+        print(f"[EVO] Task: {task}")
+        print(f"[EVO] Analysis subtasks: {len(analysis.get('subtasks', []))}")
+
         # Format agent info
         agent_info = "None available"
         if agents:
@@ -343,18 +391,23 @@ Guide the user to accomplish their goals using the available agents, or suggest 
                 f"{a.get('name', 'Agent')} ({a.get('specialty', 'General')})"
                 for a in agents[:10]
             ])
+        print(f"[EVO] Agent info: {agent_info}")
 
         prompt = WORKFLOW_DESIGN_PROMPT.format(
             task=task,
             analysis=json.dumps(analysis, indent=2),
             agents=agent_info
         )
+        print(f"[EVO] Prompt length: {len(prompt)}")
 
         try:
+            print("[EVO] Calling LLM for workflow design...")
             response = self._llm.simple_chat(
                 user_message=prompt,
                 system_prompt=EVO_SYSTEM_PROMPT
             )
+            print(f"[EVO] LLM response length: {len(response)}")
+            print(f"[EVO] LLM response preview: {response[:500]}...")
 
             # Parse JSON response
             workflow, parse_error = parse_json_safely(response, {
@@ -365,6 +418,15 @@ Guide the user to accomplish their goals using the available agents, or suggest 
                 "estimated_time_minutes": 0
             })
 
+            if parse_error:
+                print(f"[EVO] WARNING: JSON parse failed for workflow, using defaults")
+            else:
+                print(f"[EVO] Workflow parsed successfully:")
+                print(f"[EVO]   - Title: {workflow.get('title')}")
+                print(f"[EVO]   - Steps: {len(workflow.get('steps', []))}")
+                print(f"[EVO]   - Est. time: {workflow.get('estimated_time_minutes')} min")
+                print(f"[EVO]   - Est. cost: ${workflow.get('estimated_cost')}")
+
             return {
                 "success": True,
                 "workflow": workflow,
@@ -373,6 +435,7 @@ Guide the user to accomplish their goals using the available agents, or suggest 
             }
 
         except Exception as e:
+            print(f"[EVO] ERROR in suggest_workflow: {e}")
             return {
                 "success": False,
                 "error": str(e)

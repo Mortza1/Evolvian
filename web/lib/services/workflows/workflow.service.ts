@@ -20,6 +20,7 @@ class WorkflowService {
 
   /**
    * Analyze a task and get Evo's breakdown
+   * Note: Uses longer timeout (120s) for LLM call
    */
   async analyzeTask(
     task: string,
@@ -35,7 +36,7 @@ class WorkflowService {
         task,
         team_id: teamId,
         context,
-      });
+      }, { timeout: 120000 }); // 2 minute timeout for LLM call
       return { success: true, analysis: result.analysis };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to analyze task';
@@ -45,6 +46,7 @@ class WorkflowService {
 
   /**
    * Build a workflow from task (uses Evo's brain)
+   * Note: Uses longer timeouts as this involves LLM calls
    */
   async buildWorkflow(request: BuildWorkflowRequest): Promise<{
     success: boolean;
@@ -53,7 +55,7 @@ class WorkflowService {
     error?: string;
   }> {
     try {
-      // First analyze the task
+      // First analyze the task (120s timeout)
       const analysisResult = await api.post<{
         success: boolean;
         analysis: TaskAnalysis;
@@ -61,20 +63,20 @@ class WorkflowService {
         task: request.task,
         team_id: request.team_id,
         context: JSON.stringify(request.context || {}),
-      });
+      }, { timeout: 120000 });
 
       if (!analysisResult.success) {
         return { success: false, error: 'Failed to analyze task' };
       }
 
-      // Then get workflow design
+      // Then get workflow design (120s timeout)
       const workflowResult = await api.post<{
         success: boolean;
         workflow: WorkflowDesign;
       }>('/api/evo/workflow', {
         task: request.task,
         analysis: analysisResult.analysis,
-      });
+      }, { timeout: 120000 });
 
       if (!workflowResult.success) {
         return { success: false, error: 'Failed to design workflow' };
@@ -96,6 +98,7 @@ class WorkflowService {
 
   /**
    * Quick task - combined analyze + workflow in one call
+   * Note: Uses longer timeout (180s) as this involves multiple LLM calls
    */
   async quickTask(
     task: string,
@@ -115,7 +118,7 @@ class WorkflowService {
       }>('/api/evo/quick-task', {
         task,
         team_id: teamId,
-      });
+      }, { timeout: 180000 }); // 3 minute timeout for multiple LLM calls
 
       if (!result.success) {
         return { success: false, error: 'Failed to process task' };
@@ -170,16 +173,80 @@ class WorkflowService {
   }
 
   /**
-   * Cancel a running workflow
+   * Cancel a running or paused workflow
    */
-  async cancelExecution(operationId: number): Promise<boolean> {
+  async cancelExecution(operationId: number): Promise<{
+    success: boolean;
+    status?: string;
+    message?: string;
+  }> {
     try {
-      await api.post(`/api/operations/${operationId}/cancel`, {});
-      return true;
+      const result = await api.post<{
+        success: boolean;
+        status: string;
+        message: string;
+        operation_id: number;
+      }>(`/api/operations/${operationId}/cancel`, {});
+      return {
+        success: result.success,
+        status: result.status,
+        message: result.message,
+      };
     } catch (err) {
       console.error('Error cancelling execution:', err);
-      return false;
+      const message = err instanceof Error ? err.message : 'Failed to cancel';
+      return { success: false, message };
     }
+  }
+
+  /**
+   * Pause a running workflow at next node boundary
+   */
+  async pauseExecution(operationId: number): Promise<{
+    success: boolean;
+    status?: string;
+    message?: string;
+  }> {
+    try {
+      const result = await api.post<{
+        success: boolean;
+        status: string;
+        message: string;
+        operation_id: number;
+      }>(`/api/operations/${operationId}/pause`, {});
+      return {
+        success: result.success,
+        status: result.status,
+        message: result.message,
+      };
+    } catch (err) {
+      console.error('Error pausing execution:', err);
+      const message = err instanceof Error ? err.message : 'Failed to pause';
+      return { success: false, message };
+    }
+  }
+
+  /**
+   * Resume a paused workflow - returns SSE stream
+   * Note: This returns the raw fetch Response so caller can read the SSE stream
+   */
+  async resumeExecution(operationId: number): Promise<Response> {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+    const response = await fetch(`${baseUrl}/api/operations/${operationId}/resume`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'text/event-stream',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Resume failed: ${response.status}`);
+    }
+
+    return response;
   }
 
   // ==================== Operation Integration ====================

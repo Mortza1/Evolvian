@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import TaskCreationFlow from './TaskCreationFlow';
-import { getTasks, Task as StoredTask } from '@/lib/tasks';
-import { getHiredAgents } from '@/lib/agents';
+import { getTasks, getTask, Task as StoredTask } from '@/lib/tasks';
+import { useTeamAgents } from '@/lib/services/agents';
 import WarRoomLive from '@/components/operations/WarRoomLive';
 
 interface BoardViewProps {
@@ -14,6 +14,13 @@ export default function BoardView({ teamId }: BoardViewProps) {
   const [tasks, setTasks] = useState<StoredTask[]>([]);
   const [isTaskCreationOpen, setIsTaskCreationOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
+  const [activeTask, setActiveTask] = useState<StoredTask | null>(null);
+
+  // Load hired agents from API
+  const { agents: hiredAgents } = useTeamAgents({
+    teamId: parseInt(teamId, 10),
+    autoFetch: true,
+  });
 
   // Load tasks on mount and when teamId changes
   useEffect(() => {
@@ -23,6 +30,20 @@ export default function BoardView({ teamId }: BoardViewProps) {
   const loadTasks = async () => {
     const teamTasks = await getTasks(parseInt(teamId));
     setTasks(teamTasks);
+  };
+
+  // Load task details when activeTaskId changes
+  useEffect(() => {
+    if (activeTaskId) {
+      loadActiveTask(activeTaskId);
+    } else {
+      setActiveTask(null);
+    }
+  }, [activeTaskId]);
+
+  const loadActiveTask = async (taskId: number) => {
+    const task = await getTask(taskId);
+    setActiveTask(task);
   };
 
   const columns = [
@@ -37,60 +58,91 @@ export default function BoardView({ teamId }: BoardViewProps) {
 
   const handleTaskClick = (taskId: number) => {
     const task = tasks.find(t => t.id === taskId);
-    if (task && task.status === 'active') {
+    if (task) {
+      // Open for any status (pending will start execution, active will show progress)
       setActiveTaskId(taskId);
     }
   };
 
   const handleCloseWarRoom = () => {
     setActiveTaskId(null);
+    setActiveTask(null);
     loadTasks(); // Reload tasks when closing execution theatre
   };
 
-  // Execution Theatre Modal
-  if (activeTaskId) {
-    const task = tasks.find(t => t.id === activeTaskId);
-    if (task) {
-      const hiredAgents = getHiredAgents(teamId);
-      const workflowNodes = task.workflowNodes.map(node => {
-        const agent = hiredAgents.find(a => a.id === node.agentId);
-        return {
-          id: node.id,
-          agent: agent || {
-            id: node.agentId,
-            name: node.agentName,
-            photo_url: node.agentPhoto,
-            role: node.agentRole,
-          } as any,
-          action: node.action,
-          order: node.order,
-        };
-      });
+  // Find best matching agent for a role
+  const findAgentForRole = useCallback((agentRole: string, agentName?: string) => {
+    if (!hiredAgents.length) return undefined;
 
-      return (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm">
-          <div className="h-full flex flex-col">
-            <div className="flex-shrink-0 px-6 py-4 border-b border-slate-800 flex items-center gap-4 bg-[#020617]">
-              <button
-                onClick={handleCloseWarRoom}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded transition-all"
-              >
-                ← Back to Board
-              </button>
-              <div className="text-sm text-slate-400">Execution Theatre</div>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <WarRoomLive
-                taskId={task.id}
-                teamId={teamId}
-                workflowNodes={workflowNodes}
-                taskDescription={task.description}
-              />
-            </div>
+    // Try exact name match first
+    if (agentName) {
+      const nameMatch = hiredAgents.find(a => a.name.toLowerCase() === agentName.toLowerCase());
+      if (nameMatch) return nameMatch;
+    }
+
+    const roleLower = agentRole.toLowerCase();
+
+    // Try role match
+    let match = hiredAgents.find(a =>
+      a.role.toLowerCase().includes(roleLower) ||
+      roleLower.includes(a.role.toLowerCase())
+    );
+    if (match) return match;
+
+    // Try specialty match
+    match = hiredAgents.find(a =>
+      a.specialty.toLowerCase().includes(roleLower) ||
+      roleLower.includes(a.specialty.toLowerCase())
+    );
+    if (match) return match;
+
+    // Fallback to first agent
+    return hiredAgents[0];
+  }, [hiredAgents]);
+
+  // Execution Theatre Modal
+  if (activeTaskId && activeTask) {
+    // Map workflow nodes with agent data from API
+    const workflowNodes = activeTask.workflowNodes.map((node, idx) => {
+      const matchedAgent = findAgentForRole(node.agentRole, node.agentName);
+      return {
+        id: node.id,
+        name: node.name,
+        description: node.description,
+        agentId: matchedAgent?.id?.toString(),
+        agentName: matchedAgent?.name || node.agentName || node.agentRole,
+        agentPhoto: matchedAgent?.photo_url || node.agentPhoto,
+        agentRole: node.agentRole,
+        action: node.action,
+        order: node.order || idx + 1,
+      };
+    });
+
+    return (
+      <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm">
+        <div className="h-full flex flex-col">
+          <div className="flex-shrink-0 px-6 py-4 border-b border-slate-800 flex items-center gap-4 bg-[#020617]">
+            <button
+              onClick={handleCloseWarRoom}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded transition-all"
+            >
+              ← Back to Board
+            </button>
+            <div className="text-sm text-slate-400">Execution Theatre</div>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <WarRoomLive
+              taskId={activeTask.id}
+              teamId={teamId}
+              workflowNodes={workflowNodes}
+              taskDescription={activeTask.description}
+              initialStatus={activeTask.status}
+              onClose={handleCloseWarRoom}
+            />
           </div>
         </div>
-      );
-    }
+      </div>
+    );
   }
 
   return (
@@ -148,13 +200,21 @@ export default function BoardView({ teamId }: BoardViewProps) {
 
                 {/* Tasks */}
                 <div className="flex-1 space-y-3 overflow-y-auto">
-                  {columnTasks.map((task) => (
+                  {columnTasks.map((task) => {
+                    // Get agent photos for this task
+                    const taskAgentPhotos = task.workflowNodes.map(node => {
+                      const matchedAgent = findAgentForRole(node.agentRole, node.agentName);
+                      return {
+                        name: matchedAgent?.name || node.agentName || node.agentRole,
+                        photo: matchedAgent?.photo_url || node.agentPhoto,
+                      };
+                    });
+
+                    return (
                     <div
                       key={task.id}
                       onClick={() => handleTaskClick(task.id)}
-                      className={`glass rounded-xl p-4 border border-slate-700/50 hover:border-slate-600 transition-all group ${
-                        task.status === 'active' ? 'cursor-pointer' : ''
-                      }`}
+                      className="glass rounded-xl p-4 border border-slate-700/50 hover:border-slate-600 transition-all group cursor-pointer"
                     >
                       {/* Status Badge */}
                       <div className="flex items-center justify-between mb-2">
@@ -167,9 +227,9 @@ export default function BoardView({ teamId }: BoardViewProps) {
                         }`}>
                           {task.status === 'active' ? 'IN PROGRESS' : task.status === 'completed' ? 'COMPLETED' : 'PENDING'}
                         </span>
-                        {task.status === 'active' && (
-                          <div className="text-xs text-[#6366F1]">Click to view live</div>
-                        )}
+                        <div className="text-xs text-[#6366F1]">
+                          {task.status === 'pending' ? 'Click to start' : task.status === 'active' ? 'Click to view' : ''}
+                        </div>
                       </div>
 
                       {/* Task Title */}
@@ -183,16 +243,18 @@ export default function BoardView({ teamId }: BoardViewProps) {
                       </p>
 
                       {/* Progress Bar */}
-                      {task.status === 'active' && (
+                      {(task.status === 'active' || task.status === 'completed') && (
                         <div className="mb-3">
                           <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
                             <span>Progress</span>
-                            <span>{task.progress}%</span>
+                            <span>{task.progress || 0}%</span>
                           </div>
                           <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-[#6366F1] transition-all duration-500"
-                              style={{ width: `${task.progress}%` }}
+                              className={`h-full transition-all duration-500 ${
+                                task.status === 'completed' ? 'bg-green-500' : 'bg-[#6366F1]'
+                              }`}
+                              style={{ width: `${task.progress || 0}%` }}
                             ></div>
                           </div>
                         </div>
@@ -201,25 +263,36 @@ export default function BoardView({ teamId }: BoardViewProps) {
                       {/* Agents */}
                       <div className="flex items-center justify-between pt-3 border-t border-slate-700/50">
                         <div className="flex items-center gap-2">
-                          {task.workflowNodes.slice(0, 3).map((node, idx) => (
-                            <img
-                              key={idx}
-                              src={node.agentPhoto}
-                              alt={node.agentName}
-                              className="w-6 h-6 rounded-full object-cover border border-slate-700"
-                              title={node.agentName}
-                            />
+                          {taskAgentPhotos.slice(0, 3).map((agent, idx) => (
+                            agent.photo ? (
+                              <img
+                                key={idx}
+                                src={agent.photo}
+                                alt={agent.name}
+                                className="w-6 h-6 rounded-full object-cover border border-slate-700"
+                                title={agent.name}
+                              />
+                            ) : (
+                              <div
+                                key={idx}
+                                className="w-6 h-6 rounded-full bg-gradient-to-br from-[#6366F1] to-[#818CF8] flex items-center justify-center text-white text-[10px] font-bold border border-slate-700"
+                                title={agent.name}
+                              >
+                                {agent.name.substring(0, 2).toUpperCase()}
+                              </div>
+                            )
                           ))}
-                          {task.workflowNodes.length > 3 && (
-                            <span className="text-xs text-slate-500">+{task.workflowNodes.length - 3}</span>
+                          {taskAgentPhotos.length > 3 && (
+                            <span className="text-xs text-slate-500">+{taskAgentPhotos.length - 3}</span>
                           )}
                         </div>
                         <div className="text-xs font-semibold text-[#FDE047]">
-                          ${task.cost.toFixed(2)}
+                          ${(task.cost || 0).toFixed(2)}
                         </div>
                       </div>
                     </div>
-                  ))}
+                  );
+                  })}
 
                   {/* Empty State */}
                   {columnTasks.length === 0 && (

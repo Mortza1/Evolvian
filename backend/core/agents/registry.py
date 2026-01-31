@@ -2,10 +2,10 @@
 Evolvian Agent Registry
 
 Central registry for agent templates and instances.
-This is the foundation for the agent marketplace.
+Single source of truth for the agent marketplace.
 """
 
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import threading
@@ -42,7 +42,7 @@ class AgentTemplate:
     is_premium: bool = False
     avatar_url: Optional[str] = None
 
-    # Inputs/outputs for the action
+    # Inputs/outputs for EvoAgentX compatibility
     inputs: List[Dict] = field(default_factory=lambda: [
         {"name": "task", "type": "str", "description": "The task to perform"}
     ])
@@ -57,17 +57,7 @@ class AgentTemplate:
         custom_name: Optional[str] = None,
         agent_id: Optional[int] = None
     ) -> EvolvianAgent:
-        """
-        Create an EvolvianAgent instance from this template.
-
-        Args:
-            team_id: The team this agent belongs to
-            custom_name: Optional custom name override
-            agent_id: Optional database ID
-
-        Returns:
-            A new EvolvianAgent instance
-        """
+        """Create an EvolvianAgent instance from this template."""
         metadata = AgentMetadata(
             agent_id=agent_id,
             team_id=team_id,
@@ -123,19 +113,12 @@ class AgentTemplate:
 class AgentRegistry:
     """
     Central registry for agent templates and running instances.
-
-    This serves as:
-    1. Template store for the marketplace
-    2. Instance manager for running agents
-    3. Factory for creating new agents
     """
 
     def __init__(self):
         self._templates: Dict[str, AgentTemplate] = {}
-        self._instances: Dict[str, EvolvianAgent] = {}  # key: f"{team_id}:{agent_name}"
+        self._instances: Dict[str, EvolvianAgent] = {}
         self._lock = threading.Lock()
-
-    # ==================== Template Management ====================
 
     def register_template(self, template: AgentTemplate) -> None:
         """Register an agent template"""
@@ -169,8 +152,6 @@ class AgentRegistry:
                 del self._templates[template_id]
                 return True
             return False
-
-    # ==================== Instance Management ====================
 
     def _instance_key(self, team_id: int, agent_name: str) -> str:
         """Generate unique key for an agent instance"""
@@ -209,29 +190,15 @@ class AgentRegistry:
                 return True
             return False
 
-    # ==================== Factory Methods ====================
-
     def create_from_template(
         self,
         template_id: str,
-        team_id: int,
+        team_id: int = 0,
         custom_name: Optional[str] = None,
         agent_id: Optional[int] = None,
-        register: bool = True
+        register: bool = False
     ) -> Optional[EvolvianAgent]:
-        """
-        Create an agent from a template.
-
-        Args:
-            template_id: The template to use
-            team_id: Team this agent belongs to
-            custom_name: Optional custom name
-            agent_id: Optional database ID
-            register: Whether to register the instance
-
-        Returns:
-            The created agent, or None if template not found
-        """
+        """Create an agent from a template."""
         template = self.get_template(template_id)
         if not template:
             return None
@@ -242,73 +209,13 @@ class AgentRegistry:
             agent_id=agent_id
         )
 
-        # Increment hire count
         with self._lock:
             template.hires_count += 1
 
-        if register:
+        if register and team_id:
             self.register_instance(agent)
 
         return agent
-
-    def create_custom(
-        self,
-        name: str,
-        description: str,
-        prompt: str,
-        team_id: int,
-        role: str = "Custom Agent",
-        specialty: str = "General",
-        system_prompt: Optional[str] = None,
-        skills: Optional[List[str]] = None,
-        agent_id: Optional[int] = None,
-        register: bool = True
-    ) -> EvolvianAgent:
-        """
-        Create a custom agent (not from template).
-
-        Args:
-            name: Agent name
-            description: What the agent does
-            prompt: Prompt template
-            team_id: Team this agent belongs to
-            role: Agent role
-            specialty: Agent specialty
-            system_prompt: Optional system prompt
-            skills: Optional list of skills
-            agent_id: Optional database ID
-            register: Whether to register the instance
-
-        Returns:
-            The created agent
-        """
-        metadata = AgentMetadata(
-            agent_id=agent_id,
-            team_id=team_id,
-            role=role,
-            specialty=specialty,
-            hired_at=datetime.now(timezone.utc),
-        )
-
-        capabilities = AgentCapabilities(
-            skills=skills or [],
-        )
-
-        agent = EvolvianAgent(
-            name=name,
-            description=description,
-            prompt=prompt,
-            system_prompt=system_prompt,
-            metadata=metadata,
-            capabilities=capabilities,
-        )
-
-        if register:
-            self.register_instance(agent)
-
-        return agent
-
-    # ==================== Stats ====================
 
     def get_stats(self) -> Dict[str, Any]:
         """Get registry statistics"""
@@ -316,7 +223,6 @@ class AgentRegistry:
             "total_templates": len(self._templates),
             "total_instances": len(self._instances),
             "categories": list(set(t.category for t in self._templates.values())),
-            "featured_count": len([t for t in self._templates.values() if t.is_featured]),
         }
 
 
@@ -324,173 +230,147 @@ class AgentRegistry:
 AGENT_REGISTRY = AgentRegistry()
 
 
-# ==================== Built-in Templates ====================
+# ==================== Built-in Agent Templates ====================
+# These are the 4 core agents for personal branding
 
 def _register_builtin_templates():
     """Register the built-in agent templates"""
 
-    # Aria Martinez - Senior Brand Lead
+    # Brand Strategist
     AGENT_REGISTRY.register_template(AgentTemplate(
-        template_id="agent-aria-martinez",
-        name="Aria Martinez",
-        role="Senior Brand Lead",
-        specialty="Personal Branding & Executive Positioning",
-        description="Expert in crafting and managing personal brands for executives and thought leaders. Specializes in LinkedIn presence, speaking engagements, and media positioning.",
-        prompt="""You are {name}, a {role} specializing in {specialty}.
+        template_id="brand-strategist",
+        name="Brand Strategist",
+        role="Brand Strategist",
+        specialty="Value Proposition & Brand Voice",
+        description="Defines your unique value proposition, target audience, and brand voice. Creates mission statements, audience analysis, and tone guidelines.",
+        system_prompt="""You are a Brand Strategist specializing in personal branding and positioning.
 
-Task: {task}
+Your expertise includes:
+- Defining unique value propositions
+- Identifying and analyzing target audiences
+- Crafting authentic brand voice and tone
+- Creating mission and vision statements
+- Developing brand positioning strategies
 
-Approach this task with your expertise in:
-- Brand strategy and positioning
-- Content planning and creation
-- LinkedIn optimization
-- Media relations and thought leadership
+Always provide strategic, actionable guidance that helps build a distinctive and authentic personal brand.""",
+        prompt="""Task: {task}
 
-Provide actionable, strategic advice that helps build a strong personal brand.""",
-        level=10,
-        base_cost_per_hour=45.0,
-        skills=["brand strategy", "content planning", "LinkedIn optimization", "media relations", "thought leadership"],
-        personality_traits=["strategic", "creative", "detail-oriented", "persuasive"],
-        category="management",
-        rating=4.9,
-        hires_count=1250,
+As a Brand Strategist, analyze this request and provide:
+1. Strategic insights based on brand positioning principles
+2. Clear, actionable recommendations
+3. Considerations for target audience and market positioning
+
+Focus on authenticity, differentiation, and sustainable brand building.""",
+        level=5,
+        base_cost_per_hour=35.0,
+        skills=["brand positioning", "value proposition", "audience analysis", "tone guidelines", "mission statements"],
+        personality_traits=["strategic", "analytical", "creative", "authentic"],
+        category="branding",
+        rating=4.8,
         is_featured=True,
     ))
 
-    # Alex Chen - Research Analyst
+    # Content Creator
     AGENT_REGISTRY.register_template(AgentTemplate(
-        template_id="agent-research-analyst",
-        name="Alex Chen",
-        role="Research Analyst",
-        specialty="Market Research & Competitive Analysis",
-        description="Skilled at gathering, analyzing, and synthesizing information from multiple sources. Expert in market trends and competitive intelligence.",
-        prompt="""You are {name}, a {role} specializing in {specialty}.
+        template_id="content-creator",
+        name="Content Creator",
+        role="Content Creator",
+        specialty="Written & Visual Content",
+        description="Develops written and visual content including blogs, social posts, and newsletters. Expert in copywriting, storytelling, and content planning.",
+        system_prompt="""You are a Content Creator specializing in personal brand content.
 
-Task: {task}
+Your expertise includes:
+- Blog posts and long-form articles
+- Social media content and captions
+- Newsletter writing and email sequences
+- Storytelling and narrative development
+- Content calendars and planning
 
-Approach this research task methodically:
-1. Identify key information needs
-2. Consider multiple data sources
-3. Analyze findings critically
-4. Synthesize into actionable insights
+Always create engaging, authentic content that resonates with the target audience while maintaining brand voice consistency.""",
+        prompt="""Task: {task}
 
-Provide well-researched, evidence-based analysis.""",
-        level=5,
-        base_cost_per_hour=25.0,
-        skills=["research", "data analysis", "report writing", "competitive analysis", "trend spotting"],
-        personality_traits=["analytical", "thorough", "curious", "methodical"],
-        category="research",
-        rating=4.7,
-        hires_count=890,
-    ))
+As a Content Creator, approach this by:
+1. Understanding the content goals and audience
+2. Applying storytelling principles
+3. Maintaining brand voice consistency
+4. Optimizing for the target platform
 
-    # Maya Johnson - Content Writer
-    AGENT_REGISTRY.register_template(AgentTemplate(
-        template_id="agent-content-writer",
-        name="Maya Johnson",
-        role="Content Writer",
-        specialty="Blog Posts, Articles & Social Media",
-        description="Creative writer specializing in engaging content across multiple platforms. Expert in SEO-optimized articles and viral social content.",
-        prompt="""You are {name}, a {role} specializing in {specialty}.
-
-Task: {task}
-
-Create content that is:
-- Engaging and reader-friendly
-- Well-structured with clear flow
-- Optimized for the target platform
-- Action-oriented with clear CTAs
-
-Write with creativity while maintaining brand voice.""",
-        level=6,
-        base_cost_per_hour=30.0,
-        skills=["copywriting", "SEO writing", "social media", "storytelling", "editing"],
-        personality_traits=["creative", "adaptable", "deadline-driven", "empathetic"],
-        category="creative",
-        rating=4.8,
-        hires_count=2100,
-    ))
-
-    # Sam Park - Data Analyst
-    AGENT_REGISTRY.register_template(AgentTemplate(
-        template_id="agent-data-analyst",
-        name="Sam Park",
-        role="Data Analyst",
-        specialty="Data Processing & Visualization",
-        description="Expert in transforming raw data into actionable insights. Skilled in Python, SQL, and visualization tools.",
-        prompt="""You are {name}, a {role} specializing in {specialty}.
-
-Task: {task}
-
-Approach this data task by:
-1. Understanding the data structure
-2. Identifying key metrics and patterns
-3. Applying appropriate analytical methods
-4. Presenting findings clearly
-
-Provide precise, data-driven insights with clear explanations.""",
-        level=7,
-        base_cost_per_hour=35.0,
-        skills=["Python", "SQL", "data visualization", "statistics", "machine learning basics"],
-        personality_traits=["precise", "logical", "patient", "detail-oriented"],
-        category="technical",
-        rating=4.6,
-        hires_count=650,
-        is_premium=True,
-    ))
-
-    # Jordan Lee - Project Coordinator
-    AGENT_REGISTRY.register_template(AgentTemplate(
-        template_id="agent-project-coordinator",
-        name="Jordan Lee",
-        role="Project Coordinator",
-        specialty="Task Management & Team Coordination",
-        description="Keeps projects on track with excellent organization and communication. Expert in Agile and traditional project management.",
-        prompt="""You are {name}, a {role} specializing in {specialty}.
-
-Task: {task}
-
-Manage this effectively by:
-- Breaking down into clear subtasks
-- Identifying dependencies and blockers
-- Setting realistic milestones
-- Communicating status clearly
-
-Keep things organized and moving forward.""",
+Deliver content that engages, informs, and drives action.""",
         level=4,
-        base_cost_per_hour=20.0,
-        skills=["project management", "scheduling", "communication", "risk assessment", "stakeholder management"],
-        personality_traits=["organized", "proactive", "diplomatic", "resourceful"],
-        category="operations",
-        rating=4.5,
-        hires_count=780,
+        base_cost_per_hour=28.0,
+        skills=["copywriting", "storytelling", "content planning", "social media", "newsletters"],
+        personality_traits=["creative", "adaptable", "engaging", "detail-oriented"],
+        category="branding",
+        rating=4.7,
     ))
 
-    # Taylor Rivera - Social Media Manager
+    # Visual Designer
     AGENT_REGISTRY.register_template(AgentTemplate(
-        template_id="agent-social-media-manager",
-        name="Taylor Rivera",
+        template_id="visual-designer",
+        name="Visual Designer",
+        role="Visual Designer",
+        specialty="Logos, Graphics & Brand Assets",
+        description="Creates logos, graphics, and visual assets aligned with your brand. Handles design templates, brand kits, and visual identity systems.",
+        system_prompt="""You are a Visual Designer specializing in brand identity and visual assets.
+
+Your expertise includes:
+- Logo design and brand marks
+- Color palette development
+- Typography selection and pairing
+- Social media graphics and templates
+- Brand kit creation and guidelines
+- Visual identity systems
+
+Always create designs that are visually cohesive, memorable, and aligned with brand strategy.""",
+        prompt="""Task: {task}
+
+As a Visual Designer, consider:
+1. Brand personality and visual direction
+2. Target audience preferences
+3. Platform requirements and specifications
+4. Consistency with existing brand elements
+
+Provide design guidance, concepts, or specifications that elevate the visual brand.""",
+        level=4,
+        base_cost_per_hour=32.0,
+        skills=["logo design", "graphics", "brand kits", "templates", "visual identity"],
+        personality_traits=["creative", "detail-oriented", "aesthetic", "consistent"],
+        category="branding",
+        rating=4.6,
+    ))
+
+    # Social Media Manager
+    AGENT_REGISTRY.register_template(AgentTemplate(
+        template_id="social-media-manager",
+        name="Social Media Manager",
         role="Social Media Manager",
-        specialty="Social Strategy & Community Management",
-        description="Builds and engages communities across social platforms. Expert in growth strategies and viral content.",
-        prompt="""You are {name}, a {role} specializing in {specialty}.
+        specialty="Platform Strategy & Engagement",
+        description="Plans platform-specific content and engagement strategies. Handles post scheduling, analytics interpretation, and community interaction.",
+        system_prompt="""You are a Social Media Manager specializing in personal brand growth.
 
-Task: {task}
+Your expertise includes:
+- Platform-specific strategies (LinkedIn, Twitter/X, Instagram, etc.)
+- Content scheduling and optimal timing
+- Engagement tactics and community building
+- Analytics and performance tracking
+- Trend identification and leverage
 
-Create social strategies that:
-- Build genuine community engagement
-- Follow platform best practices
-- Leverage trending topics appropriately
-- Drive measurable growth
+Always focus on authentic engagement, sustainable growth, and platform best practices.""",
+        prompt="""Task: {task}
 
-Be creative, trend-aware, and community-focused.""",
-        level=5,
-        base_cost_per_hour=28.0,
-        skills=["social strategy", "community building", "content creation", "analytics", "trend analysis"],
-        personality_traits=["engaging", "creative", "responsive", "trend-savvy"],
-        category="creative",
+As a Social Media Manager, provide:
+1. Platform-specific recommendations
+2. Engagement and growth strategies
+3. Content timing and scheduling guidance
+4. Community building tactics
+
+Focus on building genuine connections and sustainable audience growth.""",
+        level=4,
+        base_cost_per_hour=25.0,
+        skills=["social strategy", "content scheduling", "analytics", "community management", "engagement"],
+        personality_traits=["responsive", "trend-aware", "community-focused", "analytical"],
+        category="branding",
         rating=4.7,
-        hires_count=1450,
     ))
 
 

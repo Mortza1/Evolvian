@@ -278,6 +278,10 @@ async def evo_quick_task(
 
     This is a convenience endpoint for simple task flows.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[quick-task] Starting for task: {request.task[:50]}...")
+
     # Verify team belongs to user
     team = db.query(Team).filter(
         Team.id == request.team_id,
@@ -302,8 +306,10 @@ async def evo_quick_task(
         }
         for a in agents
     ]
+    logger.info(f"[quick-task] Found {len(agent_list)} agents for team {team.name}")
 
     # Step 1: Analyze
+    logger.info("[quick-task] Step 1: Analyzing task...")
     analysis_result = evo_service.analyze_task(
         task=request.task,
         team_id=request.team_id,
@@ -313,29 +319,47 @@ async def evo_quick_task(
     )
 
     if not analysis_result.get("success"):
+        logger.error(f"[quick-task] Analysis failed: {analysis_result.get('error')}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Task analysis failed: {analysis_result.get('error')}"
         )
 
     analysis = analysis_result.get("analysis", {})
+    logger.info(f"[quick-task] Analysis complete. Subtasks: {len(analysis.get('subtasks', []))}")
 
     # Step 2: Design workflow
+    logger.info("[quick-task] Step 2: Designing workflow...")
     workflow_result = evo_service.suggest_workflow(
         task=request.task,
         analysis=analysis,
         agents=agent_list
     )
+    logger.info(f"[quick-task] Workflow complete. Success: {workflow_result.get('success')}")
 
-    return {
+    workflow = workflow_result.get("workflow") if workflow_result.get("success") else None
+    response = {
         "success": True,
         "task": request.task,
         "team_id": request.team_id,
         "analysis": analysis,
-        "workflow": workflow_result.get("workflow") if workflow_result.get("success") else None,
+        "workflow": workflow,
         "has_questions": len(analysis.get("questions", [])) > 0,
         "questions": analysis.get("questions", []),
         "assumptions": analysis.get("assumptions", []),
         "suggested_agents": analysis.get("suggested_agents", []),
         "ready_to_execute": len(analysis.get("questions", [])) == 0
     }
+
+    print(f"\n{'='*60}")
+    print(f"[quick-task] FINAL RESPONSE:")
+    print(f"[quick-task]   - Success: True")
+    print(f"[quick-task]   - Analysis subtasks: {len(analysis.get('subtasks', []))}")
+    if workflow:
+        print(f"[quick-task]   - Workflow title: {workflow.get('title')}")
+        print(f"[quick-task]   - Workflow steps: {len(workflow.get('steps', []))}")
+    else:
+        print(f"[quick-task]   - Workflow: None")
+    print(f"{'='*60}\n")
+
+    return response

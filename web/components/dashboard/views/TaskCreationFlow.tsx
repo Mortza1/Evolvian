@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getHiredAgents, HiredAgent } from '@/lib/agents';
-import { createTask } from '@/lib/tasks';
+import { useState } from 'react';
+import { useTeamAgents, Agent } from '@/lib/services/agents';
+import { workflowService } from '@/lib/services/workflows';
+import type { WorkflowDesign, WorkflowStep, TaskAnalysis } from '@/lib/services/workflows';
 
 interface TaskCreationFlowProps {
   isOpen: boolean;
@@ -12,10 +13,8 @@ interface TaskCreationFlowProps {
   onTaskCreated?: (taskId: number) => void;
 }
 
-interface WorkflowNode {
-  id: string;
-  agent: HiredAgent;
-  action: string;
+interface WorkflowNodeWithAgent extends WorkflowStep {
+  assignedAgent?: Agent;
   order: number;
 }
 
@@ -23,60 +22,139 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
   const [step, setStep] = useState<'input' | 'operation' | 'workflow'>('input');
   const [taskDescription, setTaskDescription] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [workflowNodes, setWorkflowNodes] = useState<WorkflowNode[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load hired agents and create workflow
-  useEffect(() => {
-    const hiredAgents = getHiredAgents(teamId);
+  // Workflow data from Evo
+  const [analysis, setAnalysis] = useState<TaskAnalysis | null>(null);
+  const [workflowDesign, setWorkflowDesign] = useState<WorkflowDesign | null>(null);
+  const [workflowNodes, setWorkflowNodes] = useState<WorkflowNodeWithAgent[]>([]);
 
-    // For branding, use Atlas, Aurora, and Sage
-    const atlas = hiredAgents.find(a => a.id === 'agent-032'); // Brand Strategist
-    const aurora = hiredAgents.find(a => a.id === 'agent-031'); // Color Oracle
-    const sage = hiredAgents.find(a => a.id === 'agent-034'); // Content Architect
+  // Load hired agents from API
+  const { agents: hiredAgents, isLoading: loadingAgents } = useTeamAgents({
+    teamId: parseInt(teamId, 10),
+    autoFetch: true,
+  });
 
-    const nodes: WorkflowNode[] = [];
+  /**
+   * Find the best matching agent for a workflow step based on role/specialty
+   */
+  const findBestAgent = (agentRole: string): Agent | undefined => {
+    if (!hiredAgents.length) return undefined;
 
-    if (atlas) {
-      nodes.push({
-        id: 'node-1',
-        agent: atlas,
-        action: 'Research AI consulting market positioning and competitive landscape',
-        order: 1,
-      });
-    }
+    const roleLower = agentRole.toLowerCase();
 
-    if (aurora) {
-      nodes.push({
-        id: 'node-2',
-        agent: aurora,
-        action: 'Define color palette and visual identity based on brand strategy',
-        order: 2,
-      });
-    }
+    // Try exact role match first
+    let match = hiredAgents.find(a => a.role.toLowerCase() === roleLower);
+    if (match) return match;
 
-    if (sage) {
-      nodes.push({
-        id: 'node-3',
-        agent: sage,
-        action: 'Create comprehensive brand messaging framework and manifesto',
-        order: 3,
-      });
-    }
+    // Try partial match on role
+    match = hiredAgents.find(a =>
+      a.role.toLowerCase().includes(roleLower) ||
+      roleLower.includes(a.role.toLowerCase())
+    );
+    if (match) return match;
 
-    setWorkflowNodes(nodes);
-  }, [teamId]);
+    // Try specialty match
+    match = hiredAgents.find(a =>
+      a.specialty.toLowerCase().includes(roleLower) ||
+      roleLower.includes(a.specialty.toLowerCase())
+    );
+    if (match) return match;
 
+    // Try skills match
+    match = hiredAgents.find(a =>
+      a.skills.some(skill =>
+        skill.toLowerCase().includes(roleLower) ||
+        roleLower.includes(skill.toLowerCase())
+      )
+    );
+    if (match) return match;
+
+    // Fallback: return first available agent
+    return hiredAgents[0];
+  };
+
+  /**
+   * Generate the workflow plan using Evo
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!taskDescription.trim()) return;
 
     setIsGenerating(true);
+    setError(null);
 
-    // Simulate AI generating the operation card
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      // Call Evo's quick-task endpoint
+      console.log('[TaskCreationFlow] Calling quickTask...');
+      const result = await workflowService.quickTask(taskDescription, parseInt(teamId, 10));
+      console.log('[TaskCreationFlow] quickTask result:', result);
 
-    setIsGenerating(false);
-    setStep('operation');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to generate workflow');
+      }
+
+      setAnalysis(result.analysis || null);
+
+      // Handle case where workflow is missing or has no steps
+      if (!result.workflow || !result.workflow.steps || result.workflow.steps.length === 0) {
+        console.warn('[TaskCreationFlow] Workflow is empty, creating fallback');
+        // Create a simple fallback workflow with one step per subtask from analysis
+        const subtasks = result.analysis?.subtasks || [];
+        const fallbackSteps = subtasks.length > 0 ? subtasks.map((st: any, idx: number) => ({
+          id: st.id || `step-${idx + 1}`,
+          name: st.title || `Step ${idx + 1}`,
+          description: st.description || '',
+          agent_role: st.agent_type || 'General Agent',
+          inputs: [],
+          outputs: [],
+          depends_on: idx > 0 ? [`step-${idx}`] : [],
+        })) : [{
+          id: 'step-1',
+          name: 'Execute Task',
+          description: taskDescription,
+          agent_role: 'General Agent',
+          inputs: ['task_description'],
+          outputs: ['result'],
+          depends_on: [],
+        }];
+
+        const fallbackWorkflow: WorkflowDesign = {
+          title: result.workflow?.title || 'Custom Workflow',
+          description: result.workflow?.description || taskDescription,
+          steps: fallbackSteps,
+          estimated_time_minutes: result.workflow?.estimated_time_minutes || 30,
+          estimated_cost: result.workflow?.estimated_cost || 10,
+        };
+        setWorkflowDesign(fallbackWorkflow);
+
+        // Map workflow steps to hired agents
+        const nodesWithAgents: WorkflowNodeWithAgent[] = fallbackWorkflow.steps.map((step, idx) => ({
+          ...step,
+          assignedAgent: findBestAgent(step.agent_role),
+          order: idx + 1,
+        }));
+        setWorkflowNodes(nodesWithAgents);
+      } else {
+        setWorkflowDesign(result.workflow);
+
+        // Map workflow steps to hired agents
+        const nodesWithAgents: WorkflowNodeWithAgent[] = result.workflow.steps.map((step, idx) => ({
+          ...step,
+          assignedAgent: findBestAgent(step.agent_role),
+          order: idx + 1,
+        }));
+        setWorkflowNodes(nodesWithAgents);
+      }
+
+      setStep('operation');
+    } catch (err) {
+      console.error('[TaskCreationFlow] Error:', err);
+      const message = err instanceof Error ? err.message : 'Failed to generate plan';
+      setError(message);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleViewWorkflow = () => {
@@ -92,30 +170,28 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
   };
 
   const handleCommence = async () => {
-    try {
-      // Create the task
-      const task = await createTask({
-        title: 'Brand Identity Assembly',
-        description: taskDescription,
-        teamId: parseInt(teamId),
-        status: 'active',
-        progress: 0,
-        startedAt: new Date(),
-        cost: 0,
-        workflowNodes: workflowNodes.map(node => ({
-          id: node.id,
-          agentId: node.agent.id,
-          agentName: node.agent.name,
-          agentPhoto: node.agent.photo_url,
-          agentRole: node.agent.role,
-          action: node.action,
-          order: node.order,
-        })),
-      });
+    if (!workflowDesign) return;
 
-      // Reset state first
+    try {
+      // Create the operation via workflow service
+      const result = await workflowService.createOperationWithWorkflow(
+        parseInt(teamId, 10),
+        workflowDesign.title || 'New Operation',
+        taskDescription,
+        workflowDesign
+      );
+
+      if (!result.success || !result.operationId) {
+        throw new Error(result.error || 'Failed to create operation');
+      }
+
+      // Reset state
       setStep('input');
       setTaskDescription('');
+      setWorkflowDesign(null);
+      setWorkflowNodes([]);
+      setAnalysis(null);
+      setError(null);
 
       // Close modal
       onClose();
@@ -123,12 +199,12 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
       // Notify parent (this will open Execution Theatre)
       if (onTaskCreated) {
         setTimeout(() => {
-          onTaskCreated(task.id);
+          onTaskCreated(result.operationId!);
         }, 100);
       }
-    } catch (error) {
-      console.error('Failed to create task:', error);
-      alert('Failed to create task. Please try again.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create operation';
+      setError(message);
     }
   };
 
@@ -144,7 +220,7 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
               <div>
                 <h2 className="text-xl font-semibold text-white">New Task</h2>
                 <p className="text-sm text-slate-500 mt-1">
-                  Describe your objective and we'll build the workflow
+                  Describe your objective and Evo will design the workflow
                 </p>
               </div>
               <button
@@ -158,7 +234,7 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
 
           {/* Input Form */}
           <form onSubmit={handleSubmit} className="p-6">
-            <div className="mb-6">
+            <div className="mb-4">
               <label className="block text-sm font-medium text-slate-400 mb-3">
                 Task Description
               </label>
@@ -172,6 +248,28 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
               />
             </div>
 
+            {/* Team Status */}
+            <div className="mb-6 p-3 bg-[#020617] rounded border border-slate-800">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500">Available Agents</span>
+                <span className="text-sm font-medium text-white">
+                  {loadingAgents ? '...' : hiredAgents.length}
+                </span>
+              </div>
+              {hiredAgents.length === 0 && !loadingAgents && (
+                <p className="text-xs text-amber-500 mt-2">
+                  No agents hired yet. Hire agents from the marketplace to execute tasks.
+                </p>
+              )}
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/20 border border-red-800 rounded text-red-400 text-sm">
+                {error}
+              </div>
+            )}
+
             {/* Footer */}
             <div className="flex justify-end items-center gap-3">
               <button
@@ -183,7 +281,7 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
               </button>
               <button
                 type="submit"
-                disabled={!taskDescription.trim() || isGenerating}
+                disabled={!taskDescription.trim() || isGenerating || hiredAgents.length === 0}
                 className="px-5 py-2 bg-[#6366F1] hover:bg-[#5558E3] text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isGenerating ? (
@@ -200,7 +298,7 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
         </div>
       )}
 
-      {step === 'operation' && workflowNodes.length > 0 && (
+      {step === 'operation' && workflowDesign && (
         <div className="w-full max-w-4xl animate-fade-in">
           {/* Operation Card */}
           <div className="relative">
@@ -214,7 +312,7 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
                 <div className="flex items-start justify-between mb-6">
                   <div>
                     <div className="text-xs text-slate-500 font-medium mb-2">WORKFLOW GENERATED</div>
-                    <h2 className="text-xl font-semibold text-white mb-2">Brand Identity Assembly</h2>
+                    <h2 className="text-xl font-semibold text-white mb-2">{workflowDesign.title}</h2>
                     <p className="text-slate-400 text-sm max-w-xl">
                       {taskDescription}
                     </p>
@@ -230,16 +328,22 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-4">
                   <div className="p-3 bg-[#020617] rounded border border-slate-800">
-                    <div className="text-xs text-slate-500 mb-1">Agents</div>
+                    <div className="text-xs text-slate-500 mb-1">Steps</div>
                     <div className="text-lg font-semibold text-white">{workflowNodes.length}</div>
                   </div>
                   <div className="p-3 bg-[#020617] rounded border border-slate-800">
                     <div className="text-xs text-slate-500 mb-1">Est. Time</div>
-                    <div className="text-lg font-semibold text-white">8 hours</div>
+                    <div className="text-lg font-semibold text-white">
+                      {workflowDesign.estimated_time_minutes < 60
+                        ? `${workflowDesign.estimated_time_minutes} min`
+                        : `${Math.round(workflowDesign.estimated_time_minutes / 60)} hrs`}
+                    </div>
                   </div>
                   <div className="p-3 bg-[#020617] rounded border border-slate-800">
                     <div className="text-xs text-slate-500 mb-1">Est. Cost</div>
-                    <div className="text-lg font-semibold text-[#FDE047]">$120</div>
+                    <div className="text-lg font-semibold text-[#FDE047]">
+                      ${workflowDesign.estimated_cost.toFixed(2)}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -248,23 +352,51 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
               <div className="p-6">
                 <div className="text-xs text-slate-500 font-medium mb-4">EXECUTION SEQUENCE</div>
                 <div className="space-y-3 mb-6">
-                  {workflowNodes.map((node, idx) => (
+                  {workflowNodes.map((node) => (
                     <div key={node.id} className="flex items-center gap-4">
                       <div className="flex-shrink-0 w-6 h-6 rounded bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-medium text-slate-400">
                         {node.order}
                       </div>
-                      <img
-                        src={node.agent.photo_url}
-                        alt={node.agent.name}
-                        className="w-8 h-8 rounded-full object-cover"
-                      />
+                      {node.assignedAgent ? (
+                        node.assignedAgent.photo_url ? (
+                          <img
+                            src={node.assignedAgent.photo_url}
+                            alt={node.assignedAgent.name}
+                            className="w-8 h-8 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#6366F1] to-[#818CF8] flex items-center justify-center text-white text-xs font-bold">
+                            {node.assignedAgent.name.substring(0, 2).toUpperCase()}
+                          </div>
+                        )
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-400 text-xs">
+                          ?
+                        </div>
+                      )}
                       <div className="flex-1">
-                        <div className="text-sm font-medium text-white">{node.agent.name}</div>
-                        <div className="text-xs text-slate-500">{node.action}</div>
+                        <div className="text-sm font-medium text-white">
+                          {node.assignedAgent?.name || node.agent_role}
+                        </div>
+                        <div className="text-xs text-slate-500">{node.description}</div>
                       </div>
                     </div>
                   ))}
                 </div>
+
+                {/* Unassigned Warning */}
+                {workflowNodes.some(n => !n.assignedAgent) && (
+                  <div className="mb-4 p-3 bg-amber-900/20 border border-amber-800 rounded text-amber-400 text-sm">
+                    Some steps don't have matching agents. Consider hiring agents with these roles.
+                  </div>
+                )}
+
+                {/* Error */}
+                {error && (
+                  <div className="mb-4 p-3 bg-red-900/20 border border-red-800 rounded text-red-400 text-sm">
+                    {error}
+                  </div>
+                )}
 
                 {/* Action Buttons */}
                 <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
@@ -293,7 +425,7 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
         </div>
       )}
 
-      {step === 'workflow' && workflowNodes.length > 0 && (
+      {step === 'workflow' && workflowDesign && (
         <div className="w-full max-w-6xl max-h-[90vh] overflow-y-auto animate-fade-in">
           {/* Mission Map */}
           <div className="bg-[#0A0A0F] rounded-lg border border-slate-800 p-8">
@@ -303,7 +435,7 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
                 <div>
                   <h2 className="text-2xl font-semibold text-white mb-1">Workflow Details</h2>
                   <p className="text-sm text-slate-500">
-                    Sequential execution plan
+                    {workflowDesign.description || 'Sequential execution plan'}
                   </p>
                 </div>
                 <button
@@ -316,10 +448,10 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
             </div>
 
             {/* Workflow Graph */}
-            <div className="relative mb-8">
-              <div className="flex items-center justify-center gap-6">
+            <div className="relative mb-8 overflow-x-auto">
+              <div className="flex items-center justify-center gap-6 min-w-max px-4">
                 {workflowNodes.map((node, idx) => {
-                  const colors = ['#6366F1', '#8B5CF6', '#EC4899'];
+                  const colors = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B'];
                   const nodeColor = colors[idx % colors.length];
 
                   return (
@@ -347,23 +479,43 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
 
                           {/* Agent Photo */}
                           <div className="mb-4">
-                            <img
-                              src={node.agent.photo_url}
-                              alt={node.agent.name}
-                              className="w-16 h-16 rounded-full object-cover mx-auto border-2"
-                              style={{ borderColor: nodeColor }}
-                            />
+                            {node.assignedAgent ? (
+                              node.assignedAgent.photo_url ? (
+                                <img
+                                  src={node.assignedAgent.photo_url}
+                                  alt={node.assignedAgent.name}
+                                  className="w-16 h-16 rounded-full object-cover mx-auto border-2"
+                                  style={{ borderColor: nodeColor }}
+                                />
+                              ) : (
+                                <div
+                                  className="w-16 h-16 rounded-full mx-auto flex items-center justify-center text-white text-xl font-bold border-2"
+                                  style={{ backgroundColor: `${nodeColor}40`, borderColor: nodeColor }}
+                                >
+                                  {node.assignedAgent.name.substring(0, 2).toUpperCase()}
+                                </div>
+                              )
+                            ) : (
+                              <div
+                                className="w-16 h-16 rounded-full mx-auto bg-slate-700 flex items-center justify-center text-slate-400 text-lg border-2"
+                                style={{ borderColor: nodeColor }}
+                              >
+                                ?
+                              </div>
+                            )}
                           </div>
 
                           {/* Agent name */}
                           <h3 className="text-base font-semibold text-white text-center mb-1">
-                            {node.agent.name}
+                            {node.assignedAgent?.name || node.agent_role}
                           </h3>
-                          <div className="text-xs text-slate-500 text-center mb-3">{node.agent.role}</div>
+                          <div className="text-xs text-slate-500 text-center mb-3">
+                            {node.assignedAgent?.role || 'Unassigned'}
+                          </div>
 
-                          {/* Action */}
+                          {/* Step name */}
                           <p className="text-xs text-slate-400 text-center leading-relaxed">
-                            {node.action}
+                            {node.name}
                           </p>
                         </div>
                       </div>
@@ -384,7 +536,7 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
             <div className="space-y-3 mb-8">
               <h3 className="text-sm font-medium text-slate-400 mb-4">EXECUTION BREAKDOWN</h3>
               {workflowNodes.map((node, idx) => {
-                const colors = ['#6366F1', '#8B5CF6', '#EC4899'];
+                const colors = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B'];
                 const nodeColor = colors[idx % colors.length];
 
                 return (
@@ -393,14 +545,28 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
                     className="p-4 bg-[#020617] rounded border border-slate-800 hover:border-slate-700 transition-all"
                   >
                     <div className="flex items-start gap-4">
-                      <img
-                        src={node.agent.photo_url}
-                        alt={node.agent.name}
-                        className="flex-shrink-0 w-10 h-10 rounded-full object-cover"
-                      />
+                      {node.assignedAgent ? (
+                        node.assignedAgent.photo_url ? (
+                          <img
+                            src={node.assignedAgent.photo_url}
+                            alt={node.assignedAgent.name}
+                            className="flex-shrink-0 w-10 h-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-[#6366F1] to-[#818CF8] flex items-center justify-center text-white text-sm font-bold">
+                            {node.assignedAgent.name.substring(0, 2).toUpperCase()}
+                          </div>
+                        )
+                      ) : (
+                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-400 text-sm">
+                          ?
+                        </div>
+                      )}
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h4 className="text-sm font-semibold text-white">{node.agent.name}</h4>
+                          <h4 className="text-sm font-semibold text-white">
+                            {node.assignedAgent?.name || node.agent_role}
+                          </h4>
                           <span
                             className="px-2 py-0.5 text-xs font-medium rounded"
                             style={{ backgroundColor: `${nodeColor}20`, color: nodeColor }}
@@ -408,11 +574,22 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
                             Step {node.order}
                           </span>
                         </div>
-                        <p className="text-sm text-slate-400 mb-3">{node.action}</p>
+                        <p className="text-sm text-slate-300 mb-2">{node.name}</p>
+                        <p className="text-xs text-slate-500 mb-3">{node.description}</p>
                         <div className="flex items-center gap-4 text-xs text-slate-500">
-                          <span>~2-3 hours</span>
-                          <span>•</span>
-                          <span>${node.agent.price_per_hour}/hr</span>
+                          {node.assignedAgent && (
+                            <>
+                              <span>${node.assignedAgent.cost_per_hour}/hr</span>
+                              <span>•</span>
+                              <span>Level {node.assignedAgent.level}</span>
+                            </>
+                          )}
+                          {node.inputs.length > 0 && (
+                            <>
+                              <span>•</span>
+                              <span>Needs: {node.inputs.join(', ')}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -420,6 +597,39 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
                 );
               })}
             </div>
+
+            {/* Analysis Summary (if available) */}
+            {analysis && (
+              <div className="mb-8 p-4 bg-[#020617] rounded border border-slate-800">
+                <h3 className="text-sm font-medium text-slate-400 mb-3">EVO'S ANALYSIS</h3>
+                <p className="text-sm text-slate-300 mb-3">{analysis.understanding}</p>
+                {analysis.assumptions.length > 0 && (
+                  <div className="mb-3">
+                    <div className="text-xs text-slate-500 mb-1">Assumptions:</div>
+                    <ul className="list-disc list-inside text-xs text-slate-400">
+                      {analysis.assumptions.map((a, i) => (
+                        <li key={i}>{a}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div className="flex items-center gap-4 text-xs">
+                  <span className="px-2 py-1 bg-slate-800 rounded text-slate-400">
+                    Complexity: {analysis.estimated_complexity}
+                  </span>
+                  <span className="px-2 py-1 bg-slate-800 rounded text-slate-400">
+                    Confidence: {Math.round(analysis.confidence * 100)}%
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Error */}
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/20 border border-red-800 rounded text-red-400 text-sm">
+                {error}
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-800">

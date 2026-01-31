@@ -73,10 +73,10 @@ The platform uses a hierarchical AI workforce model with Evo as the COO.
 - [x] `POST /api/tools/{tool_id}/assign` - Assign tool to agents
 
 ### Agent Marketplace
-- [x] `GET /api/marketplace/agents` - Browse available agents (static templates)
+- [x] `GET /api/marketplace/agents` - Browse available agents (from AGENT_REGISTRY)
 - [x] `GET /api/marketplace/agents/{template_id}` - Get agent template details
 - [x] `POST /api/marketplace/agents/hire` - Hire agent to team from template
-- [x] `GET /api/marketplace/categories` - Get agent categories
+- [x] `GET /api/marketplace/categories` - Get agent categories (dynamic from registry)
 
 ### User Preferences
 - [x] `GET /api/user/preferences` - Get user preferences
@@ -107,11 +107,12 @@ Connect to EvoAgentX framework for actual agent execution.
 - [x] `EvolvianAgent` - Wraps EvoAgentX Agent with Evolvian metadata
 - [x] `AgentMetadata` - Role, specialty, level, XP, evolution tracking
 - [x] `AgentCapabilities` - Skills, tools, actions
-- [x] `AgentRegistry` - Template storage, instance management, factory
+- [x] `AgentRegistry` - Template storage, instance management, factory (single source of truth)
 - [x] `AgentService` - High-level operations, DB sync
-- [x] Built-in agent templates (6 agents)
+- [x] Built-in agent templates (4 branding agents: Brand Strategist, Content Creator, Visual Designer, Social Media Manager)
 - [x] Simple execution via llm_service
 - [x] Full EvoAgentX execution (optional, needs deps)
+- [x] Marketplace router uses AGENT_REGISTRY (no duplicate templates)
 
 ### Workflow Layer (DONE)
 - [x] `WorkflowNode` - Single step with status, inputs/outputs, dependencies
@@ -122,13 +123,19 @@ Connect to EvoAgentX framework for actual agent execution.
 - [x] `AsyncWorkflowExecutor` - Parallel execution of independent nodes
 - [x] `ExecutionResult` - Structured execution output
 
-### Workflow API Endpoints (TODO)
-- [ ] `POST /api/operations/{id}/execute` - Start workflow execution
-- [ ] `GET /api/operations/{id}/status` - Get execution status
+### Workflow API Endpoints (DONE)
+- [x] `POST /api/operations/{id}/execute` - Start workflow execution (SSE streaming)
+- [x] `GET /api/operations/{id}/status` - Get execution status
 - [ ] `POST /api/operations/{id}/pause` - Pause execution
 - [ ] `POST /api/operations/{id}/resume` - Resume execution
 - [ ] `POST /api/operations/{id}/cancel` - Cancel execution
-- [ ] WebSocket `/ws/operations/{id}` - Real-time execution updates
+
+### Execution Theatre (DONE)
+- [x] Real-time SSE streaming from backend
+- [x] Live activity log with tool usage
+- [x] Node progress visualization
+- [x] Agent XP tracking
+- [x] LLM call status and output preview
 
 ### Remaining EvoAgentX Integration (TODO)
 - [x] Bridge Evolvian Agent model → EvoAgentX Agent class
@@ -250,6 +257,12 @@ The EvoAgentX framework (in `/evoAgentX/`) provides:
 4. **Phase 4**: Use LongTermMemory for knowledge graph
 5. **Phase 5**: Add AFlow optimization for workflows
 
+### Architecture Patterns
+
+- **Single Source of Truth**: `AGENT_REGISTRY` in `core/agents/registry.py` is the authoritative source for agent templates. Marketplace router reads from registry, no duplicate data.
+- **Dynamic Stats**: Team stats are calculated from database queries, not cached in JSON fields.
+- **Service Layer**: Frontend uses service modules (`lib/services/`) with React hooks for API calls.
+
 ---
 
 ## DONE - Frontend Dynamic Integration (Completed)
@@ -276,6 +289,8 @@ Connected frontend components to backend APIs via service layer.
 - [x] `InboxView.tsx` - Uses useTeamAgents() for specialist contacts
 - [x] `WorkflowVisualizer.tsx` - Updated to use WorkflowDesign/WorkflowGraph types
 - [x] `tasks.ts` - Updated with TaskWorkflowNode type and proper mapping
+- [x] `TaskCreationFlow.tsx` - Uses useTeamAgents() + workflowService.quickTask() for workflow generation
+- [x] `TeamOverview.tsx` - Uses useTeamAgents() hook for hired agents display
 
 ### Not Updated (Self-contained)
 - [ ] `ManagerMarketplaceModal.tsx` - Uses hardcoded manager data (acceptable for demo)

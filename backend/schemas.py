@@ -148,12 +148,26 @@ class SimpleChatRequest(BaseModel):
 # Operation/Task Schemas
 class WorkflowNode(BaseModel):
     id: str
-    agentId: str
-    agentName: str
-    agentPhoto: str
+    agentId: Optional[str] = None
+    agentName: Optional[str] = None
+    agentPhoto: Optional[str] = None
     agentRole: str
     action: str
-    order: int
+    order: int = 0
+    name: Optional[str] = None
+    description: Optional[str] = None
+    inputs: Optional[List[str]] = []
+    outputs: Optional[List[str]] = []
+    dependsOn: Optional[List[str]] = []
+    status: str = "pending"
+
+class WorkflowConfig(BaseModel):
+    """Alternative workflow format from Evo"""
+    title: Optional[str] = None
+    description: Optional[str] = None
+    nodes: Optional[List[Dict[str, Any]]] = []
+    estimated_time: Optional[int] = 0
+    estimated_cost: Optional[float] = 0.0
 
 class OperationCreate(BaseModel):
     team_id: int
@@ -162,7 +176,8 @@ class OperationCreate(BaseModel):
     status: str = "pending"  # pending, active, completed, failed
     progress: int = 0
     cost: float = 0.0
-    workflowNodes: List[WorkflowNode]
+    workflowNodes: Optional[List[WorkflowNode]] = None  # Old format
+    workflow_config: Optional[WorkflowConfig] = None  # New format from Evo
 
 class OperationUpdate(BaseModel):
     title: Optional[str] = None
@@ -178,7 +193,7 @@ class OperationResponse(BaseModel):
     team_id: int
     title: str
     description: str
-    status: str
+    status: str  # pending, in_progress, completed, failed, paused, cancelled
     workflow_config: Dict[str, Any]
     current_phase: Optional[str]
     assigned_agent_ids: List[Any]
@@ -192,9 +207,64 @@ class OperationResponse(BaseModel):
     created_at: datetime
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
+    execution_checkpoint: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
+
+
+# ==================== EXECUTION CONTROL SCHEMAS ====================
+
+class ExecutionControlResponse(BaseModel):
+    """Response for execution control operations (pause/resume/cancel)"""
+    success: bool
+    status: str  # pause_requested, cancel_requested, resumed, already_paused, already_cancelled, not_running, etc.
+    message: str
+    operation_id: int
+    checkpoint: Optional[Dict[str, Any]] = None  # Included when paused
+
+
+# ==================== VAULT FILE SCHEMAS ====================
+
+class VaultFileCreate(BaseModel):
+    """Create a new vault file"""
+    team_id: int
+    name: str
+    file_type: str = "txt"
+    folder_path: str = "/"
+    content: Optional[str] = None
+    content_json: Optional[Dict[str, Any]] = None
+    created_by: str = "system"
+    source_type: str = "manual"
+    operation_id: Optional[int] = None
+
+
+class VaultFileResponse(BaseModel):
+    """Response for a vault file"""
+    id: int
+    team_id: int
+    operation_id: Optional[int]
+    name: str
+    file_type: str
+    folder_path: str
+    content: Optional[str]
+    content_json: Optional[Dict[str, Any]]
+    size_bytes: int
+    mime_type: str
+    created_by: str
+    source_type: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class VaultFolderContents(BaseModel):
+    """Contents of a vault folder"""
+    path: str
+    folders: List[str]
+    files: List[VaultFileResponse]
 
 
 # ==================== EVO SCHEMAS ====================

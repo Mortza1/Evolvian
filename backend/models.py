@@ -103,11 +103,14 @@ class Operation(Base):
     # Operation Details
     title = Column(String)
     description = Column(Text)
-    status = Column(String, default="pending")  # pending, in_progress, completed, failed
+    status = Column(String, default="pending")  # pending, in_progress, completed, failed, paused, cancelled
 
     # Workflow
     workflow_config = Column(JSON, default={})  # Stores the workflow DAG
     current_phase = Column(String, nullable=True)
+
+    # Execution checkpoint for pause/resume
+    execution_checkpoint = Column(JSON, nullable=True)  # Stores resume state: {current_node_index, completed_nodes, context}
 
     # Assigned Agents (stored as JSON array of agent IDs)
     assigned_agent_ids = Column(JSON, default=[])
@@ -301,3 +304,39 @@ class UserObjective(Base):
     # Relationships
     user = relationship("User")
     team = relationship("Team")
+
+
+class VaultFile(Base):
+    """
+    File storage for the Neural Vault - stores operation outputs and documents.
+    """
+    __tablename__ = "vault_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"))
+    operation_id = Column(Integer, ForeignKey("operations.id"), nullable=True)
+
+    # File Identity
+    name = Column(String, index=True)
+    file_type = Column(String)  # pdf, docx, txt, json, etc.
+    folder_path = Column(String, default="/")  # Virtual folder path like "/Workflow Outputs"
+
+    # Content - stored as text/JSON for now (could move to file storage later)
+    content = Column(Text)  # For text-based content
+    content_json = Column(JSON, nullable=True)  # For structured data
+
+    # Metadata
+    size_bytes = Column(Integer, default=0)
+    mime_type = Column(String, default="application/octet-stream")
+
+    # Source tracking
+    created_by = Column(String)  # Agent name or "system"
+    source_type = Column(String, default="operation")  # operation, upload, agent
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    team = relationship("Team")
+    operation = relationship("Operation")
