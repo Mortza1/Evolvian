@@ -34,7 +34,11 @@ export default function FileVaultView({ teamId, initialFileId }: FileVaultViewPr
 
   // Fetch files from API
   const fetchFiles = useCallback(async () => {
-    if (!teamId) return;
+    if (!teamId) {
+      setIsLoading(false);
+      setError('No team selected');
+      return;
+    }
 
     setIsLoading(true);
     setError(null);

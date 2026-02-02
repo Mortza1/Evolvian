@@ -16,10 +16,11 @@ import asyncio
 from database import get_db
 from auth import get_current_user
 from schemas import OperationCreate, OperationUpdate, OperationResponse, ExecutionControlResponse
-from models import User, Team, Operation, Agent, VaultFile
+from models import User, Team, Operation, Agent, VaultFile, WorkflowExecution
 from llm_service import llm_service
 from core.agents.registry import AGENT_REGISTRY
 from core.workflows.execution_state import EXECUTION_REGISTRY, ExecutionSignal
+from core.runtime import ExecutionContext, AgentState, ToolState, NodeMetrics
 
 router = APIRouter(prefix="/api/operations", tags=["Operations"])
 
@@ -232,15 +233,46 @@ async def delete_operation(
 
 # ==================== EXECUTION ENDPOINTS ====================
 
+def _infer_task_type(title: str, description: str) -> str:
+    """
+    Infer the task type from title and description.
+    Used for grouping similar workflows for evolution comparison.
+    """
+    text = (title + " " + description).lower()
+
+    if any(w in text for w in ["brand", "branding", "logo", "identity"]):
+        return "branding"
+    elif any(w in text for w in ["content", "blog", "article", "write", "writing"]):
+        return "content_creation"
+    elif any(w in text for w in ["social", "instagram", "twitter", "linkedin", "post"]):
+        return "social_media"
+    elif any(w in text for w in ["market", "research", "analysis", "analyze"]):
+        return "research"
+    elif any(w in text for w in ["design", "visual", "graphic", "ui", "ux"]):
+        return "design"
+    elif any(w in text for w in ["campaign", "marketing", "ads", "advertising"]):
+        return "marketing"
+    elif any(w in text for w in ["strategy", "plan", "planning"]):
+        return "strategy"
+    else:
+        return "general"
+
+
 def generate_execution_events(
     operation: Operation,
     team: Team,
     agents: List[Agent],
     db: Session,
     start_index: int = 0,
-    is_resume: bool = False
+    is_resume: bool = False,
+    existing_context: ExecutionContext = None
 ) -> Generator[str, None, None]:
-    """Generate SSE events for operation execution"""
+    """
+    Generate SSE events for operation execution.
+
+    Now uses ExecutionContext for stateful execution tracking.
+    The context holds memory, agent states, tool states, and metrics.
+    """
 
     def emit(event_type: str, data: Dict[str, Any]) -> str:
         return f"data: {json.dumps({'type': event_type, **data})}\n\n"
@@ -255,6 +287,30 @@ def generate_execution_events(
         yield emit("error", {"message": "No workflow nodes defined"})
         return
 
+    # ==================== EXECUTION CONTEXT ====================
+    # Create or restore ExecutionContext - this is the stateful environment
+    if existing_context:
+        context = existing_context
+        context.resume()
+        print(f"[execute] Restored context from checkpoint")
+    else:
+        context = ExecutionContext(
+            operation_id=operation.id,
+            team_id=operation.team_id
+        )
+        # Store initial memory
+        context.add_to_memory("task_goal", operation.title)
+        context.add_to_memory("task_description", operation.description)
+        context.add_to_memory("team_name", team.name)
+
+        # Compute workflow signature for evolution tracking
+        agent_roles = [node.get("agentRole", node.get("agent_role", "")) for node in nodes]
+        context.compute_workflow_signature(agents=agent_roles)
+        print(f"[execute] Created new context with signature: {context.workflow_signature}")
+
+    context.start(total_nodes=len(nodes))
+    context.current_node_index = start_index
+
     # Register execution in the registry
     EXECUTION_REGISTRY.register(operation.id)
 
@@ -264,12 +320,14 @@ def generate_execution_events(
                 "operation_id": operation.id,
                 "from_node": start_index,
                 "total_nodes": len(nodes),
+                "context_signature": context.workflow_signature,
             })
         else:
             yield emit("start", {
                 "operation_id": operation.id,
                 "title": operation.title,
                 "total_nodes": len(nodes),
+                "context_signature": context.workflow_signature,
             })
 
         # Update operation status
@@ -288,8 +346,6 @@ def generate_execution_events(
             if agent.specialty:
                 agent_by_role[agent.specialty.lower()] = agent
 
-        total_cost = 0.0
-
         # Execute each node (starting from start_index for resume)
         for idx, node in enumerate(nodes[start_index:], start=start_index):
             node_id = node.get("id", f"step-{idx+1}")
@@ -302,36 +358,27 @@ def generate_execution_events(
             if state:
                 if state.signal == ExecutionSignal.CANCEL_REQUESTED:
                     print(f"[execute] Cancel requested at node {idx}")
-                    # Save partial results
+                    context.status = "cancelled"
+                    # Save context checkpoint
                     operation.workflow_config = workflow_config
                     operation.status = "cancelled"
-                    operation.execution_checkpoint = {
-                        "current_node_index": idx,
-                        "completed_nodes": [n for n in nodes[:idx] if n.get("status") == "completed"],
-                        "total_cost": total_cost,
-                        "cancelled_at": datetime.now(timezone.utc).isoformat(),
-                    }
+                    operation.execution_checkpoint = context.to_checkpoint()
                     db.commit()
                     EXECUTION_REGISTRY.confirm_cancelled(operation.id)
                     yield emit("cancelled", {
                         "operation_id": operation.id,
                         "at_node": idx,
                         "node_name": node_name,
-                        "total_cost": total_cost,
+                        "total_cost": context.metrics.total_cost,
+                        "context_summary": context.get_summary(),
                     })
                     return
 
                 if state.signal == ExecutionSignal.PAUSE_REQUESTED:
                     print(f"[execute] Pause requested at node {idx}")
-                    # Save checkpoint for resume
-                    checkpoint = {
-                        "current_node_index": idx,
-                        "completed_nodes": [n for n in nodes[:idx] if n.get("status") == "completed"],
-                        "context": {},
-                        "total_cost": total_cost,
-                        "paused_at": datetime.now(timezone.utc).isoformat(),
-                    }
-                    operation.execution_checkpoint = checkpoint
+                    context.pause()
+                    # Save full context checkpoint for resume
+                    operation.execution_checkpoint = context.to_checkpoint()
                     operation.workflow_config = workflow_config
                     operation.status = "paused"
                     db.commit()
@@ -340,8 +387,8 @@ def generate_execution_events(
                         "operation_id": operation.id,
                         "at_node": idx,
                         "node_name": node_name,
-                        "checkpoint": checkpoint,
-                        "total_cost": total_cost,
+                        "total_cost": context.metrics.total_cost,
+                        "context_summary": context.get_summary(),
                     })
                     return
 
@@ -359,6 +406,12 @@ def generate_execution_events(
 
             agent_name = assigned_agent.name if assigned_agent else "System Agent"
             agent_photo = assigned_agent.photo_url if assigned_agent else None
+            agent_id = assigned_agent.id if assigned_agent else 0
+
+            # ==================== NODE START ====================
+            # Track in context
+            context.start_node(node_id, agent_name)
+            context.current_node_index = idx
 
             # Emit node start
             yield emit("node_start", {
@@ -373,6 +426,7 @@ def generate_execution_events(
 
             time.sleep(0.5)
 
+            # ==================== TOOL USAGE ====================
             # Tool usage simulation based on agent specialty
             tools_used = []
             if "brand" in agent_role.lower() or "strategist" in agent_role.lower():
@@ -393,7 +447,21 @@ def generate_execution_events(
                     "tool": tool,
                     "status": "running",
                 })
+                tool_start = time.time()
                 time.sleep(0.3)
+
+                # Track tool execution in context
+                tool_state = ToolState(
+                    tool_id=f"tool-{tool.lower().replace(' ', '-')}",
+                    tool_name=tool,
+                    input_data={"node_id": node_id, "task": node_name},
+                    output_data={"status": "simulated"},
+                    executed_at=datetime.now(timezone.utc).isoformat(),
+                    latency_ms=int((time.time() - tool_start) * 1000),
+                    cost=0.0,
+                    success=True
+                )
+                context.add_tool_execution(tool_state)
 
                 yield emit("tool_use", {
                     "node_id": node_id,
@@ -410,7 +478,7 @@ def generate_execution_events(
                 })
                 time.sleep(0.3)
 
-            # Call LLM for actual work
+            # ==================== LLM CALL ====================
             yield emit("llm_call", {
                 "node_id": node_id,
                 "agent_name": agent_name,
@@ -418,21 +486,36 @@ def generate_execution_events(
                 "message": f"Executing: {node_name}",
             })
 
+            llm_response = ""
+            tokens_used = 0
+            node_cost = 0.0
+            node_success = False
+
             try:
-                # Build task prompt
+                # Build task prompt with context from previous agents
+                previous_outputs = context.get_all_agent_outputs()
+                context_section = ""
+                if previous_outputs:
+                    context_section = "\n\nPrevious work from team:\n"
+                    for prev_agent, prev_output in previous_outputs.items():
+                        context_section += f"- {prev_agent}: {prev_output[:100]}...\n"
+
                 task_prompt = f"""You are {agent_name}, a {agent_role}.
 
 Task: {node_name}
 Description: {node_desc}
 
 Context: {operation.description}
-
+{context_section}
 Provide a concise professional output for this task. Be specific and actionable.
 Keep your response under 200 words."""
 
                 print(f"[execute] Calling LLM for node {node_id}...")
                 llm_response = llm_service.simple_chat(task_prompt)
                 print(f"[execute] LLM response received: {len(llm_response)} chars")
+
+                # Estimate tokens (rough: 4 chars per token)
+                tokens_used = len(task_prompt) // 4 + len(llm_response) // 4
 
                 yield emit("llm_call", {
                     "node_id": node_id,
@@ -444,6 +527,7 @@ Keep your response under 200 words."""
                 # Store result in workflow config
                 node["result"] = llm_response
                 node["status"] = "completed"
+                node_success = True
 
             except Exception as e:
                 print(f"[execute] LLM error: {e}")
@@ -459,7 +543,30 @@ Keep your response under 200 words."""
             # Calculate cost (simple estimate)
             if assigned_agent:
                 node_cost = assigned_agent.cost_per_hour * 0.1  # 6 min per node
-                total_cost += node_cost
+
+            # ==================== UPDATE CONTEXT ====================
+            # Record agent state in context
+            agent_state = AgentState(
+                agent_id=agent_id,
+                agent_name=agent_name,
+                role=agent_role,
+                output=llm_response,
+                started_at=context.node_metrics.get(node_id, NodeMetrics(node_id, agent_name)).started_at,
+                completed_at=datetime.now(timezone.utc).isoformat(),
+                tokens_used=tokens_used,
+                cost=node_cost,
+                xp_earned=25 if node_success else 0
+            )
+            context.set_agent_state(agent_name, agent_state)
+
+            # Complete node in context
+            context.complete_node(
+                node_id,
+                success=node_success,
+                cost=node_cost,
+                tokens_used=tokens_used,
+                error=node.get("error")
+            )
 
             yield emit("progress", {
                 "node_id": node_id,
@@ -472,9 +579,14 @@ Keep your response under 200 words."""
                 "node_index": idx,
                 "status": node.get("status", "completed"),
                 "agent_name": agent_name,
+                "context_metrics": {
+                    "total_cost": context.metrics.total_cost,
+                    "total_tokens": context.metrics.total_tokens,
+                    "nodes_completed": context.metrics.nodes_completed,
+                }
             })
 
-            # Update agent stats
+            # Update agent stats in DB
             if assigned_agent:
                 assigned_agent.tasks_completed += 1
                 assigned_agent.experience_points += 25
@@ -489,16 +601,56 @@ Keep your response under 200 words."""
 
             # Update execution registry progress
             EXECUTION_REGISTRY.update_progress(operation.id, idx + 1, {"id": node_id, "status": "completed"})
+            context.advance_node()
 
             time.sleep(0.2)
 
-        # Update workflow config with results
+        # ==================== EXECUTION COMPLETE ====================
+        context.complete(success=True)
+
+        # Update operation
         operation.workflow_config = workflow_config
         operation.status = "completed"
-        operation.actual_cost = total_cost
+        operation.actual_cost = context.metrics.total_cost
         operation.completed_at = datetime.now(timezone.utc)
         operation.execution_checkpoint = None  # Clear checkpoint on completion
         db.commit()
+
+        # ==================== SAVE WORKFLOW EXECUTION (for evolution) ====================
+        try:
+            workflow_execution = WorkflowExecution(
+                operation_id=operation.id,
+                team_id=operation.team_id,
+                workflow_signature=context.workflow_signature,
+                task_type=_infer_task_type(operation.title, operation.description),
+                team_composition=[
+                    {"agent_id": state.agent_id, "agent_name": name, "role": state.role}
+                    for name, state in context.agent_states.items()
+                ],
+                agents_used=list(context.agent_states.keys()),
+                cost=context.metrics.total_cost,
+                latency_ms=context.metrics.total_latency_ms,
+                tokens_used=context.metrics.total_tokens,
+                nodes_total=context.metrics.nodes_total,
+                nodes_completed=context.metrics.nodes_completed,
+                nodes_failed=context.metrics.nodes_failed,
+                node_metrics={
+                    node_id: metrics.to_dict()
+                    for node_id, metrics in context.node_metrics.items()
+                },
+                assumptions_raised=len(context.assumptions),
+                assumptions_answered=len([a for a in context.assumptions if a.get("answered")]),
+                status="completed",
+                context_snapshot=context.to_checkpoint(),
+                started_at=operation.started_at,
+                completed_at=operation.completed_at,
+            )
+            db.add(workflow_execution)
+            db.commit()
+            print(f"[execute] Saved WorkflowExecution record (ID: {workflow_execution.id})")
+        except Exception as e:
+            print(f"[execute] Error saving WorkflowExecution: {e}")
+            # Don't fail the operation if this fails
 
         # Save results to vault
         try:
@@ -506,7 +658,8 @@ Keep your response under 200 words."""
             results_content = f"# {operation.title}\n\n"
             results_content += f"**Description:** {operation.description}\n\n"
             results_content += f"**Completed:** {operation.completed_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
-            results_content += f"**Total Cost:** ${total_cost:.2f}\n\n"
+            results_content += f"**Total Cost:** ${context.metrics.total_cost:.2f}\n\n"
+            results_content += f"**Workflow Signature:** {context.workflow_signature}\n\n"
             results_content += "---\n\n"
 
             for node in nodes:
@@ -876,6 +1029,14 @@ async def resume_operation(
             detail="No checkpoint found for paused operation"
         )
 
+    # Restore ExecutionContext from checkpoint
+    existing_context = None
+    try:
+        existing_context = ExecutionContext.from_checkpoint(checkpoint)
+        print(f"[control] Restored ExecutionContext from checkpoint")
+    except Exception as e:
+        print(f"[control] Could not restore context: {e}, will create new one")
+
     start_index = checkpoint.get("current_node_index", 0)
 
     # Get team agents
@@ -884,7 +1045,12 @@ async def resume_operation(
     print(f"[control] Resuming from node index {start_index}")
 
     return StreamingResponse(
-        generate_execution_events(operation, team, agents, db, start_index=start_index, is_resume=True),
+        generate_execution_events(
+            operation, team, agents, db,
+            start_index=start_index,
+            is_resume=True,
+            existing_context=existing_context
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

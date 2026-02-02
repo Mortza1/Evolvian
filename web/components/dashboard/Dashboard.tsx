@@ -177,7 +177,7 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
           {/* Vault gets full height without padding */}
           {activeView === 'vault' && currentTeam && (
             <div className="flex-1 overflow-hidden">
-              <NeuralVaultView />
+              <NeuralVaultView teamId={currentTeam.id.toString()} />
             </div>
           )}
 

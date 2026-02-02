@@ -306,6 +306,68 @@ class UserObjective(Base):
     team = relationship("Team")
 
 
+class WorkflowExecution(Base):
+    """
+    Workflow execution history - the dataset for evolution.
+
+    This is NOT just logging. It stores the data needed to:
+    - Compare workflow performance over time
+    - Identify successful patterns (workflow DNA)
+    - Train evolution algorithms
+    - Track quality vs cost tradeoffs
+    """
+    __tablename__ = "workflow_executions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    operation_id = Column(Integer, ForeignKey("operations.id"), index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), index=True)
+
+    # Workflow Identity - the "DNA"
+    workflow_signature = Column(String, index=True)  # Hash of graph + agents + prompts
+    task_type = Column(String, index=True, nullable=True)  # e.g., "content_creation", "research"
+
+    # Team Composition
+    team_composition = Column(JSON, default=[])  # [{"agent_id": 1, "role": "researcher", ...}]
+    agents_used = Column(JSON, default=[])  # Simple list of agent names
+
+    # Performance Metrics
+    cost = Column(Float, default=0.0)
+    latency_ms = Column(Integer, default=0)
+    tokens_used = Column(Integer, default=0)
+
+    # Quality Metrics
+    quality_score = Column(Float, nullable=True)  # 0.0 - 1.0, set by evaluator or user
+    user_rating = Column(Integer, nullable=True)  # 1-5 stars from user
+    user_feedback = Column(Text, nullable=True)  # Free-form feedback
+
+    # Execution Details
+    nodes_total = Column(Integer, default=0)
+    nodes_completed = Column(Integer, default=0)
+    nodes_failed = Column(Integer, default=0)
+
+    # Per-node metrics (for detailed analysis)
+    node_metrics = Column(JSON, default={})  # {node_id: {latency_ms, cost, success, ...}}
+
+    # Assumptions tracking
+    assumptions_raised = Column(Integer, default=0)
+    assumptions_answered = Column(Integer, default=0)
+
+    # Execution state
+    status = Column(String, default="completed")  # completed, failed, cancelled
+
+    # Full context snapshot (for replay/debugging)
+    context_snapshot = Column(JSON, nullable=True)  # Full ExecutionContext checkpoint
+
+    # Timestamps
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    operation = relationship("Operation")
+    team = relationship("Team")
+
+
 class VaultFile(Base):
     """
     File storage for the Neural Vault - stores operation outputs and documents.
