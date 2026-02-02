@@ -23,6 +23,15 @@ from .runtime import (
     ToolState,
     ExecutionMetrics,
     NodeMetrics,
+    MemoryBridge,
+    ShortTermMemory,
+    LongTermMemory,
+    KnowledgeContext,
+    MemoryItem,
+    EvolutionService,
+    WorkflowDNA,
+    WorkflowStats,
+    EvolutionSuggestion,
 )
 
 __all__ = [
@@ -41,4 +50,15 @@ __all__ = [
     "ToolState",
     "ExecutionMetrics",
     "NodeMetrics",
+    # Memory
+    "MemoryBridge",
+    "ShortTermMemory",
+    "LongTermMemory",
+    "KnowledgeContext",
+    "MemoryItem",
+    # Evolution
+    "EvolutionService",
+    "WorkflowDNA",
+    "WorkflowStats",
+    "EvolutionSuggestion",
 ]

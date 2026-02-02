@@ -20,7 +20,7 @@ from models import User, Team, Operation, Agent, VaultFile, WorkflowExecution
 from llm_service import llm_service
 from core.agents.registry import AGENT_REGISTRY
 from core.workflows.execution_state import EXECUTION_REGISTRY, ExecutionSignal
-from core.runtime import ExecutionContext, AgentState, ToolState, NodeMetrics
+from core.runtime import ExecutionContext, AgentState, ToolState, NodeMetrics, MemoryBridge
 
 router = APIRouter(prefix="/api/operations", tags=["Operations"])
 
@@ -311,6 +311,27 @@ def generate_execution_events(
     context.start(total_nodes=len(nodes))
     context.current_node_index = start_index
 
+    # ==================== MEMORY BRIDGE ====================
+    # Connect agents to team knowledge graph
+    memory_bridge = MemoryBridge(team_id=operation.team_id, db=db)
+
+    # Pre-load relevant knowledge context for this operation
+    knowledge_context = memory_bridge.get_knowledge_context(
+        task_description=operation.description,
+        include_policies=True,
+        include_entities=True,
+        include_decisions=True,
+        max_per_type=3
+    )
+
+    # Store knowledge in execution context
+    if not knowledge_context.is_empty():
+        context.add_knowledge_context(knowledge_context.to_dict().get("policies", []))
+        context.add_knowledge_context(knowledge_context.to_dict().get("entities", []))
+        context.add_knowledge_context(knowledge_context.to_dict().get("decisions", []))
+        print(f"[execute] Loaded knowledge context: {len(knowledge_context.policies)} policies, "
+              f"{len(knowledge_context.entities)} entities, {len(knowledge_context.decisions)} decisions")
+
     # Register execution in the registry
     EXECUTION_REGISTRY.register(operation.id)
 
@@ -492,25 +513,42 @@ def generate_execution_events(
             node_success = False
 
             try:
-                # Build task prompt with context from previous agents
+                # ==================== BUILD CONTEXT-AWARE PROMPT ====================
+                # Use MemoryBridge to build rich context including:
+                # - Previous agent outputs
+                # - Team knowledge (policies, entities, decisions)
                 previous_outputs = context.get_all_agent_outputs()
-                context_section = ""
-                if previous_outputs:
-                    context_section = "\n\nPrevious work from team:\n"
-                    for prev_agent, prev_output in previous_outputs.items():
-                        context_section += f"- {prev_agent}: {prev_output[:100]}...\n"
 
+                # Build knowledge section from pre-loaded context
+                knowledge_section = ""
+                if not knowledge_context.is_empty():
+                    knowledge_section = knowledge_context.to_prompt_section()
+
+                # Build previous work section
+                previous_work_section = ""
+                if previous_outputs:
+                    previous_work_section = "\n## Previous Work from Team\n"
+                    for prev_agent, prev_output in previous_outputs.items():
+                        prev_preview = prev_output[:200] + "..." if len(prev_output) > 200 else prev_output
+                        previous_work_section += f"### {prev_agent}\n{prev_preview}\n\n"
+
+                # Combine into full prompt
                 task_prompt = f"""You are {agent_name}, a {agent_role}.
 
-Task: {node_name}
-Description: {node_desc}
+## Task: {node_name}
+{node_desc}
 
-Context: {operation.description}
-{context_section}
+## Overall Goal
+{operation.description}
+{previous_work_section}
+{knowledge_section}
+
+## Instructions
 Provide a concise professional output for this task. Be specific and actionable.
+Consider any team policies and previous work when formulating your response.
 Keep your response under 200 words."""
 
-                print(f"[execute] Calling LLM for node {node_id}...")
+                print(f"[execute] Calling LLM for node {node_id} (prompt: {len(task_prompt)} chars)...")
                 llm_response = llm_service.simple_chat(task_prompt)
                 print(f"[execute] LLM response received: {len(llm_response)} chars")
 
@@ -650,6 +688,27 @@ Keep your response under 200 words."""
             print(f"[execute] Saved WorkflowExecution record (ID: {workflow_execution.id})")
         except Exception as e:
             print(f"[execute] Error saving WorkflowExecution: {e}")
+            # Don't fail the operation if this fails
+
+        # ==================== EXTRACT AND STORE LEARNINGS ====================
+        # Auto-extract insights from agent outputs and store in knowledge graph
+        try:
+            learnings_stored = 0
+            for agent_name_key, agent_state in context.agent_states.items():
+                if agent_state.output and len(agent_state.output) > 100:
+                    # Store significant outputs as learnings
+                    stored = memory_bridge.extract_and_store_learnings(
+                        agent_name=agent_name_key,
+                        task_name=f"{operation.title} - {agent_state.role}",
+                        output=agent_state.output,
+                        auto_extract=True
+                    )
+                    learnings_stored += len(stored)
+
+            if learnings_stored > 0:
+                print(f"[execute] Stored {learnings_stored} learnings to knowledge graph")
+        except Exception as e:
+            print(f"[execute] Error storing learnings: {e}")
             # Don't fail the operation if this fails
 
         # Save results to vault

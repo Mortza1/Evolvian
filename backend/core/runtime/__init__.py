@@ -6,9 +6,10 @@ This is the "brainstem" of Evolvian where intelligence happens.
 
 Modules:
 - context: ExecutionContext - stateful execution environment
+- memory_bridge: MemoryBridge - connects agents to memory
+- evolution: EvolutionService - Bayesian workflow selection and mutation
 - kernel: RuntimeKernel - orchestrates everything (TODO)
 - evaluator: ExecutionEvaluator - quality/cost metrics (TODO)
-- memory_bridge: MemoryBridge - connects agents to memory (TODO)
 """
 
 from .context import (
@@ -19,10 +20,37 @@ from .context import (
     NodeMetrics,
 )
 
+from .memory_bridge import (
+    MemoryBridge,
+    ShortTermMemory,
+    LongTermMemory,
+    KnowledgeContext,
+    MemoryItem,
+)
+
+from .evolution import (
+    EvolutionService,
+    WorkflowDNA,
+    WorkflowStats,
+    EvolutionSuggestion,
+)
+
 __all__ = [
+    # Context
     "ExecutionContext",
     "AgentState",
     "ToolState",
     "ExecutionMetrics",
     "NodeMetrics",
+    # Memory
+    "MemoryBridge",
+    "ShortTermMemory",
+    "LongTermMemory",
+    "KnowledgeContext",
+    "MemoryItem",
+    # Evolution
+    "EvolutionService",
+    "WorkflowDNA",
+    "WorkflowStats",
+    "EvolutionSuggestion",
 ]

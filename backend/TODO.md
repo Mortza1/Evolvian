@@ -21,8 +21,8 @@ The platform uses a hierarchical AI workforce model with Evo as the COO.
 
 ### What's Missing (The Real Gaps)
 - ✅ **Real cognition loop** - ExecutionContext wired, agents see previous outputs
-- ❌ **Real memory usage** - knowledge graph exists but agents don't query it
-- 🔄 **Real evolution** - WorkflowExecution records saved, needs selection logic
+- ✅ **Real memory usage** - Agents query knowledge graph, auto-store learnings
+- ✅ **Real evolution** - WorkflowExecution records saved, EvolutionService with Bayesian selection
 - ❌ **Real tool grounding** - tools are CRUD, not executable by agents
 - ❌ **Real agent identity persistence** - agents are prompts, not characters
 
@@ -102,11 +102,16 @@ Single entry point for all execution. Replaces scattered logic in routers/servic
   - Compare against historical benchmarks
   - Generate improvement suggestions
 
-### MemoryBridge (memory_bridge.py)
-- [ ] `MemoryBridge` class:
-  - `get_short_term(operation_id)` - EvoAgentX ShortTermMemory
-  - `get_long_term(team_id)` - Wraps KnowledgeGraph
-  - `inject_context(agent, context)` - Prepare agent with memory
+### MemoryBridge (memory_bridge.py) - DONE
+- [x] `MemoryBridge` class:
+  - `ShortTermMemory` - Per-operation key-value store
+  - `LongTermMemory` - Wraps KnowledgeGraph with search/store
+  - `KnowledgeContext` - Aggregated knowledge for prompts
+  - `get_knowledge_context()` - Build context with policies, entities, decisions
+  - `build_agent_context()` - Full context string for agent prompts
+  - `extract_and_store_learnings()` - Auto-store insights to knowledge graph
+- [x] Wired into operations.py execution
+- [x] Test file: `test_memory_bridge.py` verifies all functionality
 
 ---
 
@@ -183,38 +188,32 @@ def execute(self, context: ExecutionContext, inputs):
 
 ---
 
-## CRITICAL - Phase C: Memory Integration (Priority: HIGH)
+## DONE - Phase C: Memory Integration
 
-Stop treating knowledge graph as CRUD. Make agents use it.
+Agents now query and contribute to the team's knowledge graph.
 
-### Short-Term Memory (Per Operation)
-- [ ] Hook into EvoAgentX `ShortTermMemory`
-- [ ] Auto-populate with:
-  - `task_goal` - the operation objective
-  - `previous_outputs` - context.agent_states
-  - `assumptions_answered` - resolved questions
-  - `tool_results` - from context.tool_states
-- [ ] Pass to agents via MemoryBridge
+### Short-Term Memory (Per Operation) - DONE
+- [x] `ShortTermMemory` class with add/get/has/remove/clear
+- [x] Auto-populate with task_goal, task_description, team_name
+- [x] Previous outputs available via `context.get_all_agent_outputs()`
+- [x] Serializable for checkpoint/resume
 
-### Long-Term Memory (Per Team)
-- [ ] Create `EvolvianLongTermMemory` wrapper (DO NOT use EvoAgentX LongTermMemory directly)
-  ```python
-  class EvolvianLongTermMemory:
-      def retrieve(self, query: str, team_id: int) -> List[KnowledgeNode]:
-          return knowledge_service.search(team_id, query)
-
-      def store(self, node: KnowledgeNode):
-          return knowledge_service.create(node)
-  ```
-- [ ] Inject into EvoAgentX execution
-- [ ] Auto-extract entities from operation outputs → knowledge nodes
-- [ ] This is how Evolvian absorbs EvoAgentX instead of being swallowed by it
+### Long-Term Memory (Per Team) - DONE
+- [x] `LongTermMemory` class wraps KnowledgeGraph (NOT EvoAgentX LongTermMemory)
+  - `search(query)` - keyword search with relevance scoring
+  - `get_by_type(node_type)` - get policies, entities, decisions, etc.
+  - `store(node_type, label, description)` - add new knowledge
+- [x] `KnowledgeContext` aggregates relevant knowledge for prompts
+- [x] Injected into agent prompts during execution
+- [x] Auto-extract learnings from agent outputs → knowledge nodes
+- [x] This is how Evolvian absorbs EvoAgentX instead of being swallowed by it
 
 ---
 
-## CRITICAL - Phase D: Evolution Engine (Priority: HIGH)
+## PARTIAL - Phase D: Evolution Engine (Priority: HIGH)
 
 If evolution is postponed, Evolvian will never become Evolvian.
+EvolutionService now provides Bayesian workflow selection.
 
 ### WorkflowExecution Model (Required for Evolution) - DONE
 
@@ -255,27 +254,30 @@ Not just logging - this is the dataset for evolution.
 - [x] Store with WorkflowExecution (via `workflow_signature` field)
 - [ ] Auto-compute signature during workflow execution
 
-### Minimal Evolution Logic (Bayesian, Not Genetic)
+### EvolutionService (evolution.py) - DONE
 
-Start simple. Forget AFlow for now.
+Simple Bayesian workflow selection. AFlow from EvoAgentX can be added later.
 
-- [ ] `select_best_workflow(task_type)`:
-  ```python
-  def select_best_workflow(task_type: str) -> WorkflowDNA:
-      workflows = db.get_workflows(task_type)
-      return max(workflows, key=lambda w: w.quality_score / w.cost)
-  ```
+- [x] `EvolutionService` class in `core/runtime/evolution.py`:
+  - `select_best_workflow(task_type, optimization_goal)` - Bayesian selection
+  - `get_workflow_stats(task_type)` - Aggregate metrics and top workflows
+  - `suggest_improvements(current_signature, task_type, current_agents)` - Auto-suggestions
+  - `mutate_workflow(workflow_dna, mutation_rate)` - Exploratory mutations
+  - `compare_workflows(signature_a, signature_b, task_type)` - Head-to-head comparison
+  - `estimate_quality_score(...)` - Heuristic quality scoring
 
-- [ ] `mutate_workflow(workflow_dna)`:
-  ```python
-  def mutate(workflow_dna):
-      if random() < 0.3:
-          workflow_dna["agents"].append("critic_agent")
-      return workflow_dna
-  ```
+- [x] `WorkflowDNA` dataclass - genetic representation of workflows
+- [x] `EvolutionSuggestion` dataclass - improvement recommendations
+- [x] `WorkflowStats` dataclass - aggregate statistics
 
-- [ ] Track which mutations improve quality_score
-- [ ] Auto-suggest workflow improvements based on data
+- [x] Fitness calculation with multiple optimization goals:
+  - `balanced` - Equal weight to quality, cost, speed
+  - `quality` - Prioritizes output quality
+  - `cost` - Prioritizes lower cost
+  - `speed` - Prioritizes faster execution
+
+- [x] Test file: `test_evolution.py` - isolated tests with mocks
+- [ ] Wire EvolutionService into operations.py (next step)
 
 ### Agent Evolution (Make Agents Characters, Not Templates)
 
@@ -513,8 +515,16 @@ If we don't control this, Evolvian becomes just a UI on top of EvoAgentX.
    - ⏳ RuntimeKernel (full orchestration - optional refactor)
 3. ⏳ **Phase 3**: Replace executor with EvolvianWorkFlowAdapter
 4. ⏳ **Phase 4**: Map InstalledTool → EvoAgentX Tool
-5. ⏳ **Phase 5**: Bridge Memory (short-term + long-term)
-6. ⏳ **Phase 6**: Add evolution with WorkflowExecution data
+5. ✅ **Phase 5**: Bridge Memory (short-term + long-term)
+   - ✅ MemoryBridge connects agents to knowledge graph
+   - ✅ Agents receive team policies, entities, decisions in prompts
+   - ✅ Auto-extract learnings from agent outputs
+6. 🔄 **Phase 6**: Add evolution with WorkflowExecution data
+   - ✅ EvolutionService with Bayesian selection (core/runtime/evolution.py)
+   - ✅ WorkflowDNA, EvolutionSuggestion, WorkflowStats dataclasses
+   - ✅ Fitness calculation with multiple optimization goals
+   - ✅ Workflow mutation and comparison
+   - ⏳ Wire into operations.py execution flow
 
 ---
 
@@ -537,9 +547,10 @@ backend/
 │   ├── runtime/         # The Execution Kernel
 │   │   ├── __init__.py  # ✅ Module exports
 │   │   ├── context.py   # ✅ ExecutionContext (DONE)
+│   │   ├── memory_bridge.py # ✅ MemoryBridge (DONE)
+│   │   ├── evolution.py # ✅ EvolutionService (DONE)
 │   │   ├── kernel.py    # ⏳ RuntimeKernel (TODO)
 │   │   ├── evaluator.py # ⏳ ExecutionEvaluator (TODO)
-│   │   ├── memory_bridge.py # ⏳ MemoryBridge (TODO)
 │   │   └── workflow_adapter.py # ⏳ EvolvianWorkFlowAdapter (TODO)
 │   │
 │   ├── tools/           # NEW - Tool Integration
@@ -600,4 +611,4 @@ npm run dev
 
 ---
 
-*Last Updated: 2026-02-02 (ExecutionContext wired into operations.py)*
+*Last Updated: 2026-02-02 (EvolutionService implemented - Bayesian workflow selection)*
