@@ -20,7 +20,10 @@ from models import User, Team, Operation, Agent, VaultFile, WorkflowExecution
 from llm_service import llm_service
 from core.agents.registry import AGENT_REGISTRY
 from core.workflows.execution_state import EXECUTION_REGISTRY, ExecutionSignal
-from core.runtime import ExecutionContext, AgentState, ToolState, NodeMetrics, MemoryBridge
+from core.runtime import (
+    ExecutionContext, AgentState, ToolState, NodeMetrics, MemoryBridge,
+    EvolutionService, WorkflowDNA
+)
 
 router = APIRouter(prefix="/api/operations", tags=["Operations"])
 
@@ -331,6 +334,30 @@ def generate_execution_events(
         context.add_knowledge_context(knowledge_context.to_dict().get("decisions", []))
         print(f"[execute] Loaded knowledge context: {len(knowledge_context.policies)} policies, "
               f"{len(knowledge_context.entities)} entities, {len(knowledge_context.decisions)} decisions")
+
+    # ==================== EVOLUTION SERVICE ====================
+    # Check for better workflows based on historical performance
+    evolution_service = EvolutionService(db=db, team_id=operation.team_id)
+    task_type = _infer_task_type(operation.title, operation.description)
+    best_workflow = None
+
+    try:
+        best_workflow = evolution_service.select_best_workflow(task_type, optimization_goal="balanced")
+        if best_workflow and best_workflow.execution_count >= 2:
+            print(f"[execute] Evolution suggests workflow {best_workflow.signature[:8]}... "
+                  f"(fitness: {best_workflow.fitness_score:.2f}, executions: {best_workflow.execution_count})")
+            if context.workflow_signature and context.workflow_signature != best_workflow.signature:
+                suggestions = evolution_service.suggest_improvements(
+                    current_signature=context.workflow_signature,
+                    task_type=task_type,
+                    current_agents=[node.get("agentRole", node.get("agent_role", "")) for node in nodes]
+                )
+                if suggestions:
+                    print(f"[execute] Evolution suggestions: {len(suggestions)}")
+                    for s in suggestions[:2]:  # Log first 2
+                        print(f"[execute]   - [{s.suggestion_type}] {s.description}")
+    except Exception as e:
+        print(f"[execute] Evolution check failed (non-fatal): {e}")
 
     # Register execution in the registry
     EXECUTION_REGISTRY.register(operation.id)
@@ -656,11 +683,24 @@ Keep your response under 200 words."""
 
         # ==================== SAVE WORKFLOW EXECUTION (for evolution) ====================
         try:
+            # Calculate quality score using evolution service
+            total_output_length = sum(
+                len(state.output or "") for state in context.agent_states.values()
+            )
+            quality_score = evolution_service.estimate_quality_score(
+                output_length=total_output_length,
+                execution_time_ms=context.metrics.total_latency_ms,
+                nodes_completed=context.metrics.nodes_completed,
+                nodes_total=context.metrics.nodes_total,
+                assumptions_answered=len([a for a in context.assumptions if a.get("answered")])
+            )
+            print(f"[execute] Calculated quality score: {quality_score:.2f}")
+
             workflow_execution = WorkflowExecution(
                 operation_id=operation.id,
                 team_id=operation.team_id,
                 workflow_signature=context.workflow_signature,
-                task_type=_infer_task_type(operation.title, operation.description),
+                task_type=task_type,
                 team_composition=[
                     {"agent_id": state.agent_id, "agent_name": name, "role": state.role}
                     for name, state in context.agent_states.items()
@@ -669,6 +709,7 @@ Keep your response under 200 words."""
                 cost=context.metrics.total_cost,
                 latency_ms=context.metrics.total_latency_ms,
                 tokens_used=context.metrics.total_tokens,
+                quality_score=quality_score,
                 nodes_total=context.metrics.nodes_total,
                 nodes_completed=context.metrics.nodes_completed,
                 nodes_failed=context.metrics.nodes_failed,
@@ -685,7 +726,7 @@ Keep your response under 200 words."""
             )
             db.add(workflow_execution)
             db.commit()
-            print(f"[execute] Saved WorkflowExecution record (ID: {workflow_execution.id})")
+            print(f"[execute] Saved WorkflowExecution (ID: {workflow_execution.id}, quality: {quality_score:.2f})")
         except Exception as e:
             print(f"[execute] Error saving WorkflowExecution: {e}")
             # Don't fail the operation if this fails
@@ -763,7 +804,7 @@ Keep your response under 200 words."""
         yield emit("complete", {
             "operation_id": operation.id,
             "status": "completed",
-            "total_cost": total_cost,
+            "total_cost": context.metrics.total_cost,
             "duration_seconds": (operation.completed_at - operation.started_at).total_seconds(),
         })
 
@@ -1117,3 +1158,136 @@ async def resume_operation(
             "X-Accel-Buffering": "no",
         }
     )
+
+
+# ==================== EVOLUTION ENDPOINTS ====================
+
+@router.get("/evolution/stats/{team_id}")
+async def get_evolution_stats(
+    team_id: int,
+    task_type: str = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get evolution statistics for a team.
+
+    Returns workflow performance data grouped by task type.
+    Shows best performing workflows, suggestions, and trends.
+    """
+    # Verify team belongs to user
+    team = db.query(Team).filter(
+        Team.id == team_id,
+        Team.user_id == current_user.id
+    ).first()
+
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Team not found"
+        )
+
+    evolution_service = EvolutionService(db=db, team_id=team_id)
+
+    # Get all task types if none specified
+    if task_type:
+        task_types = [task_type]
+    else:
+        task_types = evolution_service.get_all_task_types()
+
+    # Build stats for each task type
+    stats_by_type = {}
+    for tt in task_types:
+        stats = evolution_service.get_workflow_stats(tt)
+        stats_by_type[tt] = stats.to_dict()
+
+    return {
+        "team_id": team_id,
+        "task_types": task_types,
+        "stats": stats_by_type,
+        "total_task_types": len(task_types),
+    }
+
+
+@router.get("/evolution/suggestions/{team_id}")
+async def get_evolution_suggestions(
+    team_id: int,
+    task_type: str,
+    current_workflow_signature: str = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get improvement suggestions for a workflow.
+
+    Based on historical performance data, suggests:
+    - Better performing workflows to use
+    - Agents to add or remove
+    - Cost optimizations
+    """
+    # Verify team belongs to user
+    team = db.query(Team).filter(
+        Team.id == team_id,
+        Team.user_id == current_user.id
+    ).first()
+
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Team not found"
+        )
+
+    evolution_service = EvolutionService(db=db, team_id=team_id)
+
+    # Get best workflow for comparison
+    best_workflow = evolution_service.select_best_workflow(task_type)
+
+    # Get suggestions
+    suggestions = evolution_service.suggest_improvements(
+        current_signature=current_workflow_signature,
+        task_type=task_type
+    )
+
+    return {
+        "team_id": team_id,
+        "task_type": task_type,
+        "current_signature": current_workflow_signature,
+        "best_workflow": best_workflow.to_dict() if best_workflow else None,
+        "suggestions": [s.to_dict() for s in suggestions],
+    }
+
+
+@router.get("/evolution/compare/{team_id}")
+async def compare_workflows(
+    team_id: int,
+    task_type: str,
+    signature_a: str,
+    signature_b: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Compare two workflows head-to-head.
+
+    Shows performance metrics and declares a winner.
+    """
+    # Verify team belongs to user
+    team = db.query(Team).filter(
+        Team.id == team_id,
+        Team.user_id == current_user.id
+    ).first()
+
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Team not found"
+        )
+
+    evolution_service = EvolutionService(db=db, team_id=team_id)
+    comparison = evolution_service.compare_workflows(signature_a, signature_b, task_type)
+
+    return {
+        "team_id": team_id,
+        "task_type": task_type,
+        **comparison
+    }

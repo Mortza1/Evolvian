@@ -210,10 +210,10 @@ Agents now query and contribute to the team's knowledge graph.
 
 ---
 
-## PARTIAL - Phase D: Evolution Engine (Priority: HIGH)
+## DONE - Phase D: Evolution Engine (Core Complete)
 
-If evolution is postponed, Evolvian will never become Evolvian.
 EvolutionService now provides Bayesian workflow selection.
+Wired into operations.py - workflows are now tracked and evaluated.
 
 ### WorkflowExecution Model (Required for Evolution) - DONE
 
@@ -277,7 +277,11 @@ Simple Bayesian workflow selection. AFlow from EvoAgentX can be added later.
   - `speed` - Prioritizes faster execution
 
 - [x] Test file: `test_evolution.py` - isolated tests with mocks
-- [ ] Wire EvolutionService into operations.py (next step)
+- [x] Wired EvolutionService into operations.py:
+  - Checks for better workflows before execution (logs suggestions)
+  - Calculates quality_score after execution
+  - Saves quality_score with WorkflowExecution
+  - New API endpoints: `/evolution/stats`, `/evolution/suggestions`, `/evolution/compare`
 
 ### Agent Evolution (Make Agents Characters, Not Templates)
 
@@ -519,12 +523,13 @@ If we don't control this, Evolvian becomes just a UI on top of EvoAgentX.
    - ✅ MemoryBridge connects agents to knowledge graph
    - ✅ Agents receive team policies, entities, decisions in prompts
    - ✅ Auto-extract learnings from agent outputs
-6. 🔄 **Phase 6**: Add evolution with WorkflowExecution data
+6. ✅ **Phase 6**: Add evolution with WorkflowExecution data
    - ✅ EvolutionService with Bayesian selection (core/runtime/evolution.py)
    - ✅ WorkflowDNA, EvolutionSuggestion, WorkflowStats dataclasses
    - ✅ Fitness calculation with multiple optimization goals
    - ✅ Workflow mutation and comparison
-   - ⏳ Wire into operations.py execution flow
+   - ✅ Wired into operations.py execution flow
+   - ✅ Evolution API endpoints exposed
 
 ---
 
@@ -611,4 +616,4 @@ npm run dev
 
 ---
 
-*Last Updated: 2026-02-02 (EvolutionService implemented - Bayesian workflow selection)*
+*Last Updated: 2026-02-02 (EvolutionService wired into operations.py - full evolution loop complete)*
