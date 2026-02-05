@@ -1,619 +1,312 @@
-# Evolvian Backend - Implementation Status & TODO
+# Evolvian - Implementation Status & Roadmap
 
-## Overview
-This document tracks the implementation status of the Evolvian backend.
-The platform uses a hierarchical AI workforce model with Evo as the COO.
+## Vision
 
-**Architecture**: Modular FastAPI with separate routers per domain.
+**Evolvian** is a multi-agent task execution platform that:
+1. Executes tasks using multiple AI agents with distinct roles
+2. Coordinates agent outputs through workflows
+3. Improves future performance based on past runs (evolution)
+4. Reuses evolved teams for similar tasks
+
+**Key Distinction from EvoAgentX**: Evo (the COO) designs the workflow and selects agents - we don't auto-generate agents. Teams are composed, evolved, and reused.
+
+**Future**: Community-made agents, tool marketplace, developer portal. But first - complete the base.
 
 ---
 
-## Architecture Assessment (Honest Status)
+## Current State (What Works)
 
-### What We Have
-- ✅ Product layer (teams, agents, marketplace, UI)
-- ✅ Workflow abstraction (WorkflowBuilder, WorkflowExecutor)
-- ✅ Evo orchestration (analyze, workflow design, chat)
-- ✅ SSE execution theatre (real-time streaming)
+### Fully Functional
+- ✅ User auth, teams, basic CRUD
+- ✅ Evo analyzes tasks → creates workflow DAG
+- ✅ Workflow execution with SSE streaming (real-time UI updates)
+- ✅ Agent registry with templates (marketplace hiring works)
+- ✅ ExecutionContext holds state across nodes
+- ✅ MemoryBridge connects agents to knowledge graph
+- ✅ EvolutionService with Bayesian workflow selection
+- ✅ WorkflowExecution records saved for evolution
 - ✅ Assumptions inbox (agents ask instead of hallucinate)
-- ✅ Knowledge graph CRUD (nodes, edges, basic query)
-- ⚠️ EvoAgentX partially integrated (LLM only, not workflows/tools/memory)
+- ✅ Frontend: workflow creation, execution theatre, output display
 
-### What's Missing (The Real Gaps)
-- ✅ **Real cognition loop** - ExecutionContext wired, agents see previous outputs
-- ✅ **Real memory usage** - Agents query knowledge graph, auto-store learnings
-- ✅ **Real evolution** - WorkflowExecution records saved, EvolutionService with Bayesian selection
-- ❌ **Real tool grounding** - tools are CRUD, not executable by agents
-- ❌ **Real agent identity persistence** - agents are prompts, not characters
+### The Base Works
+You can:
+1. Describe a task to Evo
+2. Evo creates a workflow with agent assignments
+3. Execute the workflow
+4. See real-time progress and outputs
 
-### The Problem
-Evolvian currently **looks** like an AI company, but it doesn't **think** like one yet.
-
-The vertical intelligence pipeline is thin:
-```
-Current:  Task → LLM → output (with UI around it)
-
-Needed:   Task → Evo reasoning → Workflow graph → Agent execution
-          → Tool usage → Memory read/write → Evaluation → Evolution
-          → Next task is better
-```
-
-**Priority Shift**: Stop adding horizontal features. Deepen the vertical chain.
+**But it's shallow** - agents are just LLM prompts, tools aren't executable, and evolution doesn't feed back into workflow design yet.
 
 ---
 
-## CRITICAL - Phase A: Runtime Kernel (Priority: HIGHEST)
+## Phase 1: Complete the Base (CURRENT PRIORITY)
 
-The missing "brainstem" - one module that owns execution semantics.
+The goal: Make Evolvian actually intelligent, not just look intelligent.
 
-### New Module Structure
+### 1.1 Tool System - Make Tools Executable by Agents
+
+**Status**: ✅ CORE COMPLETE
+
+Tool infrastructure is built. Agents can now call tools that actually execute.
+
+**Implemented** (`core/tools/`):
+
 ```
-core/runtime/
-    __init__.py
-    context.py      # ExecutionContext - stateful execution
-    kernel.py       # RuntimeKernel - orchestrates everything
-    evaluator.py    # ExecutionEvaluator - quality/cost metrics
-    memory_bridge.py # MemoryBridge - connects agents to memory
+core/tools/
+├── __init__.py          # ✅ Module exports
+├── base.py              # ✅ EvolvianTool, ToolResult, ToolParameter
+├── registry.py          # ✅ ToolRegistry, get_tool_registry()
+├── executor.py          # ✅ ToolExecutor, parse_tool_calls_from_response()
+└── adapters/
+    ├── __init__.py      # ✅
+    ├── web_search.py    # ✅ DuckDuckGo search (no API key needed)
+    ├── web_scrape.py    # ✅ Fetch & extract web page content
+    ├── code_executor.py # ✅ Sandboxed Python execution
+    └── file_reader.py   # ✅ Read from Neural Vault
 ```
 
-### ExecutionContext (context.py) - DONE
-Every operation must run inside a context. This is why agents feel stateless.
+**Completed Tasks**:
+- [x] Define `EvolvianTool` base class with execute interface
+- [x] Create `ToolRegistry` to manage available tools per team
+- [x] Create `ToolExecutor` that runs tools and tracks results in context
+- [x] Implement core tools: web_search, web_scrape, code_executor, file_reader
+- [x] Store tool results in `ExecutionContext.tool_states`
+- [x] Track tool costs (cost_per_call on each tool)
+- [x] Tool schemas in OpenAI function-calling format
 
-- [x] `ExecutionContext` class with:
-  - `operation_id`, `team_id`
-  - `memory: dict` - operation-scoped state
-  - `agent_states: dict` - outputs from each agent
-  - `tool_states: list` - tool execution results
-  - `metrics: ExecutionMetrics` - cost, latency, quality tracking
-  - `assumptions: list` - questions asked during execution
-  - `knowledge_context: list` - relevant knowledge nodes
-  - `node_metrics: dict` - per-node performance tracking
-  - `workflow_signature: str` - workflow DNA hash
+**Remaining Tasks**:
+- [ ] Wire ToolExecutor into agent execution loop (Phase 1.2)
+- [ ] Add more tools: email_sender, slack_sender, image_generator, database_query
 
-- [x] Supporting dataclasses: `AgentState`, `ToolState`, `NodeMetrics`, `ExecutionMetrics`
-- [x] Context passed to every agent execution (wired into operations.py)
-- [x] Context persists across pause/resume (checkpoint serialization)
-- [x] Context serializable for checkpointing (`to_checkpoint()`, `from_checkpoint()`)
-- [x] Workflow DNA signature computation (`compute_workflow_signature()`)
-- [x] Test file: `test_runtime.py` demonstrates all capabilities
-- [x] Test file: `test_operations_context.py` verifies integration
+### 1.2 Agent Execution - Context-Aware Agents
 
-### RuntimeKernel (kernel.py)
-Single entry point for all execution. Replaces scattered logic in routers/services.
+**Status**: ⚠️ PARTIAL
 
-- [ ] `RuntimeKernel` class responsibilities:
-  - Create ExecutionContext
-  - Attach memory (short-term + long-term)
-  - Attach tools (from InstalledTool)
-  - Run EvoAgentX workflow
-  - Collect metrics
-  - Emit SSE events
-  - Store execution data
-  - Trigger evolution hooks
+Agents receive context but don't fully use it. Need to:
 
-- [ ] Move execution logic from `routers/operations.py` into kernel
-- [ ] Kernel is the only place "intelligence happens"
+**Tasks**:
+- [ ] Agent prompt includes: previous node outputs, knowledge context, available tools
+- [ ] Agent can emit tool calls in structured format
+- [ ] Agent output parsed for: main_output, tool_calls, assumptions, learnings
+- [ ] Agent state properly recorded in `ExecutionContext.agent_states`
+- [ ] Agents can chain - Node B sees Node A's full output
 
-### ExecutionEvaluator (evaluator.py)
-- [ ] `ExecutionEvaluator` class:
-  - Calculate quality_score from outputs
-  - Track cost per node, per agent
-  - Track latency per node
-  - Compare against historical benchmarks
-  - Generate improvement suggestions
+**Agent Execution Flow**:
+```
+1. Build prompt with context (previous outputs, knowledge, tools)
+2. Call LLM
+3. Parse response for tool calls
+4. Execute tools if needed
+5. Continue or return final output
+6. Store state in ExecutionContext
+```
 
-### MemoryBridge (memory_bridge.py) - DONE
-- [x] `MemoryBridge` class:
-  - `ShortTermMemory` - Per-operation key-value store
-  - `LongTermMemory` - Wraps KnowledgeGraph with search/store
-  - `KnowledgeContext` - Aggregated knowledge for prompts
-  - `get_knowledge_context()` - Build context with policies, entities, decisions
-  - `build_agent_context()` - Full context string for agent prompts
-  - `extract_and_store_learnings()` - Auto-store insights to knowledge graph
-- [x] Wired into operations.py execution
-- [x] Test file: `test_memory_bridge.py` verifies all functionality
+### 1.3 Team Reuse - Evolution Feedback Loop
+
+**Status**: ⚠️ PARTIAL (EvolutionService exists but not integrated into workflow design)
+
+**Current**: EvolutionService can select best workflows, but Evo doesn't use this when designing new workflows.
+
+**Tasks**:
+- [ ] When Evo designs a workflow, query EvolutionService for similar past executions
+- [ ] Suggest proven workflows/agents to Evo before it designs from scratch
+- [ ] "Use this team again" - save successful team composition for task type
+- [ ] Show evolution stats in UI (this workflow performed X% better than average)
+- [ ] Auto-select best workflow for recurring task types
+
+### 1.4 Quality Feedback - Close the Loop
+
+**Status**: ❌ NOT STARTED
+
+Evolution needs quality signals. Currently `quality_score` is estimated, not measured.
+
+**Tasks**:
+- [ ] Add "Rate this output" UI after operation completes (1-5 stars + feedback)
+- [ ] Store `user_rating` and `user_feedback` in WorkflowExecution
+- [ ] Use real ratings in EvolutionService fitness calculation
+- [ ] Track which agents/workflows get consistently good ratings
+- [ ] Surface "top performing" workflows in UI
 
 ---
 
-## CRITICAL - Phase B: Deep EvoAgentX Integration (Priority: HIGHEST)
+## Phase 2: Developer Features (DEFERRED)
 
-Stop treating EvoAgentX as optional. It should be the cognitive VM.
+After the base works, enable developers to create custom agents and tools.
 
-### Workflow Adapter (Replace Current Executor)
+### 2.1 Agent Creation Portal
 
-Current flow:
+**Status**: ❌ NOT STARTED
+
+A developer section in the UI to create custom agents.
+
+**Features**:
+- [ ] Agent designer: name, role, specialty, prompt template
+- [ ] Test agent in sandbox before deploying
+- [ ] Version control for agent prompts
+- [ ] Assign tools/capabilities to custom agents
+- [ ] Private agents (team-only) vs public (marketplace)
+
+**Location**: Settings → Developer → Create Agent
+
+### 2.2 Tool Creation Portal
+
+**Status**: ❌ NOT STARTED
+
+Let developers define custom tools.
+
+**Features**:
+- [ ] Tool designer: name, description, parameter schema
+- [ ] Tool types: API endpoint, code snippet, webhook
+- [ ] Test tool execution
+- [ ] Assign to agents
+
+### 2.3 Team Templates
+
+**Status**: ❌ NOT STARTED
+
+Save entire team compositions as templates.
+
+**Features**:
+- [ ] "Save this team as template"
+- [ ] Template includes: agents, their tools, workflow patterns
+- [ ] Reuse template for new projects
+- [ ] Share templates (later - marketplace)
+
+---
+
+## Phase 3: Marketplace & Community (DEFERRED)
+
+Full creator economy. Only after Phases 1-2 are solid.
+
+### 3.1 Agent Marketplace
+
+- [ ] Publish custom agents to marketplace
+- [ ] Browse community agents by category
+- [ ] Ratings and reviews
+- [ ] Usage analytics for creators
+- [ ] Revenue sharing (paid agents)
+
+### 3.2 Tool Marketplace
+
+- [ ] Publish custom tools
+- [ ] Tool categories (search, code, data, integration)
+- [ ] API key management for tools
+- [ ] Usage-based pricing
+
+### 3.3 Workflow Marketplace
+
+- [ ] Publish proven workflows
+- [ ] "Workflow recipes" for common tasks
+- [ ] Import workflows with required agents/tools
+
+---
+
+## Technical Debt & Improvements
+
+### Should Fix Soon
+- [ ] RuntimeKernel - consolidate execution logic (currently scattered in operations.py)
+- [ ] Better error handling in workflow execution
+- [ ] Proper logging throughout execution pipeline
+- [ ] Database migrations (currently recreating DB)
+
+### Can Wait
+- [ ] ExecutionEvaluator - automated quality scoring
+- [ ] File vault with RAG indexing
+- [ ] Embeddings for knowledge graph search
+- [ ] Horizontal scaling (multiple workers)
+
+---
+
+## Architecture Reference
+
+### Current Flow
 ```
-WorkflowBuilder → EvolvianWorkflow → Executor → Agents
-```
-
-Target flow:
-```
-WorkflowBuilder → EvoAgentX WorkFlowGraph → WorkFlow → Evolvian runtime hooks
-```
-
-- [ ] Create `core/runtime/workflow_adapter.py`:
-  ```python
-  from evoagentx.workflow import WorkFlow
-
-  class EvolvianWorkFlowAdapter(WorkFlow):
-      def __init__(self, graph, context: ExecutionContext):
-          super().__init__(graph=graph)
-          self.context = context
-
-      def execute_node(self, node):
-          agent = resolve_evolvian_agent(node)
-          return agent.execute(self.context, node.inputs)
-  ```
-
-- [ ] EvoAgentX controls orchestration, Evolvian controls semantics
-- [ ] Preserve SSE streaming through adapter hooks
-
-### Tool Adapter (Map InstalledTool → EvoAgentX Tool)
-
-Create `core/tools/adapter.py`:
-
-- [ ] `EvolvianTool(Tool)` class:
-  ```python
-  from evoagentx.tools import Tool
-
-  class EvolvianTool(Tool):
-      def __init__(self, installed_tool):
-          self.name = installed_tool.name
-          self.config = installed_tool.config
-
-      def run(self, input):
-          return execute_tool_logic(self.config, input)
-  ```
-
-- [ ] `ToolRegistry` - maps team tools to EvoAgentX toolkit
-- [ ] Dynamic tool injection: `agent.tools = [EvolvianTool(t) for t in team_tools]`
-- [ ] Tool execution tracking (calls, costs, errors)
-
-### Agent Execution Update
-
-Modify `EvolvianAgent.execute()` to be context-aware:
-
-- [ ] Agent receives: context, memory, past outputs, assumptions, tools
-- [ ] Agent writes to: context.agent_states, context.metrics
-- [ ] Agent can query: context.knowledge_context
-- [ ] Agent can raise: assumptions (instead of hallucinating)
-
-```python
-def execute(self, context: ExecutionContext, inputs):
-    prompt = self.build_prompt(context, inputs)
-    output = llm.generate(prompt)
-    context.agent_states[self.name] = output
-    return output
-```
-
----
-
-## DONE - Phase C: Memory Integration
-
-Agents now query and contribute to the team's knowledge graph.
-
-### Short-Term Memory (Per Operation) - DONE
-- [x] `ShortTermMemory` class with add/get/has/remove/clear
-- [x] Auto-populate with task_goal, task_description, team_name
-- [x] Previous outputs available via `context.get_all_agent_outputs()`
-- [x] Serializable for checkpoint/resume
-
-### Long-Term Memory (Per Team) - DONE
-- [x] `LongTermMemory` class wraps KnowledgeGraph (NOT EvoAgentX LongTermMemory)
-  - `search(query)` - keyword search with relevance scoring
-  - `get_by_type(node_type)` - get policies, entities, decisions, etc.
-  - `store(node_type, label, description)` - add new knowledge
-- [x] `KnowledgeContext` aggregates relevant knowledge for prompts
-- [x] Injected into agent prompts during execution
-- [x] Auto-extract learnings from agent outputs → knowledge nodes
-- [x] This is how Evolvian absorbs EvoAgentX instead of being swallowed by it
-
----
-
-## DONE - Phase D: Evolution Engine (Core Complete)
-
-EvolutionService now provides Bayesian workflow selection.
-Wired into operations.py - workflows are now tracked and evaluated.
-
-### WorkflowExecution Model (Required for Evolution) - DONE
-
-Not just logging - this is the dataset for evolution.
-
-- [x] Add to `models.py`:
-  ```python
-  class WorkflowExecution(Base):
-      id: int
-      operation_id: int
-      workflow_signature: str  # Hash of graph + agents + prompts
-      team_composition: JSON   # Which agents were used
-      agents_used: JSON        # Simple list of agent names
-      cost: float
-      latency_ms: int
-      tokens_used: int
-      quality_score: float     # 0.0 - 1.0
-      user_rating: int         # 1-5 stars
-      user_feedback: str       # Free-form feedback
-      node_metrics: JSON       # Per-node performance
-      assumptions_raised: int
-      assumptions_answered: int
-      context_snapshot: JSON   # Full ExecutionContext for replay
-      created_at: datetime
-  ```
-
-### Workflow DNA Concept - PARTIAL
-
-- [x] Define workflow signature in `ExecutionContext.compute_workflow_signature()`:
-  ```python
-  workflow_dna = {
-      "agents": ["researcher", "analyst", "writer"],
-      "prompts": {"researcher": "...", ...},
-      "tools": {"researcher": ["search"], ...}
-  }
-  ```
-- [x] Hash DNA for comparison (SHA256, first 16 chars)
-- [x] Store with WorkflowExecution (via `workflow_signature` field)
-- [ ] Auto-compute signature during workflow execution
-
-### EvolutionService (evolution.py) - DONE
-
-Simple Bayesian workflow selection. AFlow from EvoAgentX can be added later.
-
-- [x] `EvolutionService` class in `core/runtime/evolution.py`:
-  - `select_best_workflow(task_type, optimization_goal)` - Bayesian selection
-  - `get_workflow_stats(task_type)` - Aggregate metrics and top workflows
-  - `suggest_improvements(current_signature, task_type, current_agents)` - Auto-suggestions
-  - `mutate_workflow(workflow_dna, mutation_rate)` - Exploratory mutations
-  - `compare_workflows(signature_a, signature_b, task_type)` - Head-to-head comparison
-  - `estimate_quality_score(...)` - Heuristic quality scoring
-
-- [x] `WorkflowDNA` dataclass - genetic representation of workflows
-- [x] `EvolutionSuggestion` dataclass - improvement recommendations
-- [x] `WorkflowStats` dataclass - aggregate statistics
-
-- [x] Fitness calculation with multiple optimization goals:
-  - `balanced` - Equal weight to quality, cost, speed
-  - `quality` - Prioritizes output quality
-  - `cost` - Prioritizes lower cost
-  - `speed` - Prioritizes faster execution
-
-- [x] Test file: `test_evolution.py` - isolated tests with mocks
-- [x] Wired EvolutionService into operations.py:
-  - Checks for better workflows before execution (logs suggestions)
-  - Calculates quality_score after execution
-  - Saves quality_score with WorkflowExecution
-  - New API endpoints: `/evolution/stats`, `/evolution/suggestions`, `/evolution/compare`
-
-### Agent Evolution (Make Agents Characters, Not Templates)
-
-- [ ] Agents must have:
-  - Personality drift (based on feedback)
-  - Specialization drift (based on tasks completed)
-  - Prompt evolution (successful prompts reinforced)
-
-- [ ] `evolve_agent_prompt(agent, feedback)`:
-  ```python
-  agent.prompt = evolve_prompt(agent.prompt, feedback)
-  ```
-
-- [ ] Store evolution events in `agent.evolution_history`
-- [ ] This is where Evolvian becomes psychologically compelling
-
-### Performance Ontology
-
-The core question: **How does Evolvian know it improved?**
-
-- [ ] Define quality metrics:
-  - Task completion rate
-  - User satisfaction score
-  - Cost efficiency (quality / cost)
-  - Speed (quality / latency)
-  - Assumption accuracy (assumptions that helped vs confused)
-
-- [ ] Store baselines per task_type
-- [ ] Compare new executions against baselines
-- [ ] Auto-flag regressions
-
----
-
-## DONE - Implemented & Working
-
-### Authentication System
-- [x] `POST /api/auth/signup` - User registration
-- [x] `POST /api/auth/login` - User login with JWT
-- [x] `POST /api/auth/logout` - Clear auth cookie
-- [x] `GET /api/auth/me` - Get current user
-- [x] `GET /api/auth/verify` - Verify token validity
-
-### Team Management
-- [x] `POST /api/teams` - Create team
-- [x] `GET /api/teams` - List user's teams
-- [x] `GET /api/teams/{team_id}` - Get team details
-- [x] `PUT /api/teams/{team_id}` - Update team
-- [x] `DELETE /api/teams/{team_id}` - Delete team
-
-### Agent Management (Basic CRUD)
-- [x] `POST /api/agents` - Create agent
-- [x] `GET /api/teams/{team_id}/agents` - List team agents
-- [x] `GET /api/agents/{agent_id}` - Get agent details
-- [x] `PUT /api/agents/{agent_id}` - Update agent
-- [x] `DELETE /api/agents/{agent_id}` - Delete agent
-
-### Chat System
-- [x] `POST /api/chat/completion` - Full chat completion
-- [x] `POST /api/chat/simple` - Simple single-turn chat
-- [x] `POST /api/chat/manager` - Team-context aware chat
-- [x] `GET /api/chat/history/{team_id}` - Get chat history
-
-### Evo AI COO Service
-- [x] `POST /api/evo/chat` - Chat with Evo
-- [x] `POST /api/evo/analyze` - Analyze task → subtasks
-- [x] `POST /api/evo/workflow` - Design workflow from analysis
-- [x] `POST /api/evo/quick-task` - Combined analyze + workflow
-
-### Operations/Tasks
-- [x] `POST /api/operations` - Create operation
-- [x] `GET /api/operations?team_id=X` - List team operations
-- [x] `GET /api/operations/{operation_id}` - Get operation details
-- [x] `PATCH /api/operations/{operation_id}` - Update operation
-- [x] `DELETE /api/operations/{operation_id}` - Delete operation
-- [x] `POST /api/operations/{id}/execute` - Start workflow execution (SSE)
-- [x] `GET /api/operations/{id}/status` - Get execution status
-- [x] `POST /api/operations/{id}/pause` - Pause execution
-- [x] `POST /api/operations/{id}/resume` - Resume execution
-- [x] `POST /api/operations/{id}/cancel` - Cancel execution
-
-### Knowledge Graph / Neural Vault
-- [x] `POST /api/knowledge/nodes` - Create knowledge node
-- [x] `GET /api/knowledge/nodes?team_id=X` - List nodes for team
-- [x] `GET /api/knowledge/nodes/{node_id}` - Get node details
-- [x] `PUT /api/knowledge/nodes/{node_id}` - Update node
-- [x] `DELETE /api/knowledge/nodes/{node_id}` - Delete node
-- [x] `POST /api/knowledge/edges` - Create edge between nodes
-- [x] `GET /api/knowledge/graph/{team_id}` - Get full graph for team
-- [x] `POST /api/knowledge/query` - RAG query (keyword search, embeddings TODO)
-
-### Tool Marketplace
-- [x] `GET /api/tools/catalog` - Get available tools catalog
-- [x] `GET /api/tools/installed?team_id=X` - List installed tools
-- [x] `POST /api/tools/install` - Install tool for team
-- [x] `DELETE /api/tools/{tool_id}/uninstall` - Uninstall tool
-- [x] `PUT /api/tools/{tool_id}/configure` - Configure tool settings
-- [x] `POST /api/tools/{tool_id}/assign` - Assign tool to agents
-
-### Agent Marketplace
-- [x] `GET /api/marketplace/agents` - Browse available agents
-- [x] `GET /api/marketplace/agents/{template_id}` - Get agent template
-- [x] `POST /api/marketplace/agents/hire` - Hire agent to team
-- [x] `GET /api/marketplace/categories` - Get agent categories
-
-### User Preferences
-- [x] `GET /api/user/preferences` - Get user preferences
-- [x] `PUT /api/user/preferences` - Update preferences
-- [x] `GET /api/user/objectives` - Get saved objectives
-- [x] `POST /api/user/objectives` - Save objective
-
-### Assumptions Inbox
-- [x] `GET /api/assumptions?team_id=X` - List pending assumptions
-- [x] `GET /api/assumptions/{id}` - Get assumption details
-- [x] `POST /api/assumptions` - Create assumption
-- [x] `POST /api/assumptions/{id}/answer` - User answers question
-- [x] `POST /api/assumptions/{id}/dismiss` - Dismiss assumption
-- [x] `GET /api/assumptions/pending/count` - Badge count for UI
-
-### Core Agent Layer
-- [x] `EvolvianAgent` - Wraps EvoAgentX Agent with metadata
-- [x] `AgentMetadata` - Role, specialty, level, XP, evolution tracking
-- [x] `AgentCapabilities` - Skills, tools, actions
-- [x] `AgentRegistry` - Template storage, instance management
-- [x] `AgentService` - High-level operations, DB sync
-- [x] Built-in agent templates (4 branding agents)
-
-### Workflow Layer
-- [x] `WorkflowNode` - Single step with status, inputs/outputs, dependencies
-- [x] `WorkflowGraph` - DAG of nodes with dependency tracking
-- [x] `EvolvianWorkflow` - Workflow execution wrapper
-- [x] `WorkflowBuilder` - Task → workflow decomposition via LLM
-- [x] `WorkflowExecutor` - Sequential execution with agent assignment
-- [x] `AsyncWorkflowExecutor` - Parallel execution of independent nodes
-- [x] `ExecutionResult` - Structured execution output
-- [x] `ExecutionRegistry` - Pause/resume/cancel state management
-
-### Execution Theatre
-- [x] Real-time SSE streaming from backend
-- [x] Live activity log with tool usage
-- [x] Node progress visualization
-- [x] Agent XP tracking
-- [x] LLM call status and output preview
-
-### Frontend Integration
-- [x] Agent service layer (types, API client, React hooks)
-- [x] Workflow service layer (types, API client, React hooks)
-- [x] All major components use backend APIs
-
----
-
-## DEFERRED - Phase E: Files & Storage (Priority: LOW)
-
-Defer until runtime kernel is complete.
-
-### File Vault
-- [ ] `POST /api/files/upload` - Upload file
-- [ ] `GET /api/files?team_id=X` - List team files
-- [ ] `GET /api/files/{file_id}` - Get file metadata
-- [ ] `GET /api/files/{file_id}/download` - Download file
-- [ ] `DELETE /api/files/{file_id}` - Delete file
-- [ ] `POST /api/files/{file_id}/index` - Index file for RAG
-
----
-
-## DEFERRED - Phase F: Marketplace Publishing (Priority: LOW)
-
-Creator economy features. Defer until core intelligence works.
-
-### Agent Publishing
-- [ ] `POST /api/marketplace/agents/publish` - Publish agent
-- [ ] `PUT /api/marketplace/agents/{id}` - Update listing
-- [ ] `DELETE /api/marketplace/agents/{id}` - Remove listing
-- [ ] `GET /api/marketplace/agents/{id}/analytics` - Usage stats
-
-### Tool Publishing
-- [ ] `POST /api/marketplace/tools/publish` - Publish tool
-- [ ] Similar CRUD for tool marketplace
-
-### Payment Integration
-- [ ] Stripe integration for payouts
-- [ ] Per-task pricing calculation
-- [ ] Creator commission tracking
-
----
-
-## Database Models Status
-
-### Implemented (in models.py)
-- [x] User - Core user accounts
-- [x] Team - User's workspaces
-- [x] Agent - AI agents in team
-- [x] Operation - Tasks/workflows
-- [x] KnowledgeNode - Knowledge graph entities
-- [x] InstalledTool - Team's installed tools
-- [x] ChatMessage - Conversation history
-- [x] Assumption - Clarifying questions from agents
-- [x] UserPreference - User settings
-- [x] UserObjective - Saved user objectives
-
-### Needed (Critical for Evolution)
-- [x] **WorkflowExecution** - Execution metrics and history (DONE - added to models.py)
-- [ ] **AgentFeedback** - User feedback on agents
-
-### Needed (Deferred)
-- [ ] File - File vault entries
-- [ ] MarketplaceAgent - Published agent listings
-- [ ] MarketplaceTool - Published tool listings
-
----
-
-## EvoAgentX Integration Strategy (Revised)
-
-**Goal**: Collapse EvoAgentX into Evolvian, not vice versa.
-
-Target architecture:
-```
-Evolvian Runtime Kernel
-  └── EvoAgentX Engine (embedded)
-        ├── WorkFlow (via EvolvianWorkFlowAdapter)
-        ├── Agent (via EvolvianAgent)
-        ├── Tools (via EvolvianTool adapter)
-        └── Memory (via EvolvianLongTermMemory wrapper)
+User describes task
+    ↓
+Evo analyzes → creates workflow DAG
+    ↓
+User confirms, starts execution
+    ↓
+WorkflowExecutor runs nodes sequentially
+    ↓
+Each node: agent prompt → LLM → output
+    ↓
+SSE streams progress to frontend
+    ↓
+WorkflowExecution saved for evolution
 ```
 
-If we don't control this, Evolvian becomes just a UI on top of EvoAgentX.
-
-### Integration Phases
-1. ✅ **Phase 1**: Use EvoAgentX LLM models only (done - OpenRouter)
-2. ✅ **Phase 2**: Build Runtime Kernel with ExecutionContext
-   - ✅ ExecutionContext class implemented
-   - ✅ WorkflowExecution model added
-   - ✅ Context wired into operations.py
-   - ✅ Previous agent outputs available for chaining
-   - ✅ WorkflowExecution saved after each operation
-   - ⏳ RuntimeKernel (full orchestration - optional refactor)
-3. ⏳ **Phase 3**: Replace executor with EvolvianWorkFlowAdapter
-4. ⏳ **Phase 4**: Map InstalledTool → EvoAgentX Tool
-5. ✅ **Phase 5**: Bridge Memory (short-term + long-term)
-   - ✅ MemoryBridge connects agents to knowledge graph
-   - ✅ Agents receive team policies, entities, decisions in prompts
-   - ✅ Auto-extract learnings from agent outputs
-6. ✅ **Phase 6**: Add evolution with WorkflowExecution data
-   - ✅ EvolutionService with Bayesian selection (core/runtime/evolution.py)
-   - ✅ WorkflowDNA, EvolutionSuggestion, WorkflowStats dataclasses
-   - ✅ Fitness calculation with multiple optimization goals
-   - ✅ Workflow mutation and comparison
-   - ✅ Wired into operations.py execution flow
-   - ✅ Evolution API endpoints exposed
-
----
-
-## Backend File Structure (Updated)
-
+### Target Flow (Phase 1 Complete)
 ```
-backend/
-├── main.py              # App entry, router registration, CORS
-├── database.py          # SQLAlchemy engine & session
-├── models.py            # All database models
-├── schemas.py           # Pydantic request/response schemas
-├── auth.py              # JWT authentication logic
-├── llm_service.py       # OpenRouter LLM integration
-├── evo_service.py       # Evo AI COO service
-├── TODO.md              # This file
-│
-├── core/
-│   ├── __init__.py
-│   │
-│   ├── runtime/         # The Execution Kernel
-│   │   ├── __init__.py  # ✅ Module exports
-│   │   ├── context.py   # ✅ ExecutionContext (DONE)
-│   │   ├── memory_bridge.py # ✅ MemoryBridge (DONE)
-│   │   ├── evolution.py # ✅ EvolutionService (DONE)
-│   │   ├── kernel.py    # ⏳ RuntimeKernel (TODO)
-│   │   ├── evaluator.py # ⏳ ExecutionEvaluator (TODO)
-│   │   └── workflow_adapter.py # ⏳ EvolvianWorkFlowAdapter (TODO)
-│   │
-│   ├── tools/           # NEW - Tool Integration
-│   │   ├── __init__.py
-│   │   └── adapter.py   # EvolvianTool adapter
-│   │
-│   ├── agents/          # Agent domain
-│   │   ├── __init__.py
-│   │   ├── base.py      # EvolvianAgent (update for context)
-│   │   ├── registry.py  # AgentRegistry, AGENT_REGISTRY
-│   │   └── service.py   # AgentService
-│   │
-│   └── workflows/       # Workflow domain
-│       ├── __init__.py
-│       ├── base.py      # WorkflowNode, WorkflowGraph
-│       ├── builder.py   # WorkflowBuilder
-│       ├── executor.py  # (Legacy - migrate to kernel)
-│       └── execution_state.py # Pause/resume state
-│
-└── routers/             # API routers (thin layer over kernel)
-    ├── __init__.py
-    ├── auth.py
-    ├── teams.py
-    ├── agents.py
-    ├── chat.py
-    ├── operations.py    # Delegates to RuntimeKernel
-    ├── evo.py
-    ├── knowledge.py
-    ├── tools.py
-    ├── marketplace.py
-    ├── assumptions.py
-    └── users.py
+User describes task
+    ↓
+Evo checks EvolutionService for proven workflows  ← NEW
+    ↓
+Evo designs workflow (using proven patterns)      ← IMPROVED
+    ↓
+WorkflowExecutor runs nodes
+    ↓
+Each node:
+  - Build prompt with context + tools            ← NEW
+  - Agent calls LLM
+  - Parse for tool calls                         ← NEW
+  - Execute tools, continue until done           ← NEW
+  - Store full state in ExecutionContext
+    ↓
+User rates output                                 ← NEW
+    ↓
+WorkflowExecution saved with real quality score
+    ↓
+EvolutionService learns, improves next run       ← IMPROVED
 ```
 
----
+### Key Files
 
-## Quick Start
+**Backend Core**:
+- `core/runtime/context.py` - ExecutionContext (done)
+- `core/runtime/evolution.py` - EvolutionService (done)
+- `core/runtime/memory_bridge.py` - MemoryBridge (done)
+- `core/tools/` - Tool system (TODO)
+- `routers/operations.py` - Execution endpoint
 
-```bash
-# Backend
-cd backend
-source venv/bin/activate
-uvicorn main:app --reload
-
-# Frontend
-cd web
-npm run dev
-```
-
----
-
-## Current Tech Stack
-
-- **Backend**: FastAPI + SQLAlchemy + SQLite
-- **LLM**: OpenRouter (DeepSeek, Llama 3.3, others)
-- **Frontend**: Next.js 16 + React 19 + Tailwind
-- **Agent Framework**: EvoAgentX (deep integration in progress)
+**Frontend Core**:
+- `web/src/components/operations/` - Operation UI
+- `web/src/components/workflow/` - Workflow visualization
+- `web/src/lib/api.ts` - API client
 
 ---
 
-*Last Updated: 2026-02-02 (EvolutionService wired into operations.py - full evolution loop complete)*
+## Progress Summary
+
+| Phase | Status | Completion |
+|-------|--------|------------|
+| Base Infrastructure | ✅ Done | 100% |
+| ExecutionContext | ✅ Done | 100% |
+| MemoryBridge | ✅ Done | 100% |
+| EvolutionService | ✅ Done | 100% |
+| **Tool System** | ✅ Core Done | 80% |
+| **Context-Aware Agents** | ⚠️ Partial | 30% |
+| **Team Reuse** | ⚠️ Partial | 20% |
+| **Quality Feedback** | ❌ Not Started | 0% |
+| Developer Portal | ❌ Deferred | 0% |
+| Marketplace | ❌ Deferred | 0% |
+
+**Overall Base Completion: ~60%**
+
+Tools now have executable implementations. Next step: wire tools into agent execution so agents can actually call them during workflow runs.
+
+---
+
+*Last Updated: 2025-02-05*
+
+---
+
+## Recent Changes
+
+**2025-02-05**: Implemented Tool System (Phase 1.1)
+- Created `core/tools/` module with EvolvianTool base class
+- Implemented ToolRegistry for managing available tools
+- Implemented ToolExecutor for running tools within ExecutionContext
+- Built 4 working tools: web_search, web_scrape, code_executor, file_reader
+- Tools output OpenAI-compatible function schemas for LLM integration
+- Code executor has security sandbox (blocked dangerous imports/operations)
