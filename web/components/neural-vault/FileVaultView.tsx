@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 interface VaultFile {
   id: number;
@@ -433,70 +434,40 @@ export default function FileVaultView({ teamId, initialFileId }: FileVaultViewPr
           )}
         </div>
 
-        {/* File Preview Panel */}
+        {/* Document Viewer Overlay */}
         {selectedFile && (
-          <div className="w-96 border-l border-slate-800 bg-slate-900/50 flex flex-col">
-            {/* Header */}
-            <div className="p-4 border-b border-slate-800">
-              <div className="flex items-start justify-between mb-3">
-                <div className="w-10 h-10">{getFileIcon(selectedFile)}</div>
-                <button
-                  onClick={() => setSelectedFile(null)}
-                  className="p-1 text-slate-500 hover:text-white transition-all"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <h2 className="text-sm font-medium text-white mb-1 break-words">{selectedFile.name}</h2>
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span>{selectedFile.file_type?.toUpperCase()}</span>
-                <span>·</span>
-                <span>{formatFileSize(selectedFile.size_bytes)}</span>
-              </div>
-            </div>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="relative w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col bg-[#0D1117] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
 
-            {/* Content Preview */}
-            <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
-              {selectedFile.content && (
-                <div className="mb-4">
-                  <h3 className="text-xs font-medium text-slate-400 mb-2">Content</h3>
-                  <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 max-h-96 overflow-y-auto scrollbar-hide">
-                    <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono">{selectedFile.content}</pre>
-                  </div>
-                </div>
-              )}
-
-              {/* Details */}
-              <div className="mb-4">
-                <h3 className="text-xs font-medium text-slate-400 mb-2">Details</h3>
-                <div className="space-y-2">
-                  <div>
-                    <div className="text-[10px] text-slate-600 mb-0.5">Created By</div>
-                    <div className="text-xs text-white">{selectedFile.created_by || 'System'}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-600 mb-0.5">Created</div>
-                    <div className="text-xs text-white">{new Date(selectedFile.created_at).toLocaleString()}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-600 mb-0.5">Path</div>
-                    <div className="text-xs text-slate-400 font-mono break-all">{selectedFile.folder_path}/{selectedFile.name}</div>
-                  </div>
-                  {selectedFile.operation_id && (
-                    <div>
-                      <div className="text-[10px] text-slate-600 mb-0.5">Operation ID</div>
-                      <div className="text-xs text-slate-400">#{selectedFile.operation_id}</div>
+              {/* Top bar */}
+              <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-800/80 bg-[#0D1117]">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 flex-shrink-0">{getFileIcon(selectedFile)}</div>
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-white truncate">{selectedFile.name}</h2>
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                      <span>{selectedFile.file_type?.toUpperCase()}</span>
+                      <span className="text-slate-700">|</span>
+                      <span>{formatFileSize(selectedFile.size_bytes)}</span>
+                      <span className="text-slate-700">|</span>
+                      <span>{new Date(selectedFile.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      {selectedFile.created_by && (
+                        <>
+                          <span className="text-slate-700">|</span>
+                          <span>{selectedFile.created_by}</span>
+                        </>
+                      )}
+                      {selectedFile.operation_id && (
+                        <>
+                          <span className="text-slate-700">|</span>
+                          <span>Op #{selectedFile.operation_id}</span>
+                        </>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
 
-              {/* Actions */}
-              <div>
-                <h3 className="text-xs font-medium text-slate-400 mb-2">Actions</h3>
-                <div className="space-y-2">
+                <div className="flex items-center gap-2 flex-shrink-0 ml-4">
                   <button
                     onClick={() => {
                       if (selectedFile.content) {
@@ -509,15 +480,109 @@ export default function FileVaultView({ teamId, initialFileId }: FileVaultViewPr
                         URL.revokeObjectURL(url);
                       }
                     }}
-                    className="w-full px-3 py-2 bg-[#6366F1] hover:bg-[#5558E3] text-white text-xs font-medium rounded-lg transition-all"
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-lg transition-all flex items-center gap-1.5"
                   >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
                     Download
                   </button>
-                  <button className="w-full px-3 py-2 bg-slate-800 hover:bg-red-900/50 text-slate-400 hover:text-red-400 text-xs font-medium rounded-lg transition-all">
-                    Delete
+                  <button
+                    onClick={() => setSelectedFile(null)}
+                    className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-all"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                   </button>
                 </div>
               </div>
+
+              {/* Document body */}
+              <div className="flex-1 overflow-y-auto scrollbar-hide">
+                {selectedFile.content ? (
+                  <article className="px-10 py-8">
+                    {selectedFile.file_type === 'md' ? (
+                      <div className="prose prose-invert prose-sm max-w-none">
+                        <ReactMarkdown
+                          components={{
+                            h1: ({ children }) => (
+                              <h1 className="text-2xl font-bold text-white mt-0 mb-4 pb-3 border-b border-slate-800">{children}</h1>
+                            ),
+                            h2: ({ children }) => (
+                              <h2 className="text-lg font-semibold text-white mt-8 mb-3 pb-2 border-b border-slate-800/60">{children}</h2>
+                            ),
+                            h3: ({ children }) => (
+                              <h3 className="text-base font-semibold text-slate-200 mt-6 mb-2">{children}</h3>
+                            ),
+                            h4: ({ children }) => (
+                              <h4 className="text-sm font-semibold text-slate-300 mt-4 mb-1.5">{children}</h4>
+                            ),
+                            p: ({ children }) => (
+                              <p className="text-sm text-slate-300 leading-relaxed mb-4 last:mb-0">{children}</p>
+                            ),
+                            ul: ({ children }) => (
+                              <ul className="list-disc pl-5 mb-4 space-y-1.5 text-sm text-slate-300">{children}</ul>
+                            ),
+                            ol: ({ children }) => (
+                              <ol className="list-decimal pl-5 mb-4 space-y-1.5 text-sm text-slate-300">{children}</ol>
+                            ),
+                            li: ({ children }) => (
+                              <li className="text-sm leading-relaxed text-slate-300">{children}</li>
+                            ),
+                            strong: ({ children }) => (
+                              <strong className="font-semibold text-white">{children}</strong>
+                            ),
+                            em: ({ children }) => (
+                              <em className="italic text-slate-400">{children}</em>
+                            ),
+                            blockquote: ({ children }) => (
+                              <blockquote className="border-l-2 border-indigo-500/50 pl-4 my-4 text-slate-400 italic">{children}</blockquote>
+                            ),
+                            code: ({ children, className }) => {
+                              const isInline = !className;
+                              return isInline ? (
+                                <code className="bg-slate-800 text-indigo-300 px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>
+                              ) : (
+                                <code className="block bg-slate-950 border border-slate-800 p-4 rounded-lg text-xs font-mono text-slate-300 overflow-x-auto my-4">{children}</code>
+                              );
+                            },
+                            a: ({ children, href }) => (
+                              <a href={href} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 decoration-indigo-400/30 hover:decoration-indigo-300/50 transition-colors">{children}</a>
+                            ),
+                            hr: () => (
+                              <hr className="my-6 border-slate-800" />
+                            ),
+                            table: ({ children }) => (
+                              <div className="overflow-x-auto my-4 rounded-lg border border-slate-800">
+                                <table className="w-full text-sm">{children}</table>
+                              </div>
+                            ),
+                            thead: ({ children }) => (
+                              <thead className="bg-slate-800/50">{children}</thead>
+                            ),
+                            th: ({ children }) => (
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-300 border-b border-slate-700">{children}</th>
+                            ),
+                            td: ({ children }) => (
+                              <td className="px-3 py-2 text-xs text-slate-400 border-b border-slate-800/50">{children}</td>
+                            ),
+                          }}
+                        >
+                          {selectedFile.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono leading-relaxed">{selectedFile.content}</pre>
+                    )}
+                  </article>
+                ) : (
+                  <div className="flex items-center justify-center h-64">
+                    <p className="text-sm text-slate-600">No content available</p>
+                  </div>
+                )}
+              </div>
+
             </div>
           </div>
         )}

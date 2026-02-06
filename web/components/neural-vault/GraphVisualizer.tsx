@@ -109,6 +109,7 @@ export default function GraphVisualizer({
           graph.edges.forEach((edge) => {
             const sourceIdx = newNodes.findIndex((n) => n.id === edge.source);
             const targetIdx = newNodes.findIndex((n) => n.id === edge.target);
+            if (sourceIdx === -1 || targetIdx === -1) return;
 
             if (sourceIdx === i) {
               const dx = newNodes[targetIdx].x - newNodes[i].x;

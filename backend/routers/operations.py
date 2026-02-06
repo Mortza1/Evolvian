@@ -11,19 +11,23 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any, Generator
 import json
 import time
+import re
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 from database import get_db
 from auth import get_current_user
 from schemas import OperationCreate, OperationUpdate, OperationResponse, ExecutionControlResponse
-from models import User, Team, Operation, Agent, VaultFile, WorkflowExecution
-from llm_service import llm_service
+from models import User, Team, Operation, Agent, VaultFile, WorkflowExecution, InstalledTool
+from llm_service import llm_service, ChatMessage as LLMChatMessage
 from core.agents.registry import AGENT_REGISTRY
 from core.workflows.execution_state import EXECUTION_REGISTRY, ExecutionSignal
 from core.runtime import (
     ExecutionContext, AgentState, ToolState, NodeMetrics, MemoryBridge,
     EvolutionService, WorkflowDNA
 )
+from core.tools.executor import ToolExecutor, parse_tool_calls_from_response
+from core.tools.registry import get_tool_registry
 
 router = APIRouter(prefix="/api/operations", tags=["Operations"])
 
@@ -261,6 +265,62 @@ def _infer_task_type(title: str, description: str) -> str:
         return "general"
 
 
+def _build_tools_prompt_section(agent_tools: list) -> str:
+    """
+    Build a prompt section describing available tools for the agent.
+
+    Args:
+        agent_tools: List of (EvolvianTool, config) tuples from registry.get_tools_for_agent()
+
+    Returns:
+        Prompt text describing tools, or "" if no tools available.
+    """
+    if not agent_tools:
+        return ""
+
+    lines = ["\n## Available Tools\nYou have access to the following tools. To use a tool, include a <tool_call> tag in your response:\n"]
+    for tool, _config in agent_tools:
+        param_parts = []
+        for p in tool.parameters:
+            req = " (required)" if p.required else " (optional)"
+            param_parts.append(f'    "{p.name}": "<{p.description}>{req}"')
+        params_json = ",\n".join(param_parts)
+        lines.append(
+            f"### {tool.name}\n"
+            f"{tool.description}\n"
+            f'<tool_call>\n{{"name": "{tool.name}", "arguments": {{\n{params_json}\n}}}}\n</tool_call>\n'
+        )
+
+    lines.append("You may call multiple tools. After each tool result, you can call more tools or provide your final answer.\n")
+    return "\n".join(lines)
+
+
+def _strip_tool_calls(text: str) -> str:
+    """Strip leftover <tool_call> XML tags from the agent's final response."""
+    return re.sub(r'<tool_call>.*?</tool_call>', '', text, flags=re.DOTALL).strip()
+
+
+def _update_tool_stats(db: Session, installed_tool_by_id: dict, tool_name: str, cost: float) -> None:
+    """Update InstalledTool.total_calls and total_cost in the DB."""
+    # Map internal tool names back to catalog IDs
+    name_to_id = {
+        "web_search": "tool-websearch",
+        "web_scrape": "tool-browser",
+        "code_executor": "tool-code-executor",
+        "file_manager": "tool-file-manager",
+    }
+    catalog_id = name_to_id.get(tool_name)
+    if catalog_id and catalog_id in installed_tool_by_id:
+        inst = installed_tool_by_id[catalog_id]
+        inst.total_calls = (inst.total_calls or 0) + 1
+        inst.total_cost = (inst.total_cost or 0.0) + cost
+        inst.last_used_at = datetime.now(timezone.utc)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+
+
 def generate_execution_events(
     operation: Operation,
     team: Team,
@@ -358,6 +418,32 @@ def generate_execution_events(
                         print(f"[execute]   - [{s.suggestion_type}] {s.description}")
     except Exception as e:
         print(f"[execute] Evolution check failed (non-fatal): {e}")
+
+    # ==================== TOOL INFRASTRUCTURE ====================
+    # Load installed tools for this team so agents can use real tools
+    tool_registry = get_tool_registry()
+    installed_tools_records = db.query(InstalledTool).filter(
+        InstalledTool.team_id == operation.team_id,
+        InstalledTool.status == "connected"
+    ).all()
+
+    installed_tools_data = []
+    installed_tool_by_id: Dict[str, InstalledTool] = {}
+    for inst in installed_tools_records:
+        tool_dict = {
+            "tool_id": inst.tool_id,
+            "configuration": inst.configuration or {},
+            "assigned_agent_ids": inst.assigned_agent_ids or [],
+        }
+        # Inject db/team_id into file_manager config so it can access vault
+        if inst.tool_id == "tool-file-manager":
+            tool_dict["configuration"]["db"] = db
+            tool_dict["configuration"]["team_id"] = operation.team_id
+        installed_tools_data.append(tool_dict)
+        installed_tool_by_id[inst.tool_id] = inst
+
+    tool_executor = ToolExecutor(context, installed_tools_data, tool_registry)
+    print(f"[execute] Loaded {len(installed_tools_data)} installed tools for team {operation.team_id}")
 
     # Register execution in the registry
     EXECUTION_REGISTRY.register(operation.id)
@@ -474,57 +560,16 @@ def generate_execution_events(
 
             time.sleep(0.5)
 
-            # ==================== TOOL USAGE ====================
-            # Tool usage simulation based on agent specialty
-            tools_used = []
-            if "brand" in agent_role.lower() or "strategist" in agent_role.lower():
-                tools_used = ["Market Research", "Competitive Analysis", "Brand Audit"]
-            elif "content" in agent_role.lower() or "creator" in agent_role.lower():
-                tools_used = ["Content Generator", "SEO Analyzer", "Tone Checker"]
-            elif "visual" in agent_role.lower() or "design" in agent_role.lower():
-                tools_used = ["Color Palette Generator", "Typography Selector", "Brand Kit Builder"]
-            elif "social" in agent_role.lower():
-                tools_used = ["Platform Analytics", "Trend Analyzer", "Engagement Optimizer"]
-            else:
-                tools_used = ["Research Tool", "Analysis Engine"]
+            # ==================== TOOL RESOLUTION ====================
+            # Get real tools available to this agent
+            agent_tools = tool_registry.get_tools_for_agent(agent_id, installed_tools_data)
+            tools_prompt_section = _build_tools_prompt_section(agent_tools)
 
-            for tool in tools_used:
-                yield emit("tool_use", {
-                    "node_id": node_id,
-                    "agent_name": agent_name,
-                    "tool": tool,
-                    "status": "running",
-                })
-                tool_start = time.time()
-                time.sleep(0.3)
-
-                # Track tool execution in context
-                tool_state = ToolState(
-                    tool_id=f"tool-{tool.lower().replace(' ', '-')}",
-                    tool_name=tool,
-                    input_data={"node_id": node_id, "task": node_name},
-                    output_data={"status": "simulated"},
-                    executed_at=datetime.now(timezone.utc).isoformat(),
-                    latency_ms=int((time.time() - tool_start) * 1000),
-                    cost=0.0,
-                    success=True
-                )
-                context.add_tool_execution(tool_state)
-
-                yield emit("tool_use", {
-                    "node_id": node_id,
-                    "agent_name": agent_name,
-                    "tool": tool,
-                    "status": "completed",
-                })
-
-            # Progress updates
-            for progress in [25, 50, 75]:
-                yield emit("progress", {
-                    "node_id": node_id,
-                    "progress": progress,
-                })
-                time.sleep(0.3)
+            # Progress update
+            yield emit("progress", {
+                "node_id": node_id,
+                "progress": 25,
+            })
 
             # ==================== LLM CALL ====================
             yield emit("llm_call", {
@@ -541,9 +586,6 @@ def generate_execution_events(
 
             try:
                 # ==================== BUILD CONTEXT-AWARE PROMPT ====================
-                # Use MemoryBridge to build rich context including:
-                # - Previous agent outputs
-                # - Team knowledge (policies, entities, decisions)
                 previous_outputs = context.get_all_agent_outputs()
 
                 # Build knowledge section from pre-loaded context
@@ -559,8 +601,13 @@ def generate_execution_events(
                         prev_preview = prev_output[:200] + "..." if len(prev_output) > 200 else prev_output
                         previous_work_section += f"### {prev_agent}\n{prev_preview}\n\n"
 
+                # Tool usage instruction (only when tools are available)
+                tool_instruction = ""
+                if agent_tools:
+                    tool_instruction = "\nIf a tool would help you complete this task, use it. Otherwise, respond directly."
+
                 # Combine into full prompt
-                task_prompt = f"""You are {agent_name}, a {agent_role}.
+                system_prompt = f"""You are {agent_name}, a {agent_role}.
 
 ## Task: {node_name}
 {node_desc}
@@ -569,18 +616,114 @@ def generate_execution_events(
 {operation.description}
 {previous_work_section}
 {knowledge_section}
+{tools_prompt_section}
 
 ## Instructions
 Provide a concise professional output for this task. Be specific and actionable.
-Consider any team policies and previous work when formulating your response.
+Consider any team policies and previous work when formulating your response.{tool_instruction}
 Keep your response under 200 words."""
 
-                print(f"[execute] Calling LLM for node {node_id} (prompt: {len(task_prompt)} chars)...")
-                llm_response = llm_service.simple_chat(task_prompt)
-                print(f"[execute] LLM response received: {len(llm_response)} chars")
+                # ==================== EXECUTION PATH ====================
+                if not agent_tools:
+                    # --- No tools: single LLM call (same as before) ---
+                    print(f"[execute] Calling LLM for node {node_id} (no tools, prompt: {len(system_prompt)} chars)...")
+                    llm_response = llm_service.simple_chat(system_prompt)
+                    tokens_used = len(system_prompt) // 4 + len(llm_response) // 4
+                    print(f"[execute] LLM response received: {len(llm_response)} chars")
+                else:
+                    # --- Tools available: multi-turn conversation loop ---
+                    print(f"[execute] Starting tool loop for node {node_id} ({len(agent_tools)} tools available)...")
+                    messages = [
+                        LLMChatMessage(role="system", content=system_prompt),
+                        LLMChatMessage(role="user", content=f"Complete this task: {node_name}\n\n{node_desc}"),
+                    ]
 
-                # Estimate tokens (rough: 4 chars per token)
-                tokens_used = len(task_prompt) // 4 + len(llm_response) // 4
+                    max_tool_turns = 5
+                    for turn in range(max_tool_turns):
+                        # Call LLM
+                        completion = llm_service.chat_completion(messages)
+                        assistant_text = completion.response
+                        usage = completion.usage or {}
+                        tokens_used += usage.get("total_tokens", len(assistant_text) // 4)
+
+                        # Parse tool calls from response
+                        tool_calls = parse_tool_calls_from_response(assistant_text)
+
+                        if not tool_calls:
+                            # No tool calls — this is the final response
+                            llm_response = assistant_text
+                            print(f"[execute] Turn {turn+1}: final response ({len(llm_response)} chars)")
+                            break
+
+                        # Execute each tool call
+                        print(f"[execute] Turn {turn+1}: {len(tool_calls)} tool call(s)")
+                        tool_results_text = ""
+                        for tc in tool_calls:
+                            tc_name = tc.get("name", "unknown")
+                            tc_args = tc.get("arguments", {})
+
+                            # Emit SSE: tool running
+                            yield emit("tool_use", {
+                                "node_id": node_id,
+                                "agent_name": agent_name,
+                                "tool": tc_name,
+                                "status": "running",
+                            })
+
+                            # Execute the tool (async -> sync bridge)
+                            try:
+                                loop = asyncio.new_event_loop()
+                                tool_result = loop.run_until_complete(
+                                    tool_executor.execute_function_call(tc, agent_name=agent_name)
+                                )
+                                loop.close()
+                            except RuntimeError:
+                                # Fallback: use thread pool if loop issues
+                                with ThreadPoolExecutor(max_workers=1) as pool:
+                                    future = pool.submit(
+                                        asyncio.run,
+                                        tool_executor.execute_function_call(tc, agent_name=agent_name)
+                                    )
+                                    tool_result = future.result(timeout=60)
+
+                            # Update InstalledTool stats
+                            _update_tool_stats(db, installed_tool_by_id, tc_name, tool_result.cost)
+
+                            # Emit SSE: tool completed or error
+                            if tool_result.success:
+                                yield emit("tool_use", {
+                                    "node_id": node_id,
+                                    "agent_name": agent_name,
+                                    "tool": tc_name,
+                                    "status": "completed",
+                                })
+                                result_str = tool_result.to_string()
+                                # Truncate very large results to keep context manageable
+                                if len(result_str) > 2000:
+                                    result_str = result_str[:2000] + "\n... (truncated)"
+                                tool_results_text += f"\n[Tool: {tc_name}] Result:\n{result_str}\n"
+                            else:
+                                yield emit("tool_use", {
+                                    "node_id": node_id,
+                                    "agent_name": agent_name,
+                                    "tool": tc_name,
+                                    "status": "error",
+                                    "error": tool_result.error,
+                                })
+                                tool_results_text += f"\n[Tool: {tc_name}] Error: {tool_result.error}\n"
+
+                        # Append assistant message + tool results, loop back
+                        messages.append(LLMChatMessage(role="assistant", content=assistant_text))
+                        messages.append(LLMChatMessage(role="user", content=f"Tool results:{tool_results_text}\n\nContinue with the task. If you have enough information, provide your final answer without any tool calls."))
+                    else:
+                        # Exhausted max turns — use last response
+                        llm_response = assistant_text
+                        print(f"[execute] Tool loop exhausted after {max_tool_turns} turns")
+
+                    # Strip leftover tool_call tags from final response
+                    llm_response = _strip_tool_calls(llm_response)
+
+                print(f"[execute] LLM final response: {len(llm_response)} chars, {tokens_used} tokens")
 
                 yield emit("llm_call", {
                     "node_id": node_id,
