@@ -105,15 +105,24 @@ Agents now receive full context and can use real tools during execution.
 
 ### 1.3 Team Reuse - Evolution Feedback Loop
 
-**Status**: ⚠️ PARTIAL (EvolutionService exists but not integrated into workflow design)
+**Status**: ✅ CORE COMPLETE
 
-**Current**: EvolutionService can select best workflows, but Evo doesn't use this when designing new workflows.
+Evo now queries EvolutionService when designing workflows and uses historical performance data to inform prompt design.
+
+**Implemented**:
+- `core/utils.py` — Shared `infer_task_type()` utility (extracted from operations.py)
+- `routers/evo.py` — `_build_evolution_context()` queries stats, best workflow, and suggestions
+- `evo_service.py` — `EVOLUTION_CONTEXT_PROMPT` template + `_format_evolution_context()` method
+- `analyze_task()` and `suggest_workflow()` accept `evolution_context` param, inject into LLM prompts
+- All 3 evo endpoints (`/analyze`, `/workflow`, `/quick-task`) wired to pass evolution context
+- `evolution_context` field added to `EvoTaskAnalysisResponse` and `EvoWorkflowResponse` schemas
+- Frontend: "Evolution-Informed Design" banner in TaskCreationFlow.tsx (shows past execution count + avg quality)
 
 **Tasks**:
-- [ ] When Evo designs a workflow, query EvolutionService for similar past executions
-- [ ] Suggest proven workflows/agents to Evo before it designs from scratch
+- [x] When Evo designs a workflow, query EvolutionService for similar past executions
+- [x] Suggest proven workflows/agents to Evo before it designs from scratch
+- [x] Show evolution stats in UI (evolution-informed banner with past execution count and avg quality)
 - [ ] "Use this team again" - save successful team composition for task type
-- [ ] Show evolution stats in UI (this workflow performed X% better than average)
 - [ ] Auto-select best workflow for recurring task types
 
 ### 1.4 Quality Feedback - Close the Loop (Hybrid Approach)
@@ -316,14 +325,14 @@ EvolutionService learns, improves next run       ← IMPROVED
 | EvolutionService | ✅ Done | 100% |
 | **Tool System** | ✅ Done | 90% |
 | **Context-Aware Agents** | ✅ Mostly Done | 85% |
-| **Team Reuse** | ⚠️ Partial | 20% |
+| **Team Reuse** | ✅ Core Done | 75% |
 | **Quality Feedback** | ✅ Done | 95% |
 | Developer Portal | ❌ Deferred | 0% |
 | Marketplace | ❌ Deferred | 0% |
 
-**Overall Base Completion: ~85%**
+**Overall Base Completion: ~90%**
 
-Tools are wired in, quality feedback loop is closed end-to-end. Agents use real tools, outputs are auto-evaluated by LLM-as-judge, users can rate outputs via the Execution Theatre UI, and evolution uses hybrid scoring. Next priority: Team Reuse (1.3) — make Evo use EvolutionService when designing workflows.
+Tools are wired in, quality feedback loop is closed end-to-end. Agents use real tools, outputs are auto-evaluated by LLM-as-judge, users can rate outputs via the Execution Theatre UI, and evolution uses hybrid scoring. Evo now queries past performance when designing workflows and shows evolution context in the UI. Remaining Phase 1 items: agent self-reflection (1.2), "use this team again" UX (1.3), and tracking consistently good agents/workflows (1.4).
 
 **Note**: New DB columns (`proxy_score`, `llm_judge_score`, `llm_judge_rationale`) need `ALTER TABLE` on existing SQLite DBs. Run the migration or recreate the DB. Server restart required after code changes.
 
@@ -334,6 +343,16 @@ Tools are wired in, quality feedback loop is closed end-to-end. Agents use real 
 ---
 
 ## Recent Changes
+
+**2026-02-06**: Implemented Team Reuse / Evolution Feedback Loop (Phase 1.3)
+- Created `core/utils.py` with shared `infer_task_type()` (extracted from operations.py)
+- Added `_build_evolution_context()` to evo router — queries EvolutionService for stats, best workflow, suggestions
+- Added `EVOLUTION_CONTEXT_PROMPT` template + `_format_evolution_context()` to EvoService
+- Updated `analyze_task()` and `suggest_workflow()` to accept and inject evolution context into LLM prompts
+- All 3 evo endpoints (`/analyze`, `/workflow`, `/quick-task`) now pass evolution data
+- Added `evolution_context` field to `EvoTaskAnalysisResponse` and `EvoWorkflowResponse` schemas
+- Frontend: "Evolution-Informed Design" indigo banner in TaskCreationFlow.tsx
+- Fully backward compatible — no evolution data = identical behavior to before
 
 **2026-02-06**: Implemented Quality Feedback System (Phase 1.4) — Full Stack
 - Created `QualityEvaluator` service (`core/runtime/quality_evaluator.py`)
