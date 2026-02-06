@@ -186,10 +186,10 @@ class EvolutionService:
             if len(execs) < min_executions:
                 continue
 
-            # Calculate averages
+            # Calculate averages using hybrid quality scores
             avg_cost = sum(e.cost or 0 for e in execs) / len(execs)
             avg_latency = sum(e.latency_ms or 0 for e in execs) / len(execs)
-            avg_quality = sum(e.quality_score or 0.5 for e in execs) / len(execs)
+            avg_quality = sum(self._get_effective_quality(e) for e in execs) / len(execs)
             success_count = sum(1 for e in execs if e.status == "completed")
             success_rate = success_count / len(execs)
 
@@ -302,9 +302,9 @@ class EvolutionService:
                 top_workflows=[]
             )
 
-        # Calculate aggregates
+        # Calculate aggregates (using hybrid quality scores)
         total_cost = sum(e.cost or 0 for e in executions)
-        total_quality = sum(e.quality_score or 0.5 for e in executions)
+        total_quality = sum(self._get_effective_quality(e) for e in executions)
         total_latency = sum(e.latency_ms or 0 for e in executions)
 
         avg_cost = total_cost / len(executions)
@@ -355,7 +355,7 @@ class EvolutionService:
 
         avg_cost = sum(e.cost or 0 for e in execs) / len(execs)
         avg_latency = sum(e.latency_ms or 0 for e in execs) / len(execs)
-        avg_quality = sum(e.quality_score or 0.5 for e in execs) / len(execs)
+        avg_quality = sum(self._get_effective_quality(e) for e in execs) / len(execs)
         success_count = sum(1 for e in execs if e.status == "completed")
         success_rate = success_count / len(execs)
 
@@ -585,7 +585,7 @@ class EvolutionService:
             return {
                 "execution_count": len(execs),
                 "avg_cost": sum(e.cost or 0 for e in execs) / len(execs),
-                "avg_quality": sum(e.quality_score or 0.5 for e in execs) / len(execs),
+                "avg_quality": sum(self._get_effective_quality(e) for e in execs) / len(execs),
                 "avg_latency_ms": sum(e.latency_ms or 0 for e in execs) / len(execs),
                 "agents": execs[0].agents_used or [],
             }
@@ -613,6 +613,31 @@ class EvolutionService:
 
     # ==================== QUALITY SCORING ====================
 
+    def _get_effective_quality(self, execution) -> float:
+        """
+        Get the best available quality score for a WorkflowExecution.
+
+        Uses hybrid formula:
+          With user_rating: 0.6 * user_norm + 0.3 * llm_judge + 0.1 * proxy
+          Without user:     0.7 * llm_judge + 0.3 * proxy
+          Fallback:         quality_score or 0.5
+        """
+        proxy = getattr(execution, 'proxy_score', None)
+        llm_judge = getattr(execution, 'llm_judge_score', None)
+        user_rating = getattr(execution, 'user_rating', None)
+
+        if user_rating is not None and llm_judge is not None:
+            user_norm = (user_rating - 1) / 4.0
+            p = proxy if proxy is not None else 0.5
+            return 0.6 * user_norm + 0.3 * llm_judge + 0.1 * p
+        elif llm_judge is not None:
+            p = proxy if proxy is not None else 0.5
+            return 0.7 * llm_judge + 0.3 * p
+        elif execution.quality_score is not None:
+            return execution.quality_score
+        else:
+            return 0.5
+
     def estimate_quality_score(
         self,
         output_length: int,
@@ -622,32 +647,18 @@ class EvolutionService:
         assumptions_answered: int = 0
     ) -> float:
         """
-        Estimate a quality score for an execution.
+        Estimate a proxy quality score for an execution (Layer 1).
 
-        This is a simple heuristic until we have user ratings.
-        In the future, this could use LLM-based evaluation.
+        This is a simple heuristic. For full quality scoring, use QualityEvaluator
+        which adds LLM-as-judge (Layer 2) and user ratings (Layer 3).
 
         Returns a score between 0.0 and 1.0.
         """
-        score = 0.5  # Base score
-
-        # Completion bonus
-        if nodes_total > 0:
-            completion_rate = nodes_completed / nodes_total
-            score += completion_rate * 0.2
-
-        # Output length bonus (reasonable output = good)
-        if output_length > 100:
-            score += 0.1
-        if output_length > 500:
-            score += 0.1
-
-        # Speed bonus (faster = better, up to a point)
-        if execution_time_ms < 30000:  # Under 30 seconds
-            score += 0.05
-
-        # Assumptions answered bonus (clarifications = better output)
-        if assumptions_answered > 0:
-            score += min(0.1, assumptions_answered * 0.02)
-
-        return min(1.0, max(0.0, score))
+        from .quality_evaluator import QualityEvaluator
+        return QualityEvaluator.compute_proxy_score(
+            output_length=output_length,
+            execution_time_ms=execution_time_ms,
+            nodes_completed=nodes_completed,
+            nodes_total=nodes_total,
+            assumptions_answered=assumptions_answered,
+        )

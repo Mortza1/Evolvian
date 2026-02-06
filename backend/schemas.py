@@ -224,6 +224,23 @@ class ExecutionControlResponse(BaseModel):
     checkpoint: Optional[Dict[str, Any]] = None  # Included when paused
 
 
+# ==================== QUALITY RATING SCHEMAS ====================
+
+class RatingRequest(BaseModel):
+    """Rate a completed operation's output"""
+    rating: int = Field(..., ge=1, le=5, description="1-5 star rating")
+    feedback: Optional[str] = Field(None, max_length=2000, description="Optional text feedback")
+
+
+class RatingResponse(BaseModel):
+    """Response after submitting a rating"""
+    success: bool
+    operation_id: int
+    rating: int
+    quality_score: float  # Updated hybrid score
+    message: str
+
+
 # ==================== VAULT FILE SCHEMAS ====================
 
 class VaultFileCreate(BaseModel):

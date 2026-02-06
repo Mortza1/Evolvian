@@ -289,6 +289,39 @@ class WorkflowService {
     }
   }
 
+  // ==================== Quality Rating ====================
+
+  /**
+   * Rate a completed operation's output (1-5 stars + optional feedback)
+   */
+  async rateOperation(operationId: number, rating: number, feedback?: string): Promise<{
+    success: boolean;
+    quality_score?: number;
+    message?: string;
+    error?: string;
+  }> {
+    try {
+      const result = await api.post<{
+        success: boolean;
+        operation_id: number;
+        rating: number;
+        quality_score: number;
+        message: string;
+      }>(`/api/operations/${operationId}/rate`, {
+        rating,
+        feedback: feedback || null,
+      });
+      return {
+        success: result.success,
+        quality_score: result.quality_score,
+        message: result.message,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to submit rating';
+      return { success: false, error: message };
+    }
+  }
+
   // ==================== Utilities ====================
 
   /**

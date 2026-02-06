@@ -35,6 +35,11 @@ from .evolution import (
     EvolutionSuggestion,
 )
 
+from .quality_evaluator import (
+    QualityEvaluator,
+    QualityResult,
+)
+
 __all__ = [
     # Context
     "ExecutionContext",
@@ -53,4 +58,7 @@ __all__ = [
     "WorkflowDNA",
     "WorkflowStats",
     "EvolutionSuggestion",
+    # Quality
+    "QualityEvaluator",
+    "QualityResult",
 ]

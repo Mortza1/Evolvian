@@ -17,14 +17,14 @@ from concurrent.futures import ThreadPoolExecutor
 
 from database import get_db
 from auth import get_current_user
-from schemas import OperationCreate, OperationUpdate, OperationResponse, ExecutionControlResponse
+from schemas import OperationCreate, OperationUpdate, OperationResponse, ExecutionControlResponse, RatingRequest, RatingResponse
 from models import User, Team, Operation, Agent, VaultFile, WorkflowExecution, InstalledTool
 from llm_service import llm_service, ChatMessage as LLMChatMessage
 from core.agents.registry import AGENT_REGISTRY
 from core.workflows.execution_state import EXECUTION_REGISTRY, ExecutionSignal
 from core.runtime import (
     ExecutionContext, AgentState, ToolState, NodeMetrics, MemoryBridge,
-    EvolutionService, WorkflowDNA
+    EvolutionService, WorkflowDNA, QualityEvaluator
 )
 from core.tools.executor import ToolExecutor, parse_tool_calls_from_response
 from core.tools.registry import get_tool_registry
@@ -826,18 +826,50 @@ Keep your response under 200 words."""
 
         # ==================== SAVE WORKFLOW EXECUTION (for evolution) ====================
         try:
-            # Calculate quality score using evolution service
+            # Layer 1: Proxy metrics score
             total_output_length = sum(
                 len(state.output or "") for state in context.agent_states.values()
             )
-            quality_score = evolution_service.estimate_quality_score(
+            tools_used_count = len(context.tool_states) if hasattr(context, 'tool_states') else 0
+            proxy_score = QualityEvaluator.compute_proxy_score(
                 output_length=total_output_length,
                 execution_time_ms=context.metrics.total_latency_ms,
                 nodes_completed=context.metrics.nodes_completed,
                 nodes_total=context.metrics.nodes_total,
+                tools_used=tools_used_count,
                 assumptions_answered=len([a for a in context.assumptions if a.get("answered")])
             )
-            print(f"[execute] Calculated quality score: {quality_score:.2f}")
+            print(f"[execute] Proxy score: {proxy_score:.3f}")
+
+            # Layer 2: LLM-as-judge evaluation
+            llm_judge_score = None
+            llm_judge_rationale = None
+            try:
+                quality_evaluator = QualityEvaluator(llm_service)
+                agent_outputs = {
+                    name: state.output for name, state in context.agent_states.items()
+                    if state.output
+                }
+                combined_output = "\n\n".join(
+                    f"## {name}\n{out}" for name, out in agent_outputs.items()
+                )
+                judge_result = quality_evaluator.evaluate_output(
+                    task_description=operation.description,
+                    output=combined_output,
+                    agent_outputs=agent_outputs,
+                )
+                llm_judge_score = judge_result.score
+                llm_judge_rationale = judge_result.rationale
+                print(f"[execute] LLM judge score: {llm_judge_score:.3f} - {llm_judge_rationale}")
+            except Exception as judge_err:
+                print(f"[execute] LLM judge failed (non-fatal): {judge_err}")
+
+            # Compute hybrid quality score
+            quality_score = QualityEvaluator.compute_hybrid_score(
+                proxy_score=proxy_score,
+                llm_judge_score=llm_judge_score,
+            )
+            print(f"[execute] Hybrid quality score: {quality_score:.3f}")
 
             workflow_execution = WorkflowExecution(
                 operation_id=operation.id,
@@ -853,6 +885,9 @@ Keep your response under 200 words."""
                 latency_ms=context.metrics.total_latency_ms,
                 tokens_used=context.metrics.total_tokens,
                 quality_score=quality_score,
+                proxy_score=proxy_score,
+                llm_judge_score=llm_judge_score,
+                llm_judge_rationale=llm_judge_rationale,
                 nodes_total=context.metrics.nodes_total,
                 nodes_completed=context.metrics.nodes_completed,
                 nodes_failed=context.metrics.nodes_failed,
@@ -869,7 +904,7 @@ Keep your response under 200 words."""
             )
             db.add(workflow_execution)
             db.commit()
-            print(f"[execute] Saved WorkflowExecution (ID: {workflow_execution.id}, quality: {quality_score:.2f})")
+            print(f"[execute] Saved WorkflowExecution (ID: {workflow_execution.id}, quality: {quality_score:.3f})")
         except Exception as e:
             print(f"[execute] Error saving WorkflowExecution: {e}")
             # Don't fail the operation if this fails
@@ -1434,3 +1469,75 @@ async def compare_workflows(
         "task_type": task_type,
         **comparison
     }
+
+
+# ==================== QUALITY RATING ENDPOINTS ====================
+
+@router.post("/{operation_id}/rate", response_model=RatingResponse)
+async def rate_operation(
+    operation_id: int,
+    rating_data: RatingRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Rate a completed operation's output (1-5 stars + optional feedback).
+
+    This is Layer 3 of the hybrid quality scoring system.
+    When a user rating is provided, it recalculates the hybrid quality_score
+    using: 0.6 * user_normalized + 0.3 * llm_judge + 0.1 * proxy
+    """
+    operation = db.query(Operation).filter(Operation.id == operation_id).first()
+
+    if not operation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Operation not found"
+        )
+
+    # Verify team belongs to user
+    team = db.query(Team).filter(
+        Team.id == operation.team_id,
+        Team.user_id == current_user.id
+    ).first()
+
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    # Find the WorkflowExecution for this operation
+    workflow_exec = db.query(WorkflowExecution).filter(
+        WorkflowExecution.operation_id == operation_id
+    ).order_by(WorkflowExecution.created_at.desc()).first()
+
+    if not workflow_exec:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No workflow execution found for this operation"
+        )
+
+    # Store the user rating
+    workflow_exec.user_rating = rating_data.rating
+    workflow_exec.user_feedback = rating_data.feedback
+
+    # Recalculate hybrid quality score with user rating
+    new_quality = QualityEvaluator.compute_hybrid_score(
+        proxy_score=workflow_exec.proxy_score or 0.5,
+        llm_judge_score=workflow_exec.llm_judge_score,
+        user_rating=rating_data.rating,
+    )
+    workflow_exec.quality_score = new_quality
+
+    db.commit()
+
+    print(f"[rate] Operation {operation_id} rated {rating_data.rating}/5 -> quality_score={new_quality:.3f}")
+
+    return RatingResponse(
+        success=True,
+        operation_id=operation_id,
+        rating=rating_data.rating,
+        quality_score=new_quality,
+        message=f"Rating saved. Quality score updated to {new_quality:.2f}",
+    )

@@ -336,7 +336,10 @@ class WorkflowExecution(Base):
     tokens_used = Column(Integer, default=0)
 
     # Quality Metrics
-    quality_score = Column(Float, nullable=True)  # 0.0 - 1.0, set by evaluator or user
+    quality_score = Column(Float, nullable=True)  # 0.0 - 1.0, hybrid combined score
+    proxy_score = Column(Float, nullable=True)  # 0.0 - 1.0, automated proxy metrics
+    llm_judge_score = Column(Float, nullable=True)  # 0.0 - 1.0, LLM-as-judge evaluation
+    llm_judge_rationale = Column(Text, nullable=True)  # Short explanation from LLM judge
     user_rating = Column(Integer, nullable=True)  # 1-5 stars from user
     user_feedback = Column(Text, nullable=True)  # Free-form feedback
 

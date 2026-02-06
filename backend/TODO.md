@@ -75,21 +75,23 @@ core/tools/
 - [x] Tool schemas in OpenAI function-calling format
 
 **Remaining Tasks**:
-- [ ] Wire ToolExecutor into agent execution loop (Phase 1.2)
+- [x] Wire ToolExecutor into agent execution loop (Phase 1.2) - DONE 2026-02-06
 - [ ] Add more tools: email_sender, slack_sender, image_generator, database_query
 
 ### 1.2 Agent Execution - Context-Aware Agents
 
-**Status**: ⚠️ PARTIAL
+**Status**: ✅ MOSTLY COMPLETE
 
-Agents receive context but don't fully use it. Need to:
+Agents now receive full context and can use real tools during execution.
 
 **Tasks**:
-- [ ] Agent prompt includes: previous node outputs, knowledge context, available tools
-- [ ] Agent can emit tool calls in structured format
-- [ ] Agent output parsed for: main_output, tool_calls, assumptions, learnings
-- [ ] Agent state properly recorded in `ExecutionContext.agent_states`
-- [ ] Agents can chain - Node B sees Node A's full output
+- [x] Agent prompt includes: previous node outputs, knowledge context, available tools
+- [x] Agent can emit tool calls in structured format (`<tool_call>` XML)
+- [x] Agent output parsed for tool_calls (parse_tool_calls_from_response)
+- [x] Agent state properly recorded in `ExecutionContext.agent_states`
+- [x] Agents can chain - Node B sees Node A's full output
+- [ ] Agent output parsed for: assumptions, learnings (structured extraction)
+- [ ] Agent self-reflection / quality self-check before returning output
 
 **Agent Execution Flow**:
 ```
@@ -114,18 +116,44 @@ Agents receive context but don't fully use it. Need to:
 - [ ] Show evolution stats in UI (this workflow performed X% better than average)
 - [ ] Auto-select best workflow for recurring task types
 
-### 1.4 Quality Feedback - Close the Loop
+### 1.4 Quality Feedback - Close the Loop (Hybrid Approach)
 
-**Status**: ❌ NOT STARTED
+**Status**: ✅ COMPLETE
 
-Evolution needs quality signals. Currently `quality_score` is estimated, not measured.
+Evolution needs quality signals. Using a **3-layer hybrid scoring system**:
+
+**Layer 1: Proxy Metrics (automated, immediate)** — `QualityEvaluator.compute_proxy_score()`
+- Output length, execution time, tool usage count, node completion rate
+- Cheap, always available, but weak signal
+
+**Layer 2: LLM-as-Judge (automated, post-execution)** — `QualityEvaluator.evaluate_output()`
+- Separate LLM call evaluates output quality on dimensions: relevance, completeness,
+  specificity, actionability, coherence
+- Returns 0-1 score + short rationale
+- Runs automatically after each execution — no user action needed
+
+**Layer 3: User Ratings (manual, optional, strongest signal)** — `POST /operations/{id}/rate`
+- 1-5 stars + text feedback via API
+- Stored in WorkflowExecution
+- When available, recalculates hybrid score
+
+**Combined fitness score** (`QualityEvaluator.compute_hybrid_score()`):
+```
+If user_rating exists:
+  quality = 0.6 * user_rating_normalized + 0.3 * llm_judge_score + 0.1 * proxy_score
+Else:
+  quality = 0.7 * llm_judge_score + 0.3 * proxy_score
+```
 
 **Tasks**:
-- [ ] Add "Rate this output" UI after operation completes (1-5 stars + feedback)
-- [ ] Store `user_rating` and `user_feedback` in WorkflowExecution
-- [ ] Use real ratings in EvolutionService fitness calculation
+- [x] Create `QualityEvaluator` service with `evaluate_output()` (LLM-as-judge) - DONE 2026-02-06
+- [x] Add `llm_judge_score`, `llm_judge_rationale`, `proxy_score` fields to WorkflowExecution - DONE 2026-02-06
+- [x] Call QualityEvaluator automatically after execution completes in operations.py - DONE 2026-02-06
+- [x] `user_rating` (1-5) and `user_feedback` (text) fields already exist in WorkflowExecution
+- [x] API endpoint: POST /operations/{id}/rate (accepts rating + feedback) - DONE 2026-02-06
+- [x] Update EvolutionService fitness calculation to use hybrid scoring - DONE 2026-02-06
+- [x] Frontend: "Rate this output" UI after operation completes (WarRoomLive.tsx) - DONE 2026-02-06
 - [ ] Track which agents/workflows get consistently good ratings
-- [ ] Surface "top performing" workflows in UI
 
 ---
 
@@ -210,7 +238,7 @@ Full creator economy. Only after Phases 1-2 are solid.
 - [ ] Database migrations (currently recreating DB)
 
 ### Can Wait
-- [ ] ExecutionEvaluator - automated quality scoring
+- [x] ExecutionEvaluator - automated quality scoring (done as QualityEvaluator)
 - [ ] File vault with RAG indexing
 - [ ] Embeddings for knowledge graph search
 - [ ] Horizontal scaling (multiple workers)
@@ -266,13 +294,15 @@ EvolutionService learns, improves next run       ← IMPROVED
 - `core/runtime/context.py` - ExecutionContext (done)
 - `core/runtime/evolution.py` - EvolutionService (done)
 - `core/runtime/memory_bridge.py` - MemoryBridge (done)
-- `core/tools/` - Tool system (TODO)
-- `routers/operations.py` - Execution endpoint
+- `core/tools/` - Tool system (done)
+- `core/runtime/quality_evaluator.py` - QualityEvaluator (done)
+- `routers/operations.py` - Execution endpoint + rating API
 
 **Frontend Core**:
-- `web/src/components/operations/` - Operation UI
-- `web/src/components/workflow/` - Workflow visualization
-- `web/src/lib/api.ts` - API client
+- `web/components/operations/WarRoomLive.tsx` - Execution theatre + rating UI
+- `web/lib/services/workflows/workflow.service.ts` - API client (incl. rateOperation)
+- `web/components/operations/` - Operation UI
+- `web/lib/api.ts` - Base API client
 
 ---
 
@@ -284,24 +314,50 @@ EvolutionService learns, improves next run       ← IMPROVED
 | ExecutionContext | ✅ Done | 100% |
 | MemoryBridge | ✅ Done | 100% |
 | EvolutionService | ✅ Done | 100% |
-| **Tool System** | ✅ Core Done | 80% |
-| **Context-Aware Agents** | ⚠️ Partial | 30% |
+| **Tool System** | ✅ Done | 90% |
+| **Context-Aware Agents** | ✅ Mostly Done | 85% |
 | **Team Reuse** | ⚠️ Partial | 20% |
-| **Quality Feedback** | ❌ Not Started | 0% |
+| **Quality Feedback** | ✅ Done | 95% |
 | Developer Portal | ❌ Deferred | 0% |
 | Marketplace | ❌ Deferred | 0% |
 
-**Overall Base Completion: ~60%**
+**Overall Base Completion: ~85%**
 
-Tools now have executable implementations. Next step: wire tools into agent execution so agents can actually call them during workflow runs.
+Tools are wired in, quality feedback loop is closed end-to-end. Agents use real tools, outputs are auto-evaluated by LLM-as-judge, users can rate outputs via the Execution Theatre UI, and evolution uses hybrid scoring. Next priority: Team Reuse (1.3) — make Evo use EvolutionService when designing workflows.
+
+**Note**: New DB columns (`proxy_score`, `llm_judge_score`, `llm_judge_rationale`) need `ALTER TABLE` on existing SQLite DBs. Run the migration or recreate the DB. Server restart required after code changes.
 
 ---
 
-*Last Updated: 2025-02-05*
+*Last Updated: 2026-02-06*
 
 ---
 
 ## Recent Changes
+
+**2026-02-06**: Implemented Quality Feedback System (Phase 1.4) — Full Stack
+- Created `QualityEvaluator` service (`core/runtime/quality_evaluator.py`)
+- 3-layer hybrid scoring: proxy metrics + LLM-as-judge + user ratings
+- LLM-as-judge evaluates on 5 dimensions (relevance, completeness, specificity, coherence, quality)
+- Auto-runs after every execution — no user action needed for evolution to work
+- Added `proxy_score`, `llm_judge_score`, `llm_judge_rationale` fields to WorkflowExecution
+- POST `/operations/{id}/rate` endpoint for user ratings (1-5 stars + feedback)
+- Updated EvolutionService to use hybrid quality scores throughout (selection, stats, comparison)
+- Frontend: Interactive star rating UI in WarRoomLive.tsx (Execution Theatre)
+  - 5-star hover + click rating, optional feedback textarea, submit to API
+  - Shows updated quality score % after submission
+- Added `rateOperation()` to `workflow.service.ts`
+- All 22 existing tests pass
+
+**2026-02-06**: Wired Real Tool Execution into Agent Loop (Phase 1.1 + 1.2)
+- Replaced 42 lines of simulated tool usage with real tool execution
+- Multi-turn tool loop (max 5 iterations) when tools are installed
+- Agent prompts now include tool descriptions with `<tool_call>` XML format
+- Falls back to `simple_chat()` when no tools installed (backward compatible)
+- `InstalledTool.total_calls` / `total_cost` updated after each tool use
+- `ToolExecutor._record_execution()` auto-creates ToolState in ExecutionContext
+- Added 22 tests covering helpers, DB loading, multi-turn loop, backward compat
+- Improved vault file viewer: full-screen overlay with rendered markdown
 
 **2025-02-05**: Implemented Tool System (Phase 1.1)
 - Created `core/tools/` module with EvolvianTool base class
