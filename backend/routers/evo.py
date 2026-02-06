@@ -4,6 +4,7 @@ Evo Router
 Handles Evo AI COO endpoints - chat, analyze, workflow design.
 """
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -16,8 +17,48 @@ from schemas import (
 )
 from models import User, Team, Agent, ChatMessage
 from evo_service import evo_service
+from core.utils import infer_task_type
+from core.runtime import EvolutionService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/evo", tags=["Evo AI"])
+
+
+def _build_evolution_context(db: Session, team_id: int, task: str) -> dict:
+    """
+    Query evolution data for a task and return structured context dict.
+    Returns {} when no past executions exist or on any error (non-fatal).
+    """
+    try:
+        task_type = infer_task_type(task, task)
+        evolution_service = EvolutionService(db=db, team_id=team_id)
+
+        stats = evolution_service.get_workflow_stats(task_type)
+        if stats.total_executions == 0:
+            return {}
+
+        best_workflow = evolution_service.select_best_workflow(task_type)
+        suggestions = evolution_service.suggest_improvements(task_type=task_type)
+
+        context = {
+            "task_type": task_type,
+            "total_past_executions": stats.total_executions,
+            "unique_workflows": stats.unique_workflows,
+            "avg_quality": stats.avg_quality,
+            "avg_cost": stats.avg_cost,
+        }
+
+        if best_workflow:
+            context["best_workflow"] = best_workflow.to_dict()
+
+        if suggestions:
+            context["suggestions"] = [s.to_dict() for s in suggestions[:3]]
+
+        return context
+    except Exception as e:
+        logger.warning(f"[evo] Evolution context query failed (non-fatal): {e}")
+        return {}
 
 
 @router.post("/chat", response_model=EvoChatResponse)
@@ -157,13 +198,17 @@ async def evo_analyze_task(
         for a in agents
     ]
 
+    # Query evolution data for this task type
+    evolution_context = _build_evolution_context(db, request.team_id, request.task)
+
     # Analyze the task
     result = evo_service.analyze_task(
         task=request.task,
         team_id=request.team_id,
         team_name=team.name,
         agents=agent_list,
-        context=request.context or ""
+        context=request.context or "",
+        evolution_context=evolution_context
     )
 
     if result.get("success"):
@@ -172,7 +217,8 @@ async def evo_analyze_task(
             analysis=result.get("analysis"),
             raw_response=result.get("raw_response"),
             team_id=request.team_id,
-            parse_error=result.get("parse_error", False)
+            parse_error=result.get("parse_error", False),
+            evolution_context=evolution_context or None
         )
     else:
         return EvoTaskAnalysisResponse(
@@ -224,6 +270,9 @@ async def evo_design_workflow(
         for a in agents
     ]
 
+    # Query evolution data for this task type
+    evolution_context = _build_evolution_context(db, request.team_id, request.task)
+
     # If no analysis provided, run analysis first
     analysis = request.analysis
     if not analysis:
@@ -231,7 +280,8 @@ async def evo_design_workflow(
             task=request.task,
             team_id=request.team_id,
             team_name=team.name,
-            agents=agent_list
+            agents=agent_list,
+            evolution_context=evolution_context
         )
         if analysis_result.get("success"):
             analysis = analysis_result.get("analysis", {})
@@ -245,7 +295,8 @@ async def evo_design_workflow(
     result = evo_service.suggest_workflow(
         task=request.task,
         analysis=analysis,
-        agents=agent_list
+        agents=agent_list,
+        evolution_context=evolution_context
     )
 
     if result.get("success"):
@@ -253,7 +304,8 @@ async def evo_design_workflow(
             success=True,
             workflow=result.get("workflow"),
             raw_response=result.get("raw_response"),
-            parse_error=result.get("parse_error", False)
+            parse_error=result.get("parse_error", False),
+            evolution_context=evolution_context or None
         )
     else:
         return EvoWorkflowResponse(
@@ -308,6 +360,11 @@ async def evo_quick_task(
     ]
     logger.info(f"[quick-task] Found {len(agent_list)} agents for team {team.name}")
 
+    # Query evolution data for this task type
+    evolution_context = _build_evolution_context(db, request.team_id, request.task)
+    if evolution_context:
+        logger.info(f"[quick-task] Evolution context: {evolution_context.get('total_past_executions', 0)} past executions")
+
     # Step 1: Analyze
     logger.info("[quick-task] Step 1: Analyzing task...")
     analysis_result = evo_service.analyze_task(
@@ -315,7 +372,8 @@ async def evo_quick_task(
         team_id=request.team_id,
         team_name=team.name,
         agents=agent_list,
-        context=request.context or ""
+        context=request.context or "",
+        evolution_context=evolution_context
     )
 
     if not analysis_result.get("success"):
@@ -333,7 +391,8 @@ async def evo_quick_task(
     workflow_result = evo_service.suggest_workflow(
         task=request.task,
         analysis=analysis,
-        agents=agent_list
+        agents=agent_list,
+        evolution_context=evolution_context
     )
     logger.info(f"[quick-task] Workflow complete. Success: {workflow_result.get('success')}")
 
@@ -348,7 +407,8 @@ async def evo_quick_task(
         "questions": analysis.get("questions", []),
         "assumptions": analysis.get("assumptions", []),
         "suggested_agents": analysis.get("suggested_agents", []),
-        "ready_to_execute": len(analysis.get("questions", [])) == 0
+        "ready_to_execute": len(analysis.get("questions", [])) == 0,
+        "evolution_context": evolution_context or None,
     }
 
     print(f"\n{'='*60}")

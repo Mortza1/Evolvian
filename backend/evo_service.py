@@ -109,6 +109,27 @@ Guidelines:
 
 Respond ONLY with valid JSON, no additional text or markdown."""
 
+EVOLUTION_CONTEXT_PROMPT = """
+## Historical Performance Data
+Your team has executed {total_executions} similar "{task_type}" tasks before. Use this data to inform your design — but adapt to the specific requirements of the current task.
+
+### Aggregate Metrics
+- Average quality score: {avg_quality:.0%}
+- Average cost: ${avg_cost:.2f}
+
+### Best Performing Workflow
+- Agents used: {best_agents}
+- Steps: {best_node_count}
+- Quality: {best_quality:.0%}
+- Success rate: {best_success_rate:.0%}
+- Fitness score: {best_fitness:.2f}
+
+### Improvement Suggestions
+{suggestions_text}
+
+Use these insights to design a better workflow. Replicate patterns from high-performing workflows while adapting to this specific task.
+"""
+
 
 # ============== Helper Functions ==============
 
@@ -201,6 +222,34 @@ class EvoService:
         if len(conv) > 20:
             self._conversations[team_id] = conv[-20:]
 
+    def _format_evolution_context(self, evolution_context: dict = None) -> str:
+        """Format evolution context dict into prompt text. Returns '' if no data."""
+        if not evolution_context or not evolution_context.get("total_past_executions"):
+            return ""
+
+        best = evolution_context.get("best_workflow", {})
+        suggestions = evolution_context.get("suggestions", [])
+
+        suggestions_text = ""
+        if suggestions:
+            for i, s in enumerate(suggestions[:3], 1):
+                suggestions_text += f"{i}. [{s.get('suggestion_type', 'tip')}] {s.get('description', '')} (confidence: {s.get('confidence', 0):.0%})\n"
+        else:
+            suggestions_text = "No specific suggestions — continue with proven patterns."
+
+        return EVOLUTION_CONTEXT_PROMPT.format(
+            total_executions=evolution_context.get("total_past_executions", 0),
+            task_type=evolution_context.get("task_type", "general"),
+            avg_quality=evolution_context.get("avg_quality", 0),
+            avg_cost=evolution_context.get("avg_cost", 0),
+            best_agents=", ".join(best.get("agents", [])) or "N/A",
+            best_node_count=best.get("node_count", 0),
+            best_quality=best.get("avg_quality_score", 0),
+            best_success_rate=best.get("success_rate", 0),
+            best_fitness=best.get("fitness_score", 0),
+            suggestions_text=suggestions_text,
+        )
+
     def chat(
         self,
         message: str,
@@ -277,7 +326,8 @@ Guide the user to accomplish their goals using the available agents, or suggest 
         team_id: int,
         team_name: str = "Team",
         agents: List[Dict] = None,
-        context: str = ""
+        context: str = "",
+        evolution_context: dict = None
     ) -> Dict[str, Any]:
         """
         Analyze a task and break it down into subtasks.
@@ -310,11 +360,16 @@ Guide the user to accomplish their goals using the available agents, or suggest 
             ])
         print(f"[EVO] Agent info: {agent_info}")
 
+        evolution_section = self._format_evolution_context(evolution_context)
+        effective_context = context or "No previous context"
+        if evolution_section:
+            effective_context += "\n" + evolution_section
+
         prompt = TASK_ANALYSIS_PROMPT.format(
             task=task,
             team_name=team_name,
             agents=agent_info,
-            context=context or "No previous context"
+            context=effective_context
         )
         print(f"[EVO] Prompt length: {len(prompt)}")
 
@@ -366,7 +421,8 @@ Guide the user to accomplish their goals using the available agents, or suggest 
         self,
         task: str,
         analysis: Dict[str, Any],
-        agents: List[Dict] = None
+        agents: List[Dict] = None,
+        evolution_context: dict = None
     ) -> Dict[str, Any]:
         """
         Design a workflow based on task analysis.
@@ -398,6 +454,11 @@ Guide the user to accomplish their goals using the available agents, or suggest 
             analysis=json.dumps(analysis, indent=2),
             agents=agent_info
         )
+
+        evolution_section = self._format_evolution_context(evolution_context)
+        if evolution_section:
+            prompt = prompt + "\n" + evolution_section
+
         print(f"[EVO] Prompt length: {len(prompt)}")
 
         try:

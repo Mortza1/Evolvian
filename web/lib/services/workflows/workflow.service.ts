@@ -108,6 +108,7 @@ class WorkflowService {
     analysis?: TaskAnalysis;
     workflow?: WorkflowDesign;
     graph?: WorkflowGraph;
+    evolution_context?: Record<string, unknown> | null;
     error?: string;
   }> {
     try {
@@ -115,6 +116,7 @@ class WorkflowService {
         success: boolean;
         analysis: TaskAnalysis;
         workflow: WorkflowDesign;
+        evolution_context?: Record<string, unknown> | null;
       }>('/api/evo/quick-task', {
         task,
         team_id: teamId,
@@ -131,6 +133,7 @@ class WorkflowService {
         analysis: result.analysis,
         workflow: result.workflow,
         graph,
+        evolution_context: result.evolution_context || null,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to process task';

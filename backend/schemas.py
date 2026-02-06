@@ -343,6 +343,7 @@ class EvoTaskAnalysisResponse(BaseModel):
     team_id: int
     error: Optional[str] = None
     parse_error: Optional[bool] = False
+    evolution_context: Optional[Dict[str, Any]] = None
 
 
 class EvoWorkflowStep(BaseModel):
@@ -379,6 +380,7 @@ class EvoWorkflowResponse(BaseModel):
     raw_response: Optional[str] = None
     error: Optional[str] = None
     parse_error: Optional[bool] = False
+    evolution_context: Optional[Dict[str, Any]] = None
 
 
 # ==================== KNOWLEDGE GRAPH SCHEMAS ====================

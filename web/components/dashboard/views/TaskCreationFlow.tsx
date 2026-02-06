@@ -28,6 +28,7 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
   const [analysis, setAnalysis] = useState<TaskAnalysis | null>(null);
   const [workflowDesign, setWorkflowDesign] = useState<WorkflowDesign | null>(null);
   const [workflowNodes, setWorkflowNodes] = useState<WorkflowNodeWithAgent[]>([]);
+  const [evolutionContext, setEvolutionContext] = useState<Record<string, unknown> | null>(null);
 
   // Load hired agents from API
   const { agents: hiredAgents, isLoading: loadingAgents } = useTeamAgents({
@@ -95,6 +96,7 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
       }
 
       setAnalysis(result.analysis || null);
+      setEvolutionContext(result.evolution_context || null);
 
       // Handle case where workflow is missing or has no steps
       if (!result.workflow || !result.workflow.steps || result.workflow.steps.length === 0) {
@@ -191,6 +193,7 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
       setWorkflowDesign(null);
       setWorkflowNodes([]);
       setAnalysis(null);
+      setEvolutionContext(null);
       setError(null);
 
       // Close modal
@@ -312,6 +315,18 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, userObjectiv
                 <div className="flex items-start justify-between mb-6">
                   <div>
                     <div className="text-xs text-slate-500 font-medium mb-2">WORKFLOW GENERATED</div>
+                    {evolutionContext && (evolutionContext.total_past_executions as number) > 0 && (
+                      <div className="mb-3 px-3 py-2 bg-indigo-950/40 border border-indigo-800/50 rounded flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></div>
+                        <div>
+                          <span className="text-xs font-medium text-indigo-300">Evolution-Informed Design</span>
+                          <span className="text-xs text-indigo-400/70 ml-2">
+                            Based on {evolutionContext.total_past_executions as number} past {evolutionContext.task_type as string} executions
+                            {evolutionContext.avg_quality ? ` (avg quality: ${Math.round((evolutionContext.avg_quality as number) * 100)}%)` : ''}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                     <h2 className="text-xl font-semibold text-white mb-2">{workflowDesign.title}</h2>
                     <p className="text-slate-400 text-sm max-w-xl">
                       {taskDescription}

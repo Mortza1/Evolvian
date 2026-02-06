@@ -28,6 +28,7 @@ from core.runtime import (
 )
 from core.tools.executor import ToolExecutor, parse_tool_calls_from_response
 from core.tools.registry import get_tool_registry
+from core.utils import infer_task_type as _infer_task_type
 
 router = APIRouter(prefix="/api/operations", tags=["Operations"])
 
@@ -240,29 +241,7 @@ async def delete_operation(
 
 # ==================== EXECUTION ENDPOINTS ====================
 
-def _infer_task_type(title: str, description: str) -> str:
-    """
-    Infer the task type from title and description.
-    Used for grouping similar workflows for evolution comparison.
-    """
-    text = (title + " " + description).lower()
-
-    if any(w in text for w in ["brand", "branding", "logo", "identity"]):
-        return "branding"
-    elif any(w in text for w in ["content", "blog", "article", "write", "writing"]):
-        return "content_creation"
-    elif any(w in text for w in ["social", "instagram", "twitter", "linkedin", "post"]):
-        return "social_media"
-    elif any(w in text for w in ["market", "research", "analysis", "analyze"]):
-        return "research"
-    elif any(w in text for w in ["design", "visual", "graphic", "ui", "ux"]):
-        return "design"
-    elif any(w in text for w in ["campaign", "marketing", "ads", "advertising"]):
-        return "marketing"
-    elif any(w in text for w in ["strategy", "plan", "planning"]):
-        return "strategy"
-    else:
-        return "general"
+# _infer_task_type is now imported from core.utils
 
 
 def _build_tools_prompt_section(agent_tools: list) -> str:
