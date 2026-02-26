@@ -220,3 +220,62 @@ def parse_tool_calls_from_response(response: str) -> List[dict]:
                 tool_calls.append({"name": name, "arguments": args})
 
     return tool_calls
+
+
+def parse_assumptions_from_response(response: str) -> List[dict]:
+    """
+    Parse assumption blocks from an agent's response.
+
+    When an agent is uncertain about something critical, it can output:
+    <assumption>
+    <question>What is the target audience for this content?</question>
+    <context>The task mentions "high-end clients" but doesn't specify industry</context>
+    <options>CEOs/Board|CTOs/Technical|Product Teams</options>
+    <priority>high</priority>
+    </assumption>
+
+    Returns:
+        List of dicts with "question", "context", "options", "priority" keys
+        Empty list if no assumptions found
+    """
+    import re
+
+    assumptions = []
+
+    # Find all <assumption> blocks
+    assumption_pattern = r'<assumption>(.*?)</assumption>'
+    for match in re.finditer(assumption_pattern, response, re.DOTALL | re.IGNORECASE):
+        assumption_block = match.group(1)
+
+        # Parse individual fields
+        question_match = re.search(r'<question>(.*?)</question>', assumption_block, re.DOTALL | re.IGNORECASE)
+        context_match = re.search(r'<context>(.*?)</context>', assumption_block, re.DOTALL | re.IGNORECASE)
+        options_match = re.search(r'<options>(.*?)</options>', assumption_block, re.DOTALL | re.IGNORECASE)
+        priority_match = re.search(r'<priority>(.*?)</priority>', assumption_block, re.DOTALL | re.IGNORECASE)
+
+        # Question is required
+        if not question_match:
+            continue
+
+        question = question_match.group(1).strip()
+        context = context_match.group(1).strip() if context_match else ""
+        options_str = options_match.group(1).strip() if options_match else ""
+        priority = priority_match.group(1).strip().lower() if priority_match else "normal"
+
+        # Parse options (pipe-separated)
+        options = []
+        if options_str:
+            options = [opt.strip() for opt in options_str.split('|') if opt.strip()]
+
+        # Validate priority
+        if priority not in ["low", "normal", "high", "critical"]:
+            priority = "normal"
+
+        assumptions.append({
+            "question": question,
+            "context": context,
+            "options": options,
+            "priority": priority,
+        })
+
+    return assumptions

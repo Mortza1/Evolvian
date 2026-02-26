@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getTeams, getActiveTeam, Team } from '@/lib/teams';
 import { getHiredAgents } from '@/lib/agents';
+import { useTeamEvents } from '@/lib/contexts/TeamEventsContext';
 
 interface SidebarProps {
   activeView: string;
@@ -15,15 +16,22 @@ interface SidebarProps {
 export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHome, onLogout }: SidebarProps) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [isTeamDropdownOpen, setIsTeamDropdownOpen] = useState(false);
+  const [baseUnreadCount, setBaseUnreadCount] = useState(0);
   const [inboxBadgeCount, setInboxBadgeCount] = useState(0);
+  const [activeOperationsCount, setActiveOperationsCount] = useState(0);
+
+  // Team events for real-time updates (Phase 6.2)
+  // Only use when currentTeam exists (TeamEventsProvider wraps it)
+  const teamEvents = currentTeam ? useTeamEvents() : null;
 
   useEffect(() => {
     setTeams(getTeams());
   }, []);
 
+  // Calculate base unread count (Evo/Aria messages)
   useEffect(() => {
     if (!currentTeam) {
-      setInboxBadgeCount(0);
+      setBaseUnreadCount(0);
       return;
     }
 
@@ -52,13 +60,10 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
           unreadCount++;
         }
 
-        // Other specialists currently have no pending questions by default
-        // But we could extend this if needed
-
-        setInboxBadgeCount(unreadCount);
+        setBaseUnreadCount(unreadCount);
       } catch (error) {
         console.error('Failed to calculate unread count:', error);
-        setInboxBadgeCount(0);
+        setBaseUnreadCount(0);
       }
     };
 
@@ -71,11 +76,24 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
     return () => clearInterval(interval);
   }, [currentTeam]);
 
+  // Update badge counts from team state (Phase 6.2)
+  useEffect(() => {
+    if (teamEvents?.teamState) {
+      setActiveOperationsCount(teamEvents.teamState.active_operations);
+
+      // Total inbox badge = base unread + pending assumptions
+      setInboxBadgeCount(baseUnreadCount + teamEvents.teamState.pending_assumptions);
+    } else {
+      // No team state yet, just show base unread
+      setInboxBadgeCount(baseUnreadCount);
+    }
+  }, [teamEvents, baseUnreadCount]);
+
   const navItems = [
     { id: 'hq', label: 'HQ', icon: HQIcon },
-    { id: 'inbox', label: 'Inbox', icon: InboxIcon, badge: inboxBadgeCount }, // Badge count for unread messages
+    { id: 'inbox', label: 'Inbox', icon: InboxIcon, badge: inboxBadgeCount }, // Badge count for unread messages and pending assumptions
     { id: 'board', label: 'Board', icon: BoardIcon },
-    { id: 'office', label: 'Office', icon: UsersIcon },
+    { id: 'office', label: 'Office', icon: UsersIcon, badge: activeOperationsCount }, // Badge count for active operations
     { id: 'store', label: 'Store', icon: StoreIcon },
     { id: 'vault', label: 'Vault', icon: VaultIcon },
     { id: 'workshop', label: 'Workshop', icon: WorkshopIcon },

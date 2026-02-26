@@ -111,6 +111,49 @@ export interface TaskAnalysis {
   confidence: number;
 }
 
+// ==================== Execution Chat Types ====================
+
+export interface ExecutionMessage {
+  id: number;
+  operation_id: number;
+  sender_type: 'user' | 'manager' | 'agent' | 'system';
+  sender_name: string;
+  sender_id?: number;
+  content: string;
+  message_type: 'chat' | 'assumption' | 'answer' | 'status' | 'review' | 'instruction' | 'question';
+  context?: Record<string, unknown>;
+  created_at: string;
+}
+
+// ==================== Pending Assumptions (Phase 5.1) ====================
+
+export interface PendingAssumption {
+  operation_id: number;
+  operation_title: string;
+  operation_description: string;
+  node_id: string;
+  node_name: string;
+  agent_name: string;
+  agent_photo?: string;
+  question: string;
+  context?: string;
+  options: string[];
+  priority: string;
+  assumption_index: number;
+  waiting_since: string;
+  waiting_duration_seconds: number;
+}
+
+// ==================== Agent Messages (Phase 5.2) ====================
+
+export interface AgentMessageGroup {
+  operation_id: number;
+  operation_title: string;
+  operation_status: string;
+  messages: ExecutionMessage[];
+  created_at: string;
+}
+
 // ==================== UI Helper Types ====================
 
 export interface WorkflowNodeUI extends WorkflowNode {

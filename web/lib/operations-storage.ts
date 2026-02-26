@@ -1,6 +1,6 @@
 import type { Agent } from './agents';
 import type { OperationConfig } from '@/components/operations/OperationDashboard';
-import type { OperationResult } from '@/components/operations/LiveOffice';
+import type { OperationResult } from '@/components/operations/demo-types';
 
 export interface AgentContribution {
   agent: Agent;

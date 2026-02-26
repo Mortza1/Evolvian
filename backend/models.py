@@ -103,7 +103,7 @@ class Operation(Base):
     # Operation Details
     title = Column(String)
     description = Column(Text)
-    status = Column(String, default="pending")  # pending, in_progress, completed, failed, paused, cancelled
+    status = Column(String, default="pending")  # pending, in_progress, completed, failed, paused, cancelled, waiting_for_input
 
     # Workflow
     workflow_config = Column(JSON, default={})  # Stores the workflow DAG
@@ -133,6 +133,7 @@ class Operation(Base):
 
     # Relationships
     team = relationship("Team")
+    execution_messages = relationship("ExecutionMessage", back_populates="operation", cascade="all, delete-orphan")
 
 
 class KnowledgeNode(Base):
@@ -217,6 +218,47 @@ class ChatMessage(Base):
     # Relationships
     team = relationship("Team")
     user = relationship("User")
+
+
+class ExecutionMessage(Base):
+    """
+    Execution-scoped messages for real-time collaboration during workflow execution.
+
+    Unlike ChatMessage (which is team-scoped), ExecutionMessage is operation-scoped
+    and includes messages from agents, manager (Evo), and users. These messages form
+    the complete transcript of an execution and enable:
+    - User sending instructions to agents mid-execution
+    - Agents asking questions (assumptions)
+    - Manager reviews and questions
+    - Status updates and system messages
+
+    Message lifecycle:
+    1. Created when sender posts a message (user, agent, or manager)
+    2. Marked as 'consumed' when read by the target recipient
+    3. Forms permanent execution transcript after completion
+    """
+    __tablename__ = "execution_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    operation_id = Column(Integer, ForeignKey("operations.id"), index=True)
+
+    # Sender Information
+    sender_type = Column(String, nullable=False)  # "user", "manager", "agent", "system"
+    sender_name = Column(String, nullable=False)  # Display name (e.g., "CEO", "Evo", agent.name, "System")
+    sender_id = Column(Integer, nullable=True)  # FK to user.id or agent.id (null for system messages)
+
+    # Message Content
+    content = Column(Text, nullable=False)
+    message_type = Column(String, default="chat")  # "chat", "assumption", "answer", "status", "review"
+
+    # Metadata
+    context = Column(JSON, default={})  # {node_id, assumption_index, target_agent, consumed, etc.}
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Relationships
+    operation = relationship("Operation", back_populates="execution_messages")
 
 
 class Assumption(Base):

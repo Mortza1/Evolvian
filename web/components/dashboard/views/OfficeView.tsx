@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useTeamAgents, type HiredAgent } from '@/lib/services/agents';
 import {
   useEvolutionStats,
+  useAgentPerformance,
   formatFitness,
   getFitnessColor,
   formatTaskType,
@@ -35,6 +36,11 @@ export default function OfficeView({ teamId }: OfficeViewProps) {
     isLoading: evolutionLoading,
     refresh: refreshEvolution,
   } = useEvolutionStats({ teamId: parseInt(teamId, 10), autoFetch: true });
+
+  // Fetch agent performance data
+  const {
+    performanceByName,
+  } = useAgentPerformance({ teamId: parseInt(teamId, 10), autoFetch: true });
 
   const handleEvolveAgent = (agent: HiredAgent) => {
     setEvolvingAgent(agent);
@@ -369,7 +375,15 @@ export default function OfficeView({ teamId }: OfficeViewProps) {
             </div>
 
             {/* Info */}
-            <h3 className="text-lg font-bold text-white mb-1">{employee.name}</h3>
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-lg font-bold text-white">{employee.name}</h3>
+              {performanceByName[employee.name]?.total_executions > 0 &&
+               performanceByName[employee.name] === Object.values(performanceByName).sort((a, b) => b.avg_quality - a.avg_quality)[0] && (
+                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-500/20 text-amber-400 rounded border border-amber-500/30">
+                  MVP
+                </span>
+              )}
+            </div>
             <p className="text-sm text-slate-400 mb-4">{employee.role}</p>
 
             {/* XP Bar */}
@@ -387,16 +401,49 @@ export default function OfficeView({ teamId }: OfficeViewProps) {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="bg-[#020617]/30 rounded-lg p-2 text-center">
-                <div className="text-lg font-bold text-white">{employee.tasks_completed}</div>
-                <div className="text-xs text-slate-400">Tasks</div>
-              </div>
-              <div className="bg-[#020617]/30 rounded-lg p-2 text-center">
-                <div className="text-lg font-bold text-[#6366F1]">{employee.skills?.length || 0}</div>
-                <div className="text-xs text-slate-400">Skills</div>
-              </div>
-            </div>
+            {(() => {
+              const perf = performanceByName[employee.name];
+              return (
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="bg-[#020617]/30 rounded-lg p-2 text-center">
+                    <div className="text-lg font-bold text-white">{employee.tasks_completed}</div>
+                    <div className="text-xs text-slate-400">Tasks</div>
+                  </div>
+                  <div className="bg-[#020617]/30 rounded-lg p-2 text-center">
+                    <div className={`text-lg font-bold ${employee.rating >= 4.0 ? 'text-green-400' : employee.rating >= 3.0 ? 'text-yellow-400' : 'text-orange-400'}`}>
+                      {employee.rating.toFixed(1)}
+                    </div>
+                    <div className="text-xs text-slate-400">Rating</div>
+                  </div>
+                  <div className="bg-[#020617]/30 rounded-lg p-2 text-center">
+                    <div className="text-lg font-bold text-[#6366F1]">{Math.round(employee.accuracy)}%</div>
+                    <div className="text-xs text-slate-400">Success</div>
+                  </div>
+                  {perf && perf.total_executions > 0 && (
+                    <div className="col-span-3 flex items-center justify-center gap-2 text-xs mt-1">
+                      <span className={
+                        perf.trend === 'improving' ? 'text-green-400' :
+                        perf.trend === 'declining' ? 'text-red-400' :
+                        'text-slate-500'
+                      }>
+                        {perf.trend === 'improving' ? '↑' : perf.trend === 'declining' ? '↓' : '→'}
+                        {' '}{perf.trend}
+                      </span>
+                      <span className="text-slate-600">·</span>
+                      <span className="text-slate-500">
+                        {Math.round(perf.avg_quality * 100)}% avg quality
+                      </span>
+                      {perf.rated_count > 0 && (
+                        <>
+                          <span className="text-slate-600">·</span>
+                          <span className="text-[#FDE047]">{perf.user_avg_rating.toFixed(1)} user avg</span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Actions */}
             <div className="flex gap-2">

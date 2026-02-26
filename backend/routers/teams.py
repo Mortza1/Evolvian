@@ -5,14 +5,18 @@ Handles team CRUD operations.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List
+from typing import List, Generator
+import json
+import time
 
 from database import get_db
 from auth import get_current_user
 from schemas import TeamCreate, TeamUpdate, TeamResponse
 from models import User, Team, Agent, Operation
+from core.workflows.execution_state import EXECUTION_REGISTRY
 
 router = APIRouter(prefix="/api/teams", tags=["Teams"])
 
@@ -205,3 +209,150 @@ async def delete_team(
     db.commit()
 
     return None
+
+
+def generate_team_events(team_id: int) -> Generator[str, None, None]:
+    """
+    Generate team-level SSE events for cross-view real-time updates.
+
+    Monitors all operations for this team and emits events when:
+    - Assumptions are raised (for badge count updates)
+    - Assumptions are answered (for badge count updates)
+    - Operations start/complete (for operation count updates)
+    """
+    from database import SessionLocal
+
+    print(f"[team_events] Starting SSE stream for team {team_id}")
+
+    # Create a dedicated database session for this stream
+    db = SessionLocal()
+
+    try:
+        # Keep track of last known state to detect changes
+        last_operation_ids = set()
+        last_pending_count = 0
+        last_active_count = 0
+
+        # Initial state broadcast
+        operations = db.query(Operation).filter(Operation.team_id == team_id).all()
+        operation_ids = {op.id for op in operations}
+        last_operation_ids = operation_ids
+
+        # Count pending assumptions
+        pending_count = sum(
+            1 for op in operations
+            if op.status == "waiting_for_input" and EXECUTION_REGISTRY.is_waiting_for_input(op.id)
+        )
+        last_pending_count = pending_count
+
+        # Count active operations
+        active_count = sum(1 for op in operations if op.status == "in_progress")
+        last_active_count = active_count
+
+        # Send initial state
+        yield f"event: team_state\ndata: {json.dumps({'pending_assumptions': pending_count, 'active_operations': active_count, 'total_operations': len(operations)})}\n\n"
+
+        while True:
+            time.sleep(1)  # Poll every second
+
+            # Refresh operations from DB
+            db.expire_all()  # Clear SQLAlchemy cache to get fresh data
+            operations = db.query(Operation).filter(Operation.team_id == team_id).all()
+            current_operation_ids = {op.id for op in operations}
+
+            # Check for new operations
+            new_operations = current_operation_ids - last_operation_ids
+            if new_operations:
+                yield f"event: operation_created\ndata: {json.dumps({'count': len(new_operations)})}\n\n"
+                last_operation_ids = current_operation_ids
+
+            # Check for completed operations
+            completed_operations = last_operation_ids - current_operation_ids
+            if completed_operations:
+                last_operation_ids = current_operation_ids
+
+            # Count pending assumptions
+            pending_count = 0
+            pending_operations = []
+            for op in operations:
+                if op.status == "waiting_for_input" and EXECUTION_REGISTRY.is_waiting_for_input(op.id):
+                    pending_count += 1
+                    state = EXECUTION_REGISTRY.get_state(op.id)
+                    if state and state.pending_assumption:
+                        pending_operations.append({
+                            "operation_id": op.id,
+                            "operation_title": op.title,
+                            "question": state.pending_assumption.get("question"),
+                        })
+
+            # Emit assumption_raised event if count increased
+            if pending_count > last_pending_count:
+                new_assumptions = pending_operations[-(pending_count - last_pending_count):]
+                for assumption_data in new_assumptions:
+                    yield f"event: assumption_raised\ndata: {json.dumps(assumption_data)}\n\n"
+                last_pending_count = pending_count
+
+            # Emit assumption_answered event if count decreased
+            elif pending_count < last_pending_count:
+                yield f"event: assumption_answered\ndata: {json.dumps({'pending_count': pending_count})}\n\n"
+                last_pending_count = pending_count
+
+            # Count active operations
+            active_count = sum(1 for op in operations if op.status == "in_progress")
+
+            # Emit active_operations_changed if count changed
+            if active_count != last_active_count:
+                yield f"event: active_operations_changed\ndata: {json.dumps({'active_count': active_count})}\n\n"
+                last_active_count = active_count
+
+    except GeneratorExit:
+        print(f"[team_events] SSE stream closed for team {team_id}")
+    except Exception as e:
+        print(f"[team_events] Error in SSE stream: {e}")
+        import traceback
+        traceback.print_exc()
+        yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+    finally:
+        # Always close the database session when stream ends
+        db.close()
+        print(f"[team_events] Database session closed for team {team_id}")
+
+
+@router.get("/{team_id}/events")
+async def stream_team_events(
+    team_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Stream team-level events for real-time cross-view updates.
+
+    Events emitted:
+    - team_state: Initial state (pending_assumptions, active_operations, total_operations)
+    - assumption_raised: New assumption needs user input
+    - assumption_answered: Assumption was answered
+    - operation_created: New operation was created
+    - active_operations_changed: Number of active operations changed
+    """
+    # Verify team belongs to user (using injected db session for auth check only)
+    team = db.query(Team).filter(
+        Team.id == team_id,
+        Team.user_id == current_user.id
+    ).first()
+
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    # Generator creates its own session for the long-running stream
+    return StreamingResponse(
+        generate_team_events(team_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )

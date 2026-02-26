@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -30,10 +30,46 @@ class TokenData(BaseModel):
 
 # Team Schemas
 class TeamSettings(BaseModel):
+    """
+    Team-level configuration settings.
+
+    Budget & Approval Settings:
+    - dailyBudgetCap: Maximum spend per day (optional)
+    - requireApprovalThreshold: Cost threshold requiring manual approval (optional)
+
+    Time & Scheduling:
+    - timezone: Team's timezone for scheduling (default: America/New_York)
+    - workingHours: Operating hours configuration (optional)
+
+    Manager Autonomy Settings (Phase 2.2):
+    - manager_review_frequency: How often Evo reviews agent outputs
+        * "every_node": Review after every single node (maximum oversight)
+        * "every_2_nodes": Review after every 2nd node (default, balanced)
+        * "first_and_last": Review only first and last nodes (minimal oversight)
+        * "never": Disable manager reviews (agents work autonomously)
+
+    - auto_assumption_threshold: Confidence threshold for raising assumptions (0.0-1.0)
+        * Lower values = more cautious, more questions asked
+        * Higher values = more autonomous, fewer interruptions
+        * Default: 0.7 (raise assumptions when confidence < 70%)
+        * Note: This setting is for future use when agents report confidence scores
+    """
     dailyBudgetCap: Optional[float] = None
     requireApprovalThreshold: Optional[float] = None
     timezone: str = "America/New_York"
     workingHours: Optional[Dict[str, str]] = None
+
+    # Manager Autonomy Settings (Phase 2.2)
+    manager_review_frequency: Literal["every_node", "every_2_nodes", "first_and_last", "never"] = Field(
+        default="every_2_nodes",
+        description="How often Evo reviews agent outputs"
+    )
+    auto_assumption_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Confidence threshold below which agents should raise assumptions (0.0-1.0). Lower = more cautious."
+    )
 
 class TeamStats(BaseModel):
     totalAgents: int = 0
@@ -222,6 +258,20 @@ class ExecutionControlResponse(BaseModel):
     message: str
     operation_id: int
     checkpoint: Optional[Dict[str, Any]] = None  # Included when paused
+
+
+class AssumptionResponseRequest(BaseModel):
+    """Request to answer a pending assumption during execution"""
+    answer: str = Field(..., min_length=1, max_length=2000, description="User's answer to the assumption question")
+    assumption_index: Optional[int] = Field(None, ge=0, description="Index of the assumption being answered (optional)")
+
+
+class AssumptionResponseResponse(BaseModel):
+    """Response after submitting an assumption answer"""
+    success: bool
+    message: str
+    operation_id: int
+    resumed: bool  # Whether execution resumed or is still waiting
 
 
 # ==================== QUALITY RATING SCHEMAS ====================
@@ -641,3 +691,90 @@ class UserObjectiveResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ==================== EXECUTION MESSAGE SCHEMAS (Phase 3.1) ====================
+
+class ExecutionMessageCreate(BaseModel):
+    """Create a new message in an execution transcript"""
+    content: str = Field(..., min_length=1, max_length=5000, description="Message content")
+    target: Optional[str] = Field(None, description="Target recipient: 'current_agent', 'manager', or specific agent name")
+    message_type: Literal["chat", "instruction", "question"] = Field(
+        default="chat",
+        description="Type of message being sent"
+    )
+
+
+class ExecutionMessageResponse(BaseModel):
+    """Response for an execution message"""
+    id: int
+    operation_id: int
+    sender_type: str  # "user", "manager", "agent", "system"
+    sender_name: str
+    sender_id: Optional[int]
+    content: str
+    message_type: str  # "chat", "assumption", "answer", "status", "review"
+    context: Dict[str, Any]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ExecutionMessagesResponse(BaseModel):
+    """Response containing list of execution messages"""
+    messages: List[ExecutionMessageResponse]
+    total_count: int
+    operation_id: int
+
+
+# ==================== Pending Assumptions (Phase 5.1) ====================
+
+class PendingAssumptionResponse(BaseModel):
+    """Response for a pending assumption in inbox"""
+    operation_id: int
+    operation_title: str
+    operation_description: str
+    node_id: str
+    node_name: str
+    agent_name: str
+    agent_photo: Optional[str]
+    question: str
+    context: Optional[str]
+    options: List[str]
+    priority: str
+    assumption_index: int
+    waiting_since: datetime  # When the assumption was raised
+    waiting_duration_seconds: int  # How long it's been waiting
+
+    class Config:
+        from_attributes = True
+
+
+class PendingAssumptionsResponse(BaseModel):
+    """Response containing list of pending assumptions"""
+    pending_assumptions: List[PendingAssumptionResponse]
+    total_count: int
+    team_id: int
+
+
+# ==================== Agent Messages (Phase 5.2) ====================
+
+class AgentMessageGroup(BaseModel):
+    """Group of messages for a single operation"""
+    operation_id: int
+    operation_title: str
+    operation_status: str
+    messages: List[ExecutionMessageResponse]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AgentMessagesResponse(BaseModel):
+    """Response containing agent messages grouped by operation"""
+    message_groups: List[AgentMessageGroup]
+    total_messages: int
+    agent_name: str
+    team_id: int

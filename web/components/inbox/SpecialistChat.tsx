@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import { chatAPI } from '@/lib/api';
+import { workflowService } from '@/lib/services/workflows/workflow.service';
+import type { AgentMessageGroup } from '@/lib/services/workflows/types';
 
 interface Message {
   id: number;
@@ -31,94 +34,79 @@ interface SpecialistChatProps {
 }
 
 export default function SpecialistChat({ specialist, teamId }: SpecialistChatProps) {
+  const router = useRouter();
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
+  const [messageGroups, setMessageGroups] = useState<AgentMessageGroup[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  // Load specialist-specific conversation
+  // Load specialist-specific execution messages (Phase 5.2)
   useEffect(() => {
     const loadMessages = async () => {
+      setLoadingMessages(true);
       try {
-        // Try to load real messages from API first
-        const history = await chatAPI.getChatHistory(teamId, 100);
+        // Load real execution messages from backend
+        const result = await workflowService.getAgentMessages(parseInt(teamId, 10), specialist.name);
 
-        // Filter messages related to this specialist (from_agent matches)
-        const specialistMessages = history.messages
-          .filter((msg: any) => {
-            // Include all user messages and assistant messages from this agent
-            return msg.role === 'user' || msg.context?.from_agent === specialist.name;
-          })
-          .map((msg: any) => ({
-            id: msg.id,
-            from: msg.role === 'user' ? 'user' : 'specialist',
-            text: msg.content,
-            timestamp: new Date(msg.created_at),
-            isDecisionRequest: msg.context?.type === 'decision_request',
-            decisionContext: msg.context,
-          }));
+        if (result.success && result.messageGroups && result.messageGroups.length > 0) {
+          // Store message groups for rendering
+          setMessageGroups(result.messageGroups);
 
-        if (specialistMessages.length > 0) {
-          setMessages(specialistMessages as Message[]);
-          return;
+          // Flatten all messages for the message list
+          const allMessages: Message[] = [];
+          result.messageGroups.forEach((group) => {
+            group.messages.forEach((msg) => {
+              allMessages.push({
+                id: msg.id,
+                from: msg.sender_type === 'user' ? 'user' : 'specialist',
+                text: msg.content,
+                timestamp: new Date(msg.created_at),
+                isDecisionRequest: msg.message_type === 'assumption',
+                decisionContext: {
+                  operation_id: group.operation_id,
+                  operation_title: group.operation_title,
+                  ...msg.context,
+                },
+              });
+            });
+          });
+
+          setMessages(allMessages);
+        } else {
+          // No execution messages yet - show welcome message
+          setMessages([
+            {
+              id: 1,
+              from: 'specialist',
+              text: `Hello! I'm ${specialist.name}, your **${specialist.role}**.\n\nI specialize in ${specialist.specialty}.\n\nI haven't been assigned to any tasks yet, but once you include me in a workflow, all my questions, outputs, and our conversations will appear here!\n\nReady when you are! 🚀`,
+              timestamp: new Date(),
+            },
+          ]);
+          setMessageGroups([]);
         }
       } catch (error) {
-        console.error('Failed to load chat history:', error);
+        console.error('Failed to load agent messages:', error);
+        // Show error message
+        setMessages([
+          {
+            id: 1,
+            from: 'specialist',
+            text: `Hello! I'm ${specialist.name}. I'm having trouble loading our conversation history. Please try refreshing the page.`,
+            timestamp: new Date(),
+          },
+        ]);
+      } finally {
+        setLoadingMessages(false);
       }
-
-      // Fallback to demo messages if no API messages
-      const welcomeMessages: Record<string, Message[]> = {
-      'agent-031': [ // Aurora - Color Oracle
-        {
-          id: 1,
-          from: 'specialist',
-          text: `Hello! I'm Aurora, your **Color Oracle**. I specialize in color psychology and brand palette strategy.\n\nBefore we dive into design work, I need to understand your vision. Let me ask you some expert questions to ensure we create a palette that truly represents your brand positioning.\n\n**Question 1 of 3:**\n\nLooking at the AI consulting landscape, most established firms use "Trust Blue" palettes (think IBM, Microsoft). This signals stability and enterprise credibility.\n\nFor your brand, do you want to:\n\n- **Blend In** (Safety play - Blues/Grays for corporate trust)\n- **Stand Out** (Disruptor play - Deep Purples/Neon accents for innovation)\n- **Premium Neutral** (Luxury play - Blacks/Golds for exclusivity)\n\nWhich positioning feels right for your consulting firm?`,
-          timestamp: new Date(Date.now() - 1000 * 60 * 5),
-        },
-      ],
-      'agent-032': [ // Atlas - Brand Strategist
-        {
-          id: 1,
-          from: 'specialist',
-          text: `Hi, I'm Atlas - your **Brand Strategist**. I help position your brand in the market with surgical precision.\n\nI've reviewed your brief for "AI Consulting for high-end clients." Before we proceed, I need to clarify your target audience.\n\n**Critical Question:**\n\nWhen you say "high-end AI consulting," who is sitting across the table from you?\n\n- **CEOs/Board Members** (Focus: Business impact, ROI, competitive advantage)\n- **CTOs/Technical Leaders** (Focus: Architecture, implementation, technical depth)\n- **Product Teams** (Focus: Features, user experience, rapid iteration)\n\nThis fundamentally changes our messaging strategy. Who is your **primary** decision-maker?`,
-          timestamp: new Date(Date.now() - 1000 * 60 * 15),
-        },
-      ],
-      'agent-033': [ // Lexis - Naming Expert
-        {
-          id: 1,
-          from: 'specialist',
-          text: `Greetings! I'm Lexis, your **Naming Expert**. I specialize in linguistic strategy and brand nomenclature.\n\nA name isn't just a label - it's a positioning statement. I need to understand your linguistic preferences before proposing options.\n\n**Naming Direction Question:**\n\nGiven your neural networks background, we have several strategic directions:\n\n### Technical/Literal:\n- **Synapse Consulting**\n- **Neural Nexus**\n- **Gradient Partners**\n\n*Pros:* Instant credibility with technical audiences\n*Cons:* May feel too "engineer-focused" for C-suite\n\n### Visionary/Abstract:\n- **Horizon AI**\n- **Apex Strategy**\n- **Meridian Group**\n\n*Pros:* Broader appeal, room to grow beyond AI\n*Cons:* Less specific differentiation\n\nWhich direction resonates with your vision?`,
-          timestamp: new Date(Date.now() - 1000 * 60 * 30),
-        },
-      ],
-      'agent-034': [ // Sage - Content Architect
-        {
-          id: 1,
-          from: 'specialist',
-          text: `Hello! I'm Sage, your **Content Architect**. I specialize in brand messaging and content architecture.\n\nI'm currently **blocked** and waiting for foundational decisions from Aurora (Color) and Atlas (Strategy) before I can proceed with messaging frameworks.\n\n**Why I'm Waiting:**\n\nContent architecture requires:\n- Brand positioning clarity (from Atlas)\n- Visual identity direction (from Aurora)\n- Target audience definition (from Atlas)\n\nOnce they've completed their discovery questions, I'll have specific questions about tone, voice, and messaging style for you.\n\n*Standing by...*`,
-          timestamp: new Date(Date.now() - 1000 * 60 * 60),
-        },
-      ],
-    };
-
-      const specialistMessages = welcomeMessages[specialist.id] || [
-        {
-          id: 1,
-          from: 'specialist',
-          text: `Hello! I'm ${specialist.name}, your **${specialist.role}**.\n\nI specialize in ${specialist.specialty}. I have some questions to help us deliver perfect results. Ready when you are!`,
-          timestamp: new Date(),
-        },
-      ];
-
-      setMessages(specialistMessages as Message[]);
     };
 
     // Initial load
     loadMessages();
 
-    // Poll for new messages every 2 seconds
-    const interval = setInterval(loadMessages, 2000);
+    // Refresh every 10 seconds
+    const interval = setInterval(loadMessages, 10000);
 
     return () => clearInterval(interval);
   }, [specialist, teamId]);
@@ -205,9 +193,92 @@ export default function SpecialistChat({ specialist, teamId }: SpecialistChatPro
         </div>
       </div>
 
-      {/* Messages */}
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-[#020617] min-h-0">
-        {messages.map((msg) => (
+      {/* Messages - Grouped by Operation (Phase 5.2) */}
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#020617] min-h-0">
+        {messageGroups.length > 0 ? (
+          // Show messages grouped by operation
+          messageGroups.map((group) => (
+            <div key={group.operation_id} className="space-y-4">
+              {/* Operation Header */}
+              <button
+                onClick={() => router.push(`/dashboard/${teamId}/operations/${group.operation_id}`)}
+                className="w-full flex items-center gap-3 p-3 bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/50 hover:border-slate-600 rounded-lg transition-all group"
+              >
+                <svg className="w-5 h-5 text-slate-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                <div className="flex-1 text-left min-w-0">
+                  <div className="text-sm font-semibold text-white truncate group-hover:text-blue-400 transition-colors">
+                    {group.operation_title}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className={`text-xs px-2 py-0.5 rounded ${
+                      group.operation_status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                      group.operation_status === 'in_progress' ? 'bg-blue-500/20 text-blue-400' :
+                      group.operation_status === 'waiting_for_input' ? 'bg-amber-500/20 text-amber-400' :
+                      'bg-slate-700 text-slate-400'
+                    }`}>
+                      {group.operation_status}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {group.messages.length} {group.messages.length === 1 ? 'message' : 'messages'}
+                    </span>
+                  </div>
+                </div>
+                <svg className="w-4 h-4 text-slate-600 group-hover:text-blue-400 flex-shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+
+              {/* Messages for this operation */}
+              {group.messages.map((execMsg) => {
+                const msg: Message = {
+                  id: execMsg.id,
+                  from: execMsg.sender_type === 'user' ? 'user' : 'specialist',
+                  text: execMsg.content,
+                  timestamp: new Date(execMsg.created_at),
+                  isDecisionRequest: execMsg.message_type === 'assumption',
+                };
+
+                return (
+                  <div
+                    key={execMsg.id}
+                    className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[85%] rounded-lg p-4 ${
+                        msg.from === 'user'
+                          ? 'bg-[#6366F1] text-white'
+                          : 'glass-light text-slate-200'
+                      }`}
+                    >
+                      <div className="text-sm prose prose-invert prose-sm max-w-none">
+                        <ReactMarkdown
+                          components={{
+                            p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                            strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                            code: ({ children, className }) => {
+                              const isInline = !className;
+                              return isInline ? (
+                                <code className="bg-slate-700/50 px-1 py-0.5 rounded text-xs">{children}</code>
+                              ) : (
+                                <code className="block bg-slate-700/50 p-2 rounded text-xs overflow-x-auto">{children}</code>
+                              );
+                            },
+                          }}
+                        >
+                          {msg.text}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))
+        ) : (
+          // Show flat messages if no groups (welcome message or errors)
+          messages.map((msg) => (
           <div
             key={msg.id}
             className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -290,7 +361,8 @@ export default function SpecialistChat({ specialist, teamId }: SpecialistChatPro
               )}
             </div>
           </div>
-        ))}
+        ))
+        )}
       </div>
 
       {/* Input - Fixed to bottom */}

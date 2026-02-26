@@ -13,6 +13,9 @@ import type {
   BuildWorkflowRequest,
   ExecuteWorkflowRequest,
   TaskAnalysis,
+  ExecutionMessage,
+  PendingAssumption,
+  AgentMessageGroup,
 } from './types';
 
 class WorkflowService {
@@ -321,6 +324,123 @@ class WorkflowService {
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to submit rating';
+      return { success: false, error: message };
+    }
+  }
+
+  // ==================== Execution Chat ====================
+
+  /**
+   * Get execution messages (transcript) for an operation
+   */
+  async getExecutionMessages(operationId: number): Promise<{
+    success: boolean;
+    messages?: ExecutionMessage[];
+    total_count?: number;
+    error?: string;
+  }> {
+    try {
+      const result = await api.get<{
+        messages: ExecutionMessage[];
+        total_count: number;
+        operation_id: number;
+      }>(`/api/operations/${operationId}/messages`);
+      return {
+        success: true,
+        messages: result.messages,
+        total_count: result.total_count,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load messages';
+      return { success: false, error: message };
+    }
+  }
+
+  /**
+   * Send a message during execution (user -> agent or manager)
+   */
+  async sendExecutionMessage(
+    operationId: number,
+    content: string,
+    target?: string,
+    messageType?: 'chat' | 'instruction' | 'question'
+  ): Promise<{
+    success: boolean;
+    message?: ExecutionMessage;
+    error?: string;
+  }> {
+    try {
+      const result = await api.post<ExecutionMessage>(
+        `/api/operations/${operationId}/messages`,
+        {
+          content,
+          target: target || null,
+          message_type: messageType || 'chat',
+        }
+      );
+      return {
+        success: true,
+        message: result,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send message';
+      return { success: false, error: message };
+    }
+  }
+
+  // ==================== Pending Assumptions (Phase 5.1) ====================
+
+  /**
+   * Get all pending assumptions (operations waiting for user input)
+   */
+  async getPendingAssumptions(teamId: number): Promise<{
+    success: boolean;
+    assumptions?: PendingAssumption[];
+    total_count?: number;
+    error?: string;
+  }> {
+    try {
+      const result = await api.get<{
+        pending_assumptions: PendingAssumption[];
+        total_count: number;
+        team_id: number;
+      }>(`/api/operations/pending-assumptions?team_id=${teamId}`);
+      return {
+        success: true,
+        assumptions: result.pending_assumptions,
+        total_count: result.total_count,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load pending assumptions';
+      return { success: false, error: message };
+    }
+  }
+
+  // ==================== Agent Messages (Phase 5.2) ====================
+
+  /**
+   * Get all execution messages for a specific agent across all operations
+   */
+  async getAgentMessages(teamId: number, agentName: string): Promise<{
+    success: boolean;
+    messageGroups?: AgentMessageGroup[];
+    total_messages?: number;
+    error?: string;
+  }> {
+    try {
+      const result = await api.get<{
+        message_groups: AgentMessageGroup[];
+        total_messages: number;
+        agent_name: string;
+        team_id: number;
+      }>(`/api/operations/agent-messages?team_id=${teamId}&agent_name=${encodeURIComponent(agentName)}`);
+      return {
+        success: true,
+        messageGroups: result.message_groups,
+        total_messages: result.total_messages,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load agent messages';
       return { success: false, error: message };
     }
   }

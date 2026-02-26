@@ -14,6 +14,7 @@ import type {
   WorkflowStats,
   EvolutionSuggestion,
   WorkflowDNA,
+  AgentPerformance,
 } from './types';
 
 // ==================== Evolution Stats Hook ====================
@@ -132,6 +133,68 @@ export function useEvolutionSuggestions(
     isLoading,
     error,
     refresh: fetchSuggestions,
+  };
+}
+
+// ==================== Agent Performance Hook ====================
+
+interface UseAgentPerformanceOptions {
+  teamId: number | string;
+  autoFetch?: boolean;
+}
+
+interface UseAgentPerformanceReturn {
+  performances: AgentPerformance[];
+  performanceByName: Record<string, AgentPerformance>;
+  isLoading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+}
+
+export function useAgentPerformance(
+  options: UseAgentPerformanceOptions
+): UseAgentPerformanceReturn {
+  const { teamId, autoFetch = true } = options;
+
+  const [performances, setPerformances] = useState<AgentPerformance[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchPerformance = useCallback(async () => {
+    if (!teamId) return;
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await evolutionService.getAgentPerformance(teamId);
+      setPerformances(data.agents || []);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch agent performance';
+      setError(message);
+      console.error('Error fetching agent performance:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [teamId]);
+
+  useEffect(() => {
+    if (autoFetch && teamId) {
+      fetchPerformance();
+    }
+  }, [autoFetch, teamId, fetchPerformance]);
+
+  // Build lookup by agent name
+  const performanceByName: Record<string, AgentPerformance> = {};
+  for (const p of performances) {
+    performanceByName[p.agent_name] = p;
+  }
+
+  return {
+    performances,
+    performanceByName,
+    isLoading,
+    error,
+    refresh: fetchPerformance,
   };
 }
 

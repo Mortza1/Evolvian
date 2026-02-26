@@ -37,7 +37,7 @@ class ChatCompletionResponse(BaseModel):
 class LLMService:
     def __init__(self):
         self.api_key = os.getenv("OPENROUTER_API_KEY")
-        self.default_model = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
+        self.default_model = os.getenv("OPENROUTER_MODEL", "google/gemma-3-27b-it:free")
         self.site_url = os.getenv("OPENROUTER_SITE_URL", "https://evolvian.com")
         self.site_name = os.getenv("OPENROUTER_SITE_NAME", "Evolvian")
         self.api_url = "https://openrouter.ai/api/v1/chat/completions"

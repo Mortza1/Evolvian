@@ -11,7 +11,7 @@ Key components:
 
 from .base import EvolvianTool, ToolResult, ToolParameter
 from .registry import ToolRegistry, get_tool_registry
-from .executor import ToolExecutor
+from .executor import ToolExecutor, parse_tool_calls_from_response, parse_assumptions_from_response
 
 __all__ = [
     "EvolvianTool",
@@ -20,4 +20,6 @@ __all__ = [
     "ToolRegistry",
     "get_tool_registry",
     "ToolExecutor",
+    "parse_tool_calls_from_response",
+    "parse_assumptions_from_response",
 ]

@@ -18,6 +18,8 @@ import InboxView from '../inbox/InboxView';
 import OperationsView from './views/OperationsView';
 import BillingView from './views/BillingView';
 import { getActiveTeam, setActiveTeamId, syncTeamsFromBackend, Team } from '@/lib/teams';
+import { TeamEventsProvider } from '@/lib/contexts/TeamEventsContext';
+import { ToastProvider } from '@/lib/contexts/ToastContext';
 
 interface DashboardProps {
   isFirstTime?: boolean;
@@ -129,8 +131,8 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
     return items;
   };
 
-  return (
-    <div className="min-h-screen w-full bg-[#0B0E14] flex flex-col">
+  const mainContent = (
+    <>
       {/* Corporate Status Bar */}
       <CorporateStatusBar
         teamId={currentTeam?.id.toString()}
@@ -254,6 +256,20 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
         onClose={() => setIsNewOperationOpen(false)}
         onLaunch={handleLaunchOperation}
       />
-    </div>
+    </>
+  );
+
+  return (
+    <ToastProvider>
+      <div className="min-h-screen w-full bg-[#0B0E14] flex flex-col">
+        {currentTeam ? (
+          <TeamEventsProvider teamId={currentTeam.id}>
+            {mainContent}
+          </TeamEventsProvider>
+        ) : (
+          mainContent
+        )}
+      </div>
+    </ToastProvider>
   );
 }

@@ -1,0 +1,542 @@
+
+EVOLVIAN
+Hierarchical Team-Based Multi-Agent Orchestration
+
+Implementation Plan and Evaluation Strategy
+Extending EvoAgentX with Hierarchical Agent Teams
+
+Version 3.0  |  February 2026
+
+
+Scope: Phase 1 = Dissertation deliverable (hierarchical EvoAgentX + benchmarks). Phase 2 = Startup product (management platform layer).
+This document covers Phase 1 in full detail and Phase 2 as a roadmap.
+
+1. Dissertation Research Framing
+1.1 The Gap in EvoAgentX
+EvoAgentX provides a five-layer architecture (basic components, agent, workflow, evolving, evaluation) for building and evolving multi-agent workflows. Its workflow layer supports two graph types: WorkFlowGraph (explicit task graphs with custom nodes, edges, conditional branches) and SequentialWorkFlowGraph (auto-inferred linear pipelines). Both treat agents as peers in a flat or sequential topology.
+What EvoAgentX does not provide is any concept of organizational hierarchy: supervisor agents that oversee teams, delegation of authority with scope constraints, escalation pathways when a worker agent exceeds its competence, or differentiated roles within a team (manager vs. specialist vs. reviewer). Every agent in vanilla EvoAgentX operates at the same authority level.
+
+The Research Gap
+Real-world organizations solve complex problems through hierarchical team structures: managers decompose goals, delegate subtasks to specialists, review outputs, and escalate exceptions. Current multi-agent frameworks, including EvoAgentX, lack this organizational structure. This limits performance on complex tasks that require task decomposition, quality oversight, and coordinated specialization.
+
+1.2 Research Question
+
+Research Question
+Does adding hierarchical team-based orchestration (supervisor agents, role differentiation, delegation scoping, and escalation pathways) to a self-evolving multi-agent framework improve task performance on complex, multi-step problems compared to flat workflow orchestration?
+
+1.3 Hypothesis
+H1: Hierarchical EvoAgentX (Evolvian) will outperform vanilla EvoAgentX on complex tasks requiring multi-step reasoning and cross-domain coordination (GAIA, HotPotQA), as measured by accuracy/F1 score.
+H2: Hierarchical EvoAgentX will show comparable or better performance on structured single-domain tasks (MBPP, MATH), demonstrating that the hierarchy does not add harmful overhead to simpler tasks.
+H3: The self-evolution algorithms (TextGrad, AFlow) will produce greater performance gains when applied to hierarchical workflows than flat workflows, because the hierarchy provides more structured optimization targets.
+
+1.4 Contribution Statement
+This dissertation makes three contributions:
+	•	Architectural contribution: A hierarchical team orchestration layer added to the EvoAgentX framework, introducing supervisor agents, role-based teams, delegation scoping, and escalation pathways.
+	•	Empirical contribution: A comparative evaluation on four benchmarks (HotPotQA, MBPP, MATH, GAIA) showing performance differences between flat and hierarchical multi-agent orchestration.
+	•	Design contribution: A reusable architecture pattern for hierarchical self-evolving agent teams that can serve as the foundation for enterprise agent management systems.
+
+2. What You Are Building (Technical Specification)
+2.1 Current EvoAgentX Workflow Architecture
+In vanilla EvoAgentX, the workflow layer has these key classes:
+Class
+Purpose
+Limitation
+WorkFlowGraph
+Explicit task graph with custom nodes, edges, branches, parallel execution
+Agents are peers. No concept of authority or supervision.
+SequentialWorkFlowGraph
+Auto-infers linear pipelines from input/output dependencies
+Strictly sequential. No oversight or review loops.
+WorkFlowGenerator
+Generates a workflow graph from a natural language goal description
+Generates flat graphs only. Cannot create team structures.
+WorkFlow
+Executes a graph, manages agent coordination, handles state
+Executes nodes in topological order. No escalation or delegation logic.
+AgentManager
+Registry of agents used in a workflow
+Flat registry. No roles, no hierarchy, no authority levels.
+
+2.2 What You Add: Hierarchical Team Layer
+You are extending the workflow layer with new classes and modifying existing ones. Here is every new component:
+
+2.2.1 New Class: Team
+A Team groups agents into an organizational unit with a supervisor and one or more workers. Each team has a defined scope (what tasks it handles) and an internal workflow for how the supervisor delegates and reviews.
+Attribute
+Type
+Description
+team_id
+str
+Unique identifier for this team
+name
+str
+Human-readable team name (e.g., "Research Team")
+supervisor
+Agent
+The agent that manages this team — receives tasks, decomposes, delegates, reviews
+workers
+List[Agent]
+Agents that execute subtasks assigned by the supervisor
+scope
+List[str]
+Task types this team handles (e.g., ["research", "summarization"])
+delegation_policy
+DelegationPolicy
+Rules for how the supervisor assigns work (round-robin, skill-match, load-balance)
+escalation_rules
+List[EscalationRule]
+Conditions under which a worker escalates back to supervisor
+review_mode
+Enum
+none | supervisor_reviews_all | supervisor_reviews_on_flag | peer_review
+
+2.2.2 New Class: DelegationPolicy
+Attribute
+Type
+Description
+strategy
+Enum
+round_robin | capability_match | load_balance | supervisor_decides
+max_concurrent_per_worker
+int
+How many tasks a worker can handle simultaneously
+require_supervisor_decomposition
+bool
+If True, supervisor must break the task into subtasks before delegating (vs. passing the whole task)
+allow_worker_to_worker
+bool
+Can workers delegate to each other or must everything go through supervisor?
+
+2.2.3 New Class: EscalationRule
+Attribute
+Type
+Description
+condition
+str
+Natural language or code condition (e.g., "confidence < 0.6" or "error_count > 2")
+action
+Enum
+escalate_to_supervisor | retry_with_different_worker | request_human_input | fail_task
+max_retries
+int
+How many times to retry before escalating further
+
+2.2.4 New Class: HierarchicalWorkFlowGraph
+This is the core new graph type. It extends WorkFlowGraph to support teams as first-class nodes, not just individual agents.
+Attribute
+Type
+Description
+teams
+List[Team]
+All teams in this workflow
+team_graph
+Dict[str, List[str]]
+Directed graph of team dependencies (which team feeds into which)
+inter_team_protocol
+Enum
+supervisor_to_supervisor | direct_handoff | shared_context
+root_supervisor
+Agent | None
+Optional top-level supervisor that coordinates across all teams
+
+Execution flow in a HierarchicalWorkFlowGraph:
+	•	Task arrives at the root supervisor (or first team’s supervisor if no root).
+	•	Supervisor decomposes the task into subtasks using its LLM. Each subtask is tagged with the skills/scope it requires.
+	•	Delegation engine matches subtasks to workers based on the DelegationPolicy (capability matching, load balancing, etc.).
+	•	Workers execute their subtasks. If a worker hits an escalation condition, it routes back to the supervisor.
+	•	Supervisor reviews outputs (based on review_mode). If quality is insufficient, the supervisor can reassign, provide feedback, or revise the subtask prompt.
+	•	Cross-team handoff: When the current team’s work is complete, results pass to the next team in the team_graph via the inter_team_protocol.
+	•	Final aggregation: The root supervisor (or last team’s supervisor) assembles the final output.
+
+2.2.5 Modifications to Existing EvoAgentX Classes
+Existing Class
+Modification
+Why
+Agent
+Add role field (Enum: supervisor | worker | reviewer | specialist)
+Agents need to know their role to behave differently
+Agent
+Add team_id field (str | None)
+Track which team an agent belongs to
+Agent
+Add authority_scope field (List[str])
+What task types this agent is authorized to handle
+AgentManager
+Add get_team(team_id), get_supervisor(team_id), assign_to_team() methods
+Need team-aware agent lookup
+WorkFlow
+Add support for executing HierarchicalWorkFlowGraph (team-based execution loop)
+The execution engine must understand the delegation/review cycle
+WorkFlowGenerator
+Extend generate_workflow() to optionally produce HierarchicalWorkFlowGraph when task complexity warrants it
+Auto-generation should create hierarchical workflows for complex goals
+
+
+3. Evaluation Plan (Proving Hierarchy Beats Flat)
+3.1 Experimental Design
+You will run the same benchmarks that the EvoAgentX paper used, so your results are directly comparable to their published numbers. This is critical for the dissertation: you are extending their work and showing improvement.
+
+
+Experimental Setup
+For each benchmark, run three configurations: (A) Vanilla EvoAgentX (flat workflow, their published settings), (B) Hierarchical EvoAgentX WITHOUT evolution (your team structure, but no optimization — isolates the effect of hierarchy alone), (C) Hierarchical EvoAgentX WITH evolution (your team structure + TextGrad/AFlow optimization — shows the combined effect). Compare A vs B to measure the value of hierarchy. Compare B vs C to measure how evolution interacts with hierarchy. Compare A vs C for the full combined improvement.
+
+3.2 Benchmarks
+Benchmark
+Task Type
+Why Hierarchy Should Help
+Metric
+EvoAgentX Baseline
+HotPotQA
+Multi-hop QA
+Requires decomposing questions into sub-queries, researching separately, then synthesizing. Natural supervisor-worker pattern.
+F1 Score
+Published: +7.44% after optimization
+GAIA
+Real-world multi-step
+Complex tasks requiring web navigation, data analysis, file operations. Multiple specialist skills needed simultaneously.
+Overall Accuracy
+Published: up to +20% after optimization
+MATH
+Mathematical reasoning
+Multi-step proofs benefit from a planner/solver/reviewer structure. Reviewer catches errors before final submission.
+Solve Rate
+Published: +10% after optimization
+MBPP
+Code generation
+Code tasks benefit from architect/coder/tester team. Hierarchy adds a natural review loop.
+pass@1
+Published: +10% after optimization
+
+3.3 Specific Team Structures Per Benchmark
+You need to design the hierarchical team structure for each benchmark. These should be motivated by how humans would organize to solve these tasks.
+
+HotPotQA Team Structure:
+	•	Supervisor: Research Coordinator — receives the multi-hop question, decomposes it into sub-questions
+	•	Worker 1: Retriever Agent — searches for evidence relevant to each sub-question
+	•	Worker 2: Reasoning Agent — synthesizes evidence into an answer to each sub-question
+	•	Supervisor reviews the sub-answers, identifies gaps, may re-delegate, then produces final answer
+
+GAIA Team Structure:
+	•	Root Supervisor: Task Planner — analyzes the complex task, creates a multi-step plan
+	•	Team 1 (Research): Web Navigator + Data Extractor — supervised by Research Lead
+	•	Team 2 (Analysis): Data Analyst + File Processor — supervised by Analysis Lead
+	•	Root Supervisor aggregates outputs from both teams, handles cross-team dependencies
+
+MATH Team Structure:
+	•	Supervisor: Math Strategist — reads the problem, decides solution approach, delegates steps
+	•	Worker 1: Solver Agent — executes the mathematical steps
+	•	Worker 2: Verifier Agent — checks each step for errors (acts as reviewer)
+	•	Supervisor makes final decision based on solver output + verifier feedback
+
+MBPP Team Structure:
+	•	Supervisor: Architect Agent — reads the specification, designs the approach, delegates
+	•	Worker 1: Coder Agent — writes the implementation
+	•	Worker 2: Tester Agent — writes tests and validates the code
+	•	Supervisor reviews test results, may request revision from Coder if tests fail
+
+3.4 Evaluation Protocol
+Follow EvoAgentX’s published protocol exactly for comparability:
+	•	Sample sizes: 50 examples for validation, 100 for testing (same as EvoAgentX paper)
+	•	Run each configuration 3 times and report mean + standard deviation (for statistical significance)
+	•	Use the same LLM (GPT-4o-mini or whichever model your budget allows) across all configurations
+	•	For evolution runs: use the same number of optimization iterations as the EvoAgentX paper
+	•	Track and report: total LLM API calls (to show overhead cost of hierarchy), total tokens consumed, and wall-clock time
+
+
+Expected Results Pattern
+You should expect: GAIA shows the largest improvement from hierarchy (most complex, multi-domain tasks). HotPotQA shows moderate improvement (multi-hop reasoning benefits from decomposition). MATH and MBPP may show smaller improvement (more structured tasks where hierarchy adds review loops but the core reasoning is still single-agent). If hierarchy hurts on simpler tasks, that is also a valid finding — you can discuss the overhead-vs-benefit tradeoff in your dissertation.
+
+
+4. Sprint-Level Implementation Tasks
+Each sprint is approximately one week. Tasks are ordered by dependency. This is your week-by-week build plan.
+
+SPRINT 1: Foundation (Week 1)
+
+Task
+Description
+Done When
+1.1
+Fork EvoAgentX, set up dev environment, verify you can run the existing HotPotQA benchmark and reproduce their baseline numbers
+Baseline F1 score matches published range
+1.2
+Read and annotate the WorkFlowGraph, SequentialWorkFlowGraph, WorkFlow, and AgentManager source code. Map every method and understand the execution loop.
+You can explain the execution flow on a whiteboard
+1.3
+Create the project branch: evolvian/hierarchical-teams
+Branch exists, CI passes
+1.4
+Write the dissertation chapter outline for the technical contribution
+Outline approved by supervisor
+
+SPRINT 2: Core Data Models (Week 2)
+
+Task
+Description
+Done When
+2.1
+Implement Team class with all attributes (supervisor, workers, scope, delegation_policy, escalation_rules, review_mode)
+Unit tests pass for Team creation and configuration
+2.2
+Implement DelegationPolicy class with strategy enum and configuration
+Unit tests pass for all strategy types
+2.3
+Implement EscalationRule class with condition evaluation logic
+Unit tests pass: rules correctly trigger on mock conditions
+2.4
+Extend Agent class: add role, team_id, authority_scope fields
+Existing EvoAgentX agent tests still pass (backward compatible)
+2.5
+Extend AgentManager: add team-aware methods (get_team, get_supervisor, assign_to_team)
+Unit tests pass for all new methods
+
+SPRINT 3: Hierarchical Graph (Week 3)
+
+Task
+Description
+Done When
+3.1
+Implement HierarchicalWorkFlowGraph class: teams list, team_graph (DAG of team dependencies), inter_team_protocol, root_supervisor
+Can construct a 2-team hierarchical graph in code
+3.2
+Implement the supervisor decomposition logic: given a task, the supervisor LLM produces subtasks tagged with required skills
+Supervisor correctly decomposes a sample HotPotQA question into sub-queries
+3.3
+Implement delegation routing: match subtasks to workers based on DelegationPolicy
+Subtasks are routed to correct workers based on capability_match strategy
+3.4
+Implement the review loop: supervisor collects worker outputs, evaluates quality, can request revision
+Test shows supervisor rejecting a low-quality output and re-delegating
+
+SPRINT 4: Execution Engine (Week 4)
+
+Task
+Description
+Done When
+4.1
+Extend WorkFlow class to execute HierarchicalWorkFlowGraph: implement the full delegation-execution-review-handoff loop
+Can execute a 1-team hierarchical workflow end-to-end on a HotPotQA sample
+4.2
+Implement escalation handling: when a worker triggers an escalation rule, route back to supervisor with context
+Escalation correctly fires and supervisor handles it
+4.3
+Implement cross-team handoff: output of Team A’s supervisor becomes input to Team B’s supervisor
+2-team pipeline works end-to-end on a GAIA sample
+4.4
+Add logging: every delegation, execution, escalation, and review is logged with timestamps and agent IDs
+Full execution trace is available for any workflow run
+
+SPRINT 5: Benchmark - HotPotQA (Week 5)
+
+Task
+Description
+Done When
+5.1
+Configure the HotPotQA team structure (Research Coordinator + Retriever + Reasoner) as described in Section 3.3
+Team config YAML/JSON works with HierarchicalWorkFlowGraph
+5.2
+Run HotPotQA evaluation: Configuration B (hierarchical, no evolution). 50 validation + 100 test. 3 runs.
+Results recorded: mean F1 + std dev
+5.3
+Run HotPotQA evaluation: Configuration C (hierarchical + TextGrad optimization). Same setup.
+Results recorded: mean F1 + std dev
+5.4
+Compare against Configuration A (vanilla EvoAgentX baseline from Sprint 1). Generate comparison table.
+Clear comparison table with statistical significance markers
+
+SPRINT 6: Benchmark - GAIA + MATH (Week 6)
+
+Task
+Description
+Done When
+6.1
+Configure GAIA multi-team structure (Root Supervisor + Research Team + Analysis Team)
+Multi-team config works
+6.2
+Run GAIA evaluation: Configuration B and C. Record accuracy at all 3 GAIA levels.
+Results recorded per level
+6.3
+Configure MATH team structure (Strategist + Solver + Verifier)
+Config works
+6.4
+Run MATH evaluation: Configuration B and C.
+Results recorded
+
+SPRINT 7: Benchmark - MBPP + Analysis (Week 7)
+
+Task
+Description
+Done When
+7.1
+Configure MBPP team structure (Architect + Coder + Tester). Run evaluations B and C.
+Results recorded
+7.2
+Compile all results into master comparison table (all 4 benchmarks × 3 configurations)
+Table complete with means, std devs, and significance tests
+7.3
+Analyse cost overhead: compare total API calls and tokens between flat vs hierarchical
+Overhead analysis complete
+7.4
+Write results analysis: where did hierarchy help, where didn’t it, why?
+Draft analysis section for dissertation
+
+SPRINT 8: Demo + Writeup (Week 8)
+
+Task
+Description
+Done When
+8.1
+Build a simple demo: a Streamlit or Gradio UI that shows the hierarchical execution trace visually (agents in a tree, tasks flowing through delegation, outputs aggregated)
+Live demo works
+8.2
+Record a demo video (3–5 minutes) showing the system in action
+Video ready for submission
+8.3
+Write the full technical chapter of the dissertation (architecture + implementation)
+Draft complete
+8.4
+Write the evaluation chapter (experimental design + results + discussion)
+Draft complete
+
+5. Expected Results Template
+This is the table format for your dissertation. Fill in as you collect results.
+Benchmark
+Config A: Vanilla EvoAgentX
+Config B: Hierarchical (no evo)
+Config C: Hierarchical + Evolution
+B vs A Δ
+C vs A Δ
+HotPotQA (F1)
+Baseline: ___
+___±___
+___±___
++/- ___%
++/- ___%
+GAIA L1 (Acc)
+Baseline: ___
+___±___
+___±___
++/- ___%
++/- ___%
+GAIA L2 (Acc)
+Baseline: ___
+___±___
+___±___
++/- ___%
++/- ___%
+GAIA L3 (Acc)
+Baseline: ___
+___±___
+___±___
++/- ___%
++/- ___%
+MATH (Solve)
+Baseline: ___
+___±___
+___±___
++/- ___%
++/- ___%
+MBPP (pass@1)
+Baseline: ___
+___±___
+___±___
++/- ___%
++/- ___%
+
+Benchmark
+Config A: API Calls
+Config B: API Calls
+Config C: API Calls
+Overhead B vs A
+Overhead C vs A
+HotPotQA
+___
+___
+___
++___%
++___%
+GAIA
+___
+___
+___
++___%
++___%
+MATH
+___
+___
+___
++___%
++___%
+MBPP
+___
+___
+___
++___%
++___%
+
+
+6. Phase 2: Startup Product Roadmap (Post-Dissertation)
+Once the dissertation is submitted and the hierarchical EvoAgentX extension is proven, the following layers transform it from a research contribution into a commercial product. This is summarized here for planning purposes; a full FRD for Phase 2 was produced in v2.0 of this document series.
+
+Phase 2 Component
+What It Adds
+Timeline (Post-Dissertation)
+Agent Registry + Dashboard
+Web UI to register, view, and manage all agents (native + external)
+Months 1–2
+Org Chart UI
+Visual drag-and-drop hierarchy editor (React Flow)
+Months 2–3
+External Platform Adapters
+Connect to CrewAI, LangGraph, Salesforce agents via MCP adapters
+Months 3–5
+Audit + Compliance Service
+Immutable audit logs, delegation chain visualization, compliance reports
+Months 4–6
+Enterprise Auth + RBAC
+Role-based access, SSO, team-scoped permissions
+Months 5–6
+Self-Service Onboarding
+Customer can sign up, connect agents, and see their org chart in < 1 hour
+Months 6–8
+First Design Partner
+One paying customer using the full platform
+Month 8–10
+
+
+The Bridge from Dissertation to Startup
+Your dissertation proves that hierarchical agent orchestration improves performance. The startup product takes that proven architecture and wraps it in enterprise-grade management, governance, and cross-platform connectivity. The research validates the technical approach; the product solves the business problem. Every conversation with investors starts with: "We proved this works — here are the benchmark results. Now we’re building the platform."
+
+7. Dissertation Risks and Mitigations
+Risk
+Likelihood
+Impact
+Mitigation
+Hierarchy doesn’t improve performance on some benchmarks
+Medium
+Medium
+This is a valid finding. Frame it as “hierarchy helps on complex multi-step tasks but adds overhead on simpler tasks.” Discuss the complexity threshold where hierarchy becomes beneficial.
+API costs exceed budget (hierarchical uses more calls)
+High
+High
+Use GPT-4o-mini (cheapest capable model). Run smaller validation samples first. Track costs per experiment. Set a budget cap and prioritize GAIA + HotPotQA (most likely to show improvement).
+EvoAgentX codebase changes during your work
+Medium
+Medium
+Fork at a specific commit. Do not merge upstream changes during evaluation. Document the exact commit hash.
+Supervisor decomposition produces poor subtasks
+Medium
+High
+Iterate on the supervisor prompt. Use few-shot examples in the supervisor’s system prompt showing good decomposition. This prompt engineering IS part of the research contribution.
+Results are not statistically significant
+Medium
+High
+Run 3+ repetitions per configuration. Use paired t-tests or Wilcoxon signed-rank. If significance is marginal, increase sample size to 200 test examples.
+Time runs out before all 4 benchmarks
+Medium
+Low
+Prioritize GAIA and HotPotQA (most likely to show hierarchy benefit). MATH and MBPP are nice-to-have. Two strong results are better than four weak ones.
+
+
+END OF DOCUMENT
+Phase 1: Prove it works. Phase 2: Build the product.
+Evolvian — Hierarchical self-evolving agent teams.

@@ -19,6 +19,7 @@ class ExecutionSignal(Enum):
     CANCEL_REQUESTED = "cancel_requested"
     PAUSED = "paused"
     CANCELLED = "cancelled"
+    WAITING_FOR_INPUT = "waiting_for_input"
 
 
 @dataclass
@@ -31,6 +32,8 @@ class ExecutionState:
     paused_at: Optional[datetime] = None
     completed_nodes: List[Dict[str, Any]] = field(default_factory=list)
     context: Dict[str, Any] = field(default_factory=dict)
+    pending_assumption: Optional[Dict[str, Any]] = None
+    assumption_answer: Optional[str] = None
 
 
 class ExecutionRegistry:
@@ -137,6 +140,42 @@ class ExecutionRegistry:
                 op_id for op_id, state in self._executions.items()
                 if state.signal == ExecutionSignal.RUNNING
             ]
+
+    def request_input(self, operation_id: int, assumption_data: Dict[str, Any]) -> bool:
+        """
+        Request user input for an assumption.
+        Sets signal to WAITING_FOR_INPUT and stores assumption data.
+        Returns True if successfully requested, False if not running.
+        """
+        with self._registry_lock:
+            state = self._executions.get(operation_id)
+            if state and state.signal == ExecutionSignal.RUNNING:
+                state.signal = ExecutionSignal.WAITING_FOR_INPUT
+                state.pending_assumption = assumption_data
+                state.assumption_answer = None
+                return True
+            return False
+
+    def provide_input(self, operation_id: int, answer: str) -> bool:
+        """
+        Provide user's answer to a pending assumption.
+        Stores answer and resets signal to RUNNING.
+        Returns True if answer was accepted, False if not waiting for input.
+        """
+        with self._registry_lock:
+            state = self._executions.get(operation_id)
+            if state and state.signal == ExecutionSignal.WAITING_FOR_INPUT:
+                state.assumption_answer = answer
+                state.signal = ExecutionSignal.RUNNING
+                state.pending_assumption = None
+                return True
+            return False
+
+    def is_waiting_for_input(self, operation_id: int) -> bool:
+        """Check if an execution is waiting for user input"""
+        with self._registry_lock:
+            state = self._executions.get(operation_id)
+            return state is not None and state.signal == ExecutionSignal.WAITING_FOR_INPUT
 
 
 # Global singleton instance

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { Agent } from '@/lib/agents';
-import type { OperationResult } from './LiveOffice';
+import type { OperationResult } from './demo-types';
 
 interface OperationReviewProps {
   result: OperationResult;

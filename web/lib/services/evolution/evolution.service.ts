@@ -9,6 +9,7 @@ import type {
   EvolutionStatsResponse,
   EvolutionSuggestionsResponse,
   WorkflowComparisonResponse,
+  AgentPerformanceResponse,
 } from './types';
 
 const API_BASE = '/api/operations/evolution';
@@ -42,6 +43,22 @@ export const evolutionService = {
     return api.get<EvolutionSuggestionsResponse>(
       `${API_BASE}/suggestions/${teamId}?${params.toString()}`
     );
+  },
+
+  /**
+   * Get per-agent performance stats from execution history
+   */
+  async getAgentPerformance(
+    teamId: number | string,
+    agentName?: string
+  ): Promise<AgentPerformanceResponse> {
+    const params = new URLSearchParams();
+    if (agentName) {
+      params.append('agent_name', agentName);
+    }
+    const queryString = params.toString();
+    const url = `${API_BASE}/agent-performance/${teamId}${queryString ? `?${queryString}` : ''}`;
+    return api.get<AgentPerformanceResponse>(url);
   },
 
   /**

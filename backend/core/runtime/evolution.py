@@ -102,6 +102,39 @@ class WorkflowStats:
         }
 
 
+@dataclass
+class AgentPerformance:
+    """Performance stats for a single agent across all executions."""
+    agent_name: str
+    agent_id: int
+    total_executions: int
+    avg_quality: float          # average quality_score of workflows this agent participated in
+    best_quality: float         # highest quality_score
+    worst_quality: float        # lowest quality_score
+    avg_cost: float             # average cost per execution
+    success_rate: float         # % of workflows that completed successfully
+    user_avg_rating: float      # average user_rating (only rated executions)
+    rated_count: int            # how many executions got user ratings
+    best_task_type: str         # task_type where this agent performs best
+    trend: str                  # "improving", "stable", "declining"
+
+    def to_dict(self) -> dict:
+        return {
+            "agent_name": self.agent_name,
+            "agent_id": self.agent_id,
+            "total_executions": self.total_executions,
+            "avg_quality": self.avg_quality,
+            "best_quality": self.best_quality,
+            "worst_quality": self.worst_quality,
+            "avg_cost": self.avg_cost,
+            "success_rate": self.success_rate,
+            "user_avg_rating": self.user_avg_rating,
+            "rated_count": self.rated_count,
+            "best_task_type": self.best_task_type,
+            "trend": self.trend,
+        }
+
+
 class EvolutionService:
     """
     The evolution engine for Evolvian.
@@ -391,6 +424,119 @@ class EvolutionService:
         ).distinct().all()
 
         return [r[0] for r in result if r[0]]
+
+    # ==================== AGENT PERFORMANCE ====================
+
+    def get_agent_performance(
+        self,
+        agent_name: str = None
+    ) -> List['AgentPerformance']:
+        """
+        Get per-agent performance stats aggregated from WorkflowExecution history.
+
+        Groups all completed executions by agent name (from team_composition),
+        and computes quality, cost, success, and trend metrics for each.
+
+        Args:
+            agent_name: If set, return stats for only this agent.
+
+        Returns:
+            List of AgentPerformance, sorted by avg_quality descending.
+        """
+        WorkflowExecution = self._get_workflow_execution_model()
+
+        executions = self.db.query(WorkflowExecution).filter(
+            WorkflowExecution.team_id == self.team_id,
+            WorkflowExecution.status == "completed"
+        ).order_by(WorkflowExecution.created_at.asc()).all()
+
+        if not executions:
+            return []
+
+        # Group executions by agent name
+        # agent_name -> list of (execution, agent_info_dict)
+        agent_executions: Dict[str, List[Tuple]] = {}
+
+        for ex in executions:
+            composition = ex.team_composition or []
+            for member in composition:
+                name = member.get("agent_name", "")
+                if not name:
+                    continue
+                if agent_name and name != agent_name:
+                    continue
+                if name not in agent_executions:
+                    agent_executions[name] = []
+                agent_executions[name].append((ex, member))
+
+        results = []
+        for name, exec_pairs in agent_executions.items():
+            execs = [pair[0] for pair in exec_pairs]
+            first_member = exec_pairs[0][1]  # agent_info from first execution
+
+            # Quality stats
+            qualities = [self._get_effective_quality(e) for e in execs]
+            avg_quality = sum(qualities) / len(qualities)
+            best_quality = max(qualities)
+            worst_quality = min(qualities)
+
+            # Cost
+            avg_cost = sum(e.cost or 0 for e in execs) / len(execs)
+
+            # Success rate
+            success_count = sum(1 for e in execs if e.status == "completed")
+            success_rate = success_count / len(execs)
+
+            # User ratings (only where rated)
+            rated_execs = [e for e in execs if e.user_rating is not None]
+            user_avg_rating = (
+                sum(e.user_rating for e in rated_execs) / len(rated_execs)
+                if rated_execs else 0.0
+            )
+
+            # Best task type (which task_type has highest avg quality for this agent)
+            type_qualities: Dict[str, List[float]] = {}
+            for e in execs:
+                tt = e.task_type or "general"
+                if tt not in type_qualities:
+                    type_qualities[tt] = []
+                type_qualities[tt].append(self._get_effective_quality(e))
+
+            best_task_type = max(
+                type_qualities,
+                key=lambda t: sum(type_qualities[t]) / len(type_qualities[t])
+            ) if type_qualities else "general"
+
+            # Trend: compare last 5 vs prior 5
+            trend = "stable"
+            if len(qualities) >= 4:
+                mid = max(len(qualities) - 5, len(qualities) // 2)
+                recent_avg = sum(qualities[mid:]) / len(qualities[mid:])
+                prior_avg = sum(qualities[:mid]) / len(qualities[:mid])
+                diff = recent_avg - prior_avg
+                if diff > 0.05:
+                    trend = "improving"
+                elif diff < -0.05:
+                    trend = "declining"
+
+            results.append(AgentPerformance(
+                agent_name=name,
+                agent_id=first_member.get("agent_id", 0),
+                total_executions=len(execs),
+                avg_quality=avg_quality,
+                best_quality=best_quality,
+                worst_quality=worst_quality,
+                avg_cost=avg_cost,
+                success_rate=success_rate,
+                user_avg_rating=user_avg_rating,
+                rated_count=len(rated_execs),
+                best_task_type=best_task_type,
+                trend=trend,
+            ))
+
+        # Sort by avg_quality descending
+        results.sort(key=lambda a: a.avg_quality, reverse=True)
+        return results
 
     # ==================== SUGGESTIONS ====================
 

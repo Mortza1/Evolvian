@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Generator
+from typing import List, Dict, Any, Generator, Optional
 import json
 import time
 import re
@@ -17,8 +17,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 from database import get_db
 from auth import get_current_user
-from schemas import OperationCreate, OperationUpdate, OperationResponse, ExecutionControlResponse, RatingRequest, RatingResponse
-from models import User, Team, Operation, Agent, VaultFile, WorkflowExecution, InstalledTool
+from schemas import OperationCreate, OperationUpdate, OperationResponse, ExecutionControlResponse, RatingRequest, RatingResponse, AssumptionResponseRequest, AssumptionResponseResponse, ExecutionMessageCreate, ExecutionMessageResponse, ExecutionMessagesResponse, PendingAssumptionResponse, PendingAssumptionsResponse, AgentMessageGroup, AgentMessagesResponse
+from models import User, Team, Operation, Agent, VaultFile, WorkflowExecution, InstalledTool, ExecutionMessage
 from llm_service import llm_service, ChatMessage as LLMChatMessage
 from core.agents.registry import AGENT_REGISTRY
 from core.workflows.execution_state import EXECUTION_REGISTRY, ExecutionSignal
@@ -26,7 +26,7 @@ from core.runtime import (
     ExecutionContext, AgentState, ToolState, NodeMetrics, MemoryBridge,
     EvolutionService, WorkflowDNA, QualityEvaluator
 )
-from core.tools.executor import ToolExecutor, parse_tool_calls_from_response
+from core.tools.executor import ToolExecutor, parse_tool_calls_from_response, parse_assumptions_from_response
 from core.tools.registry import get_tool_registry
 from core.utils import infer_task_type as _infer_task_type
 
@@ -242,6 +242,316 @@ async def delete_operation(
 # ==================== EXECUTION ENDPOINTS ====================
 
 # _infer_task_type is now imported from core.utils
+
+
+def _wait_for_assumption_answer(operation_id: int, timeout: int = 300) -> Optional[str]:
+    """
+    Wait for user to answer an assumption by polling ExecutionRegistry.
+
+    Args:
+        operation_id: The operation ID waiting for input
+        timeout: Maximum seconds to wait (default 300 = 5 minutes)
+
+    Returns:
+        The user's answer string, or None if timeout/cancelled
+    """
+    import time
+
+    start_time = time.time()
+    poll_interval = 1.0  # Check every second
+
+    while time.time() - start_time < timeout:
+        state = EXECUTION_REGISTRY.get(operation_id)
+
+        if not state:
+            # Execution was unregistered (cancelled)
+            print(f"[wait_assumption] Execution {operation_id} unregistered")
+            return None
+
+        if state.signal == ExecutionSignal.CANCEL_REQUESTED:
+            # User cancelled
+            print(f"[wait_assumption] Cancel requested")
+            return None
+
+        if state.assumption_answer is not None:
+            # Got the answer!
+            answer = state.assumption_answer
+            print(f"[wait_assumption] Received answer: {answer[:50]}...")
+            return answer
+
+        # Still waiting
+        time.sleep(poll_interval)
+
+    # Timeout
+    print(f"[wait_assumption] Timeout after {timeout}s")
+    return None
+
+
+def should_evo_review(context, node_output: str, node_index: int, total_nodes: int, review_frequency: str = "every_2_nodes") -> bool:
+    """
+    Determine if Evo should review the current node's output.
+
+    Args:
+        context: ExecutionContext with metrics and history
+        node_output: The agent's output for the just-completed node
+        node_index: 0-indexed position of the node that just completed
+        total_nodes: Total number of nodes in workflow
+        review_frequency: "every_node", "every_2_nodes", "first_and_last", "never"
+
+    Returns:
+        True if Evo should review this node's output
+    """
+    # Never review if disabled
+    if review_frequency == "never":
+        return False
+
+    # Always review the first node (to catch early misunderstandings)
+    if node_index == 0:
+        return True
+
+    # Review frequency logic
+    if review_frequency == "every_node":
+        return True
+    elif review_frequency == "every_2_nodes":
+        # Review every 2nd node (1st is already covered above)
+        return (node_index + 1) % 2 == 0
+    elif review_frequency == "first_and_last":
+        # First already handled, check if this is the last node
+        return node_index == total_nodes - 1
+
+    # Skip review if output seems high quality (simple heuristics)
+    if len(node_output) < 50:
+        # Very short output might be low quality
+        return True
+
+    # Skip if output has confidence markers (looks like agent is certain)
+    confidence_markers = ["I have completed", "Successfully", "Confirmed", "Verified"]
+    if any(marker.lower() in node_output.lower() for marker in confidence_markers):
+        return False
+
+    # Default: review every 2 nodes
+    return (node_index + 1) % 2 == 0
+
+
+def run_evo_review(
+    llm_service,
+    task_description: str,
+    node_name: str,
+    node_output: str,
+    context,
+    remaining_nodes: list
+) -> dict:
+    """
+    Run Evo's review of an agent's output to detect if clarification is needed.
+
+    Args:
+        llm_service: LLMService instance
+        task_description: Original task description
+        node_name: Name of the node that just completed
+        node_output: The agent's output
+        context: ExecutionContext with execution history
+        remaining_nodes: List of nodes still to be executed
+
+    Returns:
+        {
+            "needs_clarification": bool,
+            "question": str (if needs_clarification),
+            "context": str (if needs_clarification),
+            "options": list[str] (optional),
+            "reason": str (why review triggered)
+        }
+    """
+    print(f"[evo_review] Reviewing node: {node_name}")
+
+    # Build review prompt
+    remaining_work = "\n".join([f"- {n.get('name', 'Unnamed')}" for n in remaining_nodes[:3]])  # Show next 3
+    if len(remaining_nodes) > 3:
+        remaining_work += f"\n- ... and {len(remaining_nodes) - 3} more tasks"
+
+    review_prompt = f"""You are Evo, the AI manager overseeing this workflow execution.
+
+**Original Task**: {task_description}
+
+**Just Completed**: {node_name}
+
+**Agent's Output**:
+{node_output[:1000]}  # Limit to first 1000 chars
+
+**Remaining Work**:
+{remaining_work if remaining_nodes else "(This was the final task)"}
+
+**Your Job**: Review this output and determine if anything is unclear, ambiguous, or potentially incorrect based on the original task. Consider:
+1. Does the output make sense for the task?
+2. Is any critical information missing or vague?
+3. Are there assumptions that could lead to problems in remaining work?
+4. Does this align with the user's original intent?
+
+If everything looks good, respond with exactly: PROCEED
+
+If you need clarification from the user, respond in this JSON format:
+{{
+    "needs_clarification": true,
+    "question": "Your specific question to the user",
+    "context": "Why you're asking (what you noticed that's unclear)",
+    "options": ["Option 1", "Option 2", "Option 3"]  // Optional: provide choices if applicable
+}}
+
+Be selective - only ask if truly critical. Minor issues can be addressed by agents themselves."""
+
+    try:
+        # Call LLM as Evo
+        evo_response = llm_service.simple_chat(review_prompt, model="gpt-4o-mini")  # Use cheaper model for reviews
+        print(f"[evo_review] Evo response: {evo_response[:200]}...")
+
+        # Check for PROCEED
+        if "PROCEED" in evo_response.upper() and "needs_clarification" not in evo_response.lower():
+            print("[evo_review] Evo approved - no clarification needed")
+            return {"needs_clarification": False, "reason": "output_approved"}
+
+        # Try to parse JSON response
+        import json
+        import re
+
+        # Try to find JSON in the response
+        json_match = re.search(r'\{.*\}', evo_response, re.DOTALL)
+        if json_match:
+            review_data = json.loads(json_match.group(0))
+            if review_data.get("needs_clarification"):
+                print(f"[evo_review] Clarification needed: {review_data.get('question', 'N/A')}")
+                return {
+                    "needs_clarification": True,
+                    "question": review_data.get("question", "Could you provide more details?"),
+                    "context": review_data.get("context", f"Manager review of: {node_name}"),
+                    "options": review_data.get("options", []),
+                    "reason": "manager_review"
+                }
+
+        # Fallback: if response is long and doesn't say PROCEED, treat as concern
+        if len(evo_response) > 100:
+            print("[evo_review] Ambiguous response, treating as no clarification needed")
+
+        return {"needs_clarification": False, "reason": "ambiguous_response"}
+
+    except Exception as e:
+        print(f"[evo_review] Error during review: {e}")
+        # On error, don't block execution
+        return {"needs_clarification": False, "reason": f"error: {str(e)}"}
+
+
+def _get_and_consume_user_messages(operation_id: int, db: Session, current_node_id: str = None) -> str:
+    """
+    Retrieve unread user messages for this operation and mark them as consumed.
+
+    This enables real-time collaboration: users can send instructions or questions
+    during execution, and they'll be injected into the agent's context at the next
+    LLM call.
+
+    Args:
+        operation_id: The operation ID
+        db: Database session
+        current_node_id: Optional node ID to filter messages targeted at current node
+
+    Returns:
+        Formatted string with user messages, or empty string if no unread messages
+    """
+    from sqlalchemy import and_, cast, String
+    from sqlalchemy.dialects.postgresql import JSONB
+
+    # Query for unread user messages
+    # Note: SQLite doesn't support JSON path queries the same way as PostgreSQL
+    # We'll fetch all user messages and filter in Python
+    messages = db.query(ExecutionMessage).filter(
+        ExecutionMessage.operation_id == operation_id,
+        ExecutionMessage.sender_type == "user",
+    ).order_by(ExecutionMessage.created_at.asc()).all()
+
+    # Filter for unconsumed messages
+    unread_messages = []
+    for msg in messages:
+        context = msg.context or {}
+        if not context.get("consumed", False):
+            # Check if message is targeted at current node or is general
+            target = context.get("target")
+            if target in [None, "current_agent", current_node_id]:
+                unread_messages.append(msg)
+
+    if not unread_messages:
+        return ""
+
+    print(f"[messages] Found {len(unread_messages)} unread user messages for operation {operation_id}")
+
+    # Format messages for injection into prompt
+    message_lines = []
+    for msg in unread_messages:
+        msg_type = msg.message_type
+        type_label = {
+            "instruction": "INSTRUCTION",
+            "question": "QUESTION",
+            "chat": "MESSAGE"
+        }.get(msg_type, "MESSAGE")
+
+        message_lines.append(f"[User {type_label}]: {msg.content}")
+
+    # Mark messages as consumed
+    for msg in unread_messages:
+        if msg.context is None:
+            msg.context = {}
+        msg.context["consumed"] = True
+        msg.context["consumed_at"] = datetime.now(timezone.utc).isoformat()
+
+    try:
+        db.commit()
+        print(f"[messages] Marked {len(unread_messages)} messages as consumed")
+    except Exception as e:
+        print(f"[messages] Error marking messages as consumed: {e}")
+        db.rollback()
+
+    # Return formatted string
+    additional_context = "\n".join(message_lines)
+    return f"\n\n## User Messages\nThe user has sent you the following messages during execution:\n{additional_context}\n\nPlease take these into account as you continue your work.\n"
+
+
+def _record_execution_event_as_message(
+    db: Session,
+    operation_id: int,
+    sender_type: str,
+    sender_name: str,
+    content: str,
+    message_type: str,
+    sender_id: int = None,
+    context: dict = None
+) -> None:
+    """
+    Record an execution event as an ExecutionMessage for transcript.
+
+    This creates a permanent record of all execution activity, forming
+    a complete transcript that can be viewed during and after execution.
+
+    Args:
+        db: Database session
+        operation_id: The operation ID
+        sender_type: "user", "manager", "agent", "system"
+        sender_name: Display name
+        content: Message content
+        message_type: "status", "chat", "assumption", "answer", "review"
+        sender_id: Optional FK to user.id or agent.id
+        context: Optional metadata dict
+    """
+    try:
+        message = ExecutionMessage(
+            operation_id=operation_id,
+            sender_type=sender_type,
+            sender_name=sender_name,
+            sender_id=sender_id,
+            content=content,
+            message_type=message_type,
+            context=context or {}
+        )
+        db.add(message)
+        db.commit()
+    except Exception as e:
+        print(f"[transcript] Error recording execution message: {e}")
+        db.rollback()
 
 
 def _build_tools_prompt_section(agent_tools: list) -> str:
@@ -537,6 +847,18 @@ def generate_execution_events(
                 "agent_role": agent_role,
             })
 
+            # Record in transcript (Phase 3.4)
+            _record_execution_event_as_message(
+                db=db,
+                operation_id=operation.id,
+                sender_type="agent",
+                sender_name=agent_name,
+                sender_id=assigned_agent.id if assigned_agent else None,
+                content=f"Starting work on: {node_name}",
+                message_type="status",
+                context={"node_id": node_id, "node_index": idx, "action": "node_start"}
+            )
+
             time.sleep(0.5)
 
             # ==================== TOOL RESOLUTION ====================
@@ -585,6 +907,19 @@ def generate_execution_events(
                 if agent_tools:
                     tool_instruction = "\nIf a tool would help you complete this task, use it. Otherwise, respond directly."
 
+                # Assumption instruction
+                assumption_instruction = """
+
+**IMPORTANT - If Uncertain**: If you are uncertain about something critical that would impact your work quality, output an assumption block before your response:
+<assumption>
+<question>Your specific question here</question>
+<context>Why you need to know this</context>
+<options>Option1|Option2|Option3</options>
+<priority>high</priority>
+</assumption>
+
+Only raise assumptions for truly critical uncertainties. Most tasks can proceed with reasonable assumptions."""
+
                 # Combine into full prompt
                 system_prompt = f"""You are {agent_name}, a {agent_role}.
 
@@ -600,15 +935,107 @@ def generate_execution_events(
 ## Instructions
 Provide a concise professional output for this task. Be specific and actionable.
 Consider any team policies and previous work when formulating your response.{tool_instruction}
-Keep your response under 200 words."""
+Keep your response under 200 words.{assumption_instruction}"""
 
                 # ==================== EXECUTION PATH ====================
                 if not agent_tools:
-                    # --- No tools: single LLM call (same as before) ---
-                    print(f"[execute] Calling LLM for node {node_id} (no tools, prompt: {len(system_prompt)} chars)...")
-                    llm_response = llm_service.simple_chat(system_prompt)
-                    tokens_used = len(system_prompt) // 4 + len(llm_response) // 4
+                    # --- No tools: single LLM call ---
+                    # Check for user messages before LLM call (Phase 3.3)
+                    user_messages_context = _get_and_consume_user_messages(operation.id, db, node_id)
+                    effective_prompt = system_prompt + user_messages_context
+
+                    print(f"[execute] Calling LLM for node {node_id} (no tools, prompt: {len(effective_prompt)} chars)...")
+                    llm_response = llm_service.simple_chat(effective_prompt)
+                    tokens_used = len(effective_prompt) // 4 + len(llm_response) // 4
                     print(f"[execute] LLM response received: {len(llm_response)} chars")
+
+                    # Check for assumptions in no-tools path
+                    assumptions = parse_assumptions_from_response(llm_response)
+                    if assumptions:
+                        assumption = assumptions[0]
+                        print(f"[execute] Assumption raised (no-tools path): {assumption['question'][:50]}...")
+
+                        context.raise_assumption(
+                            question=assumption["question"],
+                            context=assumption["context"],
+                            options=assumption.get("options", []),
+                            priority=assumption.get("priority", "normal")
+                        )
+
+                        yield emit("assumption_raised", {
+                            "operation_id": operation.id,
+                            "node_id": node_id,
+                            "node_name": node_name,
+                            "agent_name": agent_name,
+                            "agent_photo": assigned_agent.photo_url if assigned_agent else None,
+                            "assumption_index": len(context.assumptions) - 1,
+                            "question": assumption["question"],
+                            "context": assumption["context"],
+                            "options": assumption.get("options", []),
+                            "priority": assumption.get("priority", "normal"),
+                        })
+
+                        # Record in transcript (Phase 3.4)
+                        _record_execution_event_as_message(
+                            db=db,
+                            operation_id=operation.id,
+                            sender_type="agent",
+                            sender_name=agent_name,
+                            sender_id=assigned_agent.id if assigned_agent else None,
+                            content=f"Question: {assumption['question']}",
+                            message_type="assumption",
+                            context={
+                                "node_id": node_id,
+                                "assumption_index": len(context.assumptions) - 1,
+                                "assumption_context": assumption["context"],
+                                "options": assumption.get("options", []),
+                                "priority": assumption.get("priority", "normal")
+                            }
+                        )
+
+                        EXECUTION_REGISTRY.request_input(operation.id, assumption)
+                        operation.execution_checkpoint = context.to_checkpoint()
+                        operation.status = "waiting_for_input"
+                        db.commit()
+
+                        answer = _wait_for_assumption_answer(operation.id, timeout=300)
+
+                        if answer is None:
+                            yield emit("assumption_timeout", {
+                                "operation_id": operation.id,
+                                "node_id": node_id,
+                                "message": "No response received. Execution cannot continue."
+                            })
+                            context.status = "failed"
+                            operation.status = "failed"
+                            db.commit()
+                            return
+
+                        context.answer_assumption(len(context.assumptions) - 1, answer)
+                        yield emit("assumption_answered", {
+                            "assumption_index": len(context.assumptions) - 1,
+                            "answer": answer,
+                        })
+
+                        # Record in transcript (Phase 3.4)
+                        _record_execution_event_as_message(
+                            db=db,
+                            operation_id=operation.id,
+                            sender_type="user",
+                            sender_name="User",
+                            sender_id=None,
+                            content=f"Answer to '{assumption['question'][:50]}...': {answer}",
+                            message_type="answer",
+                            context={"node_id": node_id, "assumption_index": len(context.assumptions) - 1}
+                        )
+
+                        # Re-call LLM with answer
+                        # Check for any new user messages (Phase 3.3)
+                        user_messages_context = _get_and_consume_user_messages(operation.id, db, node_id)
+                        follow_up_prompt = f"{system_prompt}\n\n## User's Answer to Your Question\n\nQ: {assumption['question']}\nA: {answer}\n\nNow please complete the task with this information.{user_messages_context}"
+                        llm_response = llm_service.simple_chat(follow_up_prompt)
+                        tokens_used += len(follow_up_prompt) // 4 + len(llm_response) // 4
+                        print(f"[execute] LLM response after assumption answered: {len(llm_response)} chars")
                 else:
                     # --- Tools available: multi-turn conversation loop ---
                     print(f"[execute] Starting tool loop for node {node_id} ({len(agent_tools)} tools available)...")
@@ -619,12 +1046,120 @@ Keep your response under 200 words."""
 
                     max_tool_turns = 5
                     for turn in range(max_tool_turns):
+                        # Check for user messages before each LLM call (Phase 3.3)
+                        user_messages_context = _get_and_consume_user_messages(operation.id, db, node_id)
+                        if user_messages_context:
+                            # Inject as a user message in the conversation
+                            messages.append(LLMChatMessage(
+                                role="user",
+                                content=f"[REAL-TIME UPDATE FROM USER]{user_messages_context}"
+                            ))
+
                         # Call LLM
                         completion = llm_service.chat_completion(messages)
                         assistant_text = completion.response
                         usage = completion.usage or {}
                         tokens_used += usage.get("total_tokens", len(assistant_text) // 4)
 
+                        # ==================== CHECK FOR ASSUMPTIONS FIRST ====================
+                        assumptions = parse_assumptions_from_response(assistant_text)
+                        if assumptions:
+                            # Agent raised assumption(s) - handle the first one
+                            assumption = assumptions[0]
+                            print(f"[execute] Assumption raised: {assumption['question'][:50]}...")
+
+                            # Record in context
+                            context.raise_assumption(
+                                question=assumption["question"],
+                                context=assumption["context"],
+                                options=assumption.get("options", []),
+                                priority=assumption.get("priority", "normal")
+                            )
+
+                            # Emit SSE event
+                            yield emit("assumption_raised", {
+                                "operation_id": operation.id,
+                                "node_id": node_id,
+                                "node_name": node_name,
+                                "agent_name": agent_name,
+                                "agent_photo": assigned_agent.photo_url if assigned_agent else None,
+                                "assumption_index": len(context.assumptions) - 1,
+                                "question": assumption["question"],
+                                "context": assumption["context"],
+                                "options": assumption.get("options", []),
+                                "priority": assumption.get("priority", "normal"),
+                            })
+
+                            # Record in transcript (Phase 3.4)
+                            _record_execution_event_as_message(
+                                db=db,
+                                operation_id=operation.id,
+                                sender_type="agent",
+                                sender_name=agent_name,
+                                sender_id=assigned_agent.id if assigned_agent else None,
+                                content=f"Question: {assumption['question']}",
+                                message_type="assumption",
+                                context={
+                                    "node_id": node_id,
+                                    "assumption_index": len(context.assumptions) - 1,
+                                    "assumption_context": assumption["context"],
+                                    "options": assumption.get("options", []),
+                                    "priority": assumption.get("priority", "normal")
+                                }
+                            )
+
+                            # Request input via registry
+                            EXECUTION_REGISTRY.request_input(operation.id, assumption)
+
+                            # Save checkpoint
+                            operation.execution_checkpoint = context.to_checkpoint()
+                            operation.status = "waiting_for_input"
+                            db.commit()
+
+                            # Wait for user answer (blocking poll)
+                            answer = _wait_for_assumption_answer(operation.id, timeout=300)
+
+                            if answer is None:
+                                # Timeout or cancelled
+                                yield emit("assumption_timeout", {
+                                    "operation_id": operation.id,
+                                    "node_id": node_id,
+                                    "message": "No response received for assumption. Execution cannot continue."
+                                })
+                                context.status = "failed"
+                                operation.status = "failed"
+                                db.commit()
+                                return
+
+                            # Got answer - record it
+                            context.answer_assumption(len(context.assumptions) - 1, answer)
+                            yield emit("assumption_answered", {
+                                "assumption_index": len(context.assumptions) - 1,
+                                "answer": answer,
+                            })
+
+                            # Record in transcript (Phase 3.4)
+                            _record_execution_event_as_message(
+                                db=db,
+                                operation_id=operation.id,
+                                sender_type="user",
+                                sender_name="User",
+                                sender_id=None,
+                                content=f"Answer to '{assumption['question'][:50]}...': {answer}",
+                                message_type="answer",
+                                context={"node_id": node_id, "assumption_index": len(context.assumptions) - 1}
+                            )
+
+                            # Re-inject answer and continue
+                            messages.append(LLMChatMessage(role="assistant", content=assistant_text))
+                            messages.append(LLMChatMessage(
+                                role="user",
+                                content=f"Thank you. The user answered your question:\n\nQ: {assumption['question']}\nA: {answer}\n\nNow please continue with your task, incorporating this information."
+                            ))
+                            # Loop back to get new LLM response
+                            continue
+
+                        # ==================== CHECK FOR TOOL CALLS ====================
                         # Parse tool calls from response
                         tool_calls = parse_tool_calls_from_response(assistant_text)
 
@@ -676,7 +1211,19 @@ Keep your response under 200 words."""
                                     "tool": tc_name,
                                     "status": "completed",
                                 })
+                                # Record in transcript (Phase 3.4)
                                 result_str = tool_result.to_string()
+                                result_preview = result_str[:200] + "..." if len(result_str) > 200 else result_str
+                                _record_execution_event_as_message(
+                                    db=db,
+                                    operation_id=operation.id,
+                                    sender_type="agent",
+                                    sender_name=agent_name,
+                                    sender_id=assigned_agent.id if assigned_agent else None,
+                                    content=f"Used tool: {tc_name}\nResult: {result_preview}",
+                                    message_type="status",
+                                    context={"node_id": node_id, "tool": tc_name, "status": "completed"}
+                                )
                                 # Truncate very large results to keep context manageable
                                 if len(result_str) > 2000:
                                     result_str = result_str[:2000] + "\n... (truncated)"
@@ -689,6 +1236,17 @@ Keep your response under 200 words."""
                                     "status": "error",
                                     "error": tool_result.error,
                                 })
+                                # Record in transcript (Phase 3.4)
+                                _record_execution_event_as_message(
+                                    db=db,
+                                    operation_id=operation.id,
+                                    sender_type="agent",
+                                    sender_name=agent_name,
+                                    sender_id=assigned_agent.id if assigned_agent else None,
+                                    content=f"Tool error: {tc_name}\nError: {tool_result.error}",
+                                    message_type="status",
+                                    context={"node_id": node_id, "tool": tc_name, "status": "error"}
+                                )
                                 tool_results_text += f"\n[Tool: {tc_name}] Error: {tool_result.error}\n"
 
                         # Append assistant message + tool results, loop back
@@ -710,6 +1268,19 @@ Keep your response under 200 words."""
                     "status": "completed",
                     "output_preview": llm_response[:200] + "..." if len(llm_response) > 200 else llm_response,
                 })
+
+                # Record agent output in transcript (Phase 3.4)
+                output_preview = llm_response[:500] + "..." if len(llm_response) > 500 else llm_response
+                _record_execution_event_as_message(
+                    db=db,
+                    operation_id=operation.id,
+                    sender_type="agent",
+                    sender_name=agent_name,
+                    sender_id=assigned_agent.id if assigned_agent else None,
+                    content=output_preview,
+                    message_type="chat",
+                    context={"node_id": node_id, "node_name": node_name, "full_length": len(llm_response)}
+                )
 
                 # Store result in workflow config
                 node["result"] = llm_response
@@ -789,6 +1360,117 @@ Keep your response under 200 words."""
             # Update execution registry progress
             EXECUTION_REGISTRY.update_progress(operation.id, idx + 1, {"id": node_id, "status": "completed"})
             context.advance_node()
+
+            # ==================== EVO MANAGER REVIEW ====================
+            # After node completion, optionally have Evo review the output for quality/clarity
+            remaining_nodes = nodes[idx + 1:]  # Nodes still to be executed
+            team_settings = team.settings or {}
+            review_frequency = team_settings.get("manager_review_frequency", "every_2_nodes")
+
+            if should_evo_review(context, llm_response, idx, len(nodes), review_frequency):
+                print(f"[execute] Evo reviewing node {idx}: {node_name}")
+                yield emit("manager_reviewing", {
+                    "operation_id": operation.id,
+                    "node_id": node_id,
+                    "node_name": node_name,
+                })
+
+                evo_review = run_evo_review(
+                    llm_service=llm_service,
+                    task_description=operation.description,
+                    node_name=node_name,
+                    node_output=llm_response,
+                    context=context,
+                    remaining_nodes=remaining_nodes
+                )
+
+                if evo_review.get("needs_clarification"):
+                    # Manager has a question - same flow as agent assumptions
+                    print(f"[execute] Manager needs clarification: {evo_review['question']}")
+
+                    # Raise assumption from manager
+                    context.raise_assumption(
+                        question=evo_review["question"],
+                        context=evo_review["context"],
+                        options=evo_review.get("options", []),
+                        priority="high"  # Manager questions are always high priority
+                    )
+
+                    # Emit manager_question event
+                    yield emit("manager_question", {
+                        "operation_id": operation.id,
+                        "node_id": node_id,
+                        "node_name": node_name,
+                        "assumption_index": len(context.assumptions) - 1,
+                        "question": evo_review["question"],
+                        "context": evo_review["context"],
+                        "options": evo_review.get("options", []),
+                        "priority": "high",
+                        "reason": evo_review.get("reason", "manager_review"),
+                    })
+
+                    # Record in transcript (Phase 3.4)
+                    _record_execution_event_as_message(
+                        db=db,
+                        operation_id=operation.id,
+                        sender_type="manager",
+                        sender_name="Evo",
+                        sender_id=None,
+                        content=f"Question: {evo_review['question']}",
+                        message_type="review",
+                        context={
+                            "node_id": node_id,
+                            "assumption_index": len(context.assumptions) - 1,
+                            "review_context": evo_review["context"],
+                            "options": evo_review.get("options", []),
+                            "reason": evo_review.get("reason", "manager_review")
+                        }
+                    )
+
+                    # Request input and wait for answer
+                    EXECUTION_REGISTRY.request_input(operation.id, evo_review)
+                    operation.execution_checkpoint = context.to_checkpoint()
+                    operation.status = "waiting_for_input"
+                    db.commit()
+
+                    answer = _wait_for_assumption_answer(operation.id, timeout=300)
+
+                    if answer is None:
+                        # Timeout or cancelled
+                        yield emit("assumption_timeout", {
+                            "operation_id": operation.id,
+                            "node_id": node_id,
+                            "message": "No response received for manager's question. Execution cannot continue."
+                        })
+                        context.status = "failed"
+                        operation.status = "failed"
+                        db.commit()
+                        return
+
+                    # Record answer
+                    context.answer_assumption(len(context.assumptions) - 1, answer)
+                    yield emit("assumption_answered", {
+                        "assumption_index": len(context.assumptions) - 1,
+                        "answer": answer,
+                        "answered_by": "user",
+                        "question_from": "manager",
+                    })
+
+                    # Record in transcript (Phase 3.4)
+                    _record_execution_event_as_message(
+                        db=db,
+                        operation_id=operation.id,
+                        sender_type="user",
+                        sender_name="User",
+                        sender_id=None,
+                        content=f"Answer to manager's question: {answer}",
+                        message_type="answer",
+                        context={"node_id": node_id, "assumption_index": len(context.assumptions) - 1, "question_from": "manager"}
+                    )
+
+                    # Continue execution with the clarification
+                    # (No need to re-run the node - the clarification will inform future nodes)
+                    print(f"[execute] Manager clarification received: {answer[:100]}...")
 
             time.sleep(0.2)
 
@@ -887,6 +1569,35 @@ Keep your response under 200 words."""
         except Exception as e:
             print(f"[execute] Error saving WorkflowExecution: {e}")
             # Don't fail the operation if this fails
+
+        # ==================== UPDATE AGENT PERFORMANCE STATS ====================
+        # Update Agent.rating and Agent.accuracy from real execution data
+        try:
+            for agent in agents:
+                perf_list = evolution_service.get_agent_performance(agent_name=agent.name)
+                if perf_list:
+                    perf = perf_list[0]
+                    # Map avg_quality (0-1) to rating (1.0-5.0)
+                    agent.rating = round(1.0 + perf.avg_quality * 4.0, 2)
+                    # Map success_rate to accuracy (0-100)
+                    agent.accuracy = round(perf.success_rate * 100, 1)
+                    # Append to evolution_history (cap at 50 entries)
+                    history = agent.evolution_history or []
+                    history.append({
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "quality_score": quality_score,
+                        "operation_id": operation.id,
+                        "trend": perf.trend,
+                    })
+                    agent.evolution_history = history[-50:]
+            db.commit()
+            print(f"[execute] Updated agent performance stats for {len(agents)} agents")
+        except Exception as e:
+            print(f"[execute] Error updating agent stats (non-fatal): {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         # ==================== EXTRACT AND STORE LEARNINGS ====================
         # Auto-extract insights from agent outputs and store in knowledge graph
@@ -1239,6 +1950,352 @@ async def cancel_operation(
     )
 
 
+@router.post("/{operation_id}/assumption/respond", response_model=AssumptionResponseResponse)
+async def respond_to_assumption(
+    operation_id: int,
+    request: AssumptionResponseRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Provide an answer to a pending assumption during execution.
+
+    The execution generator is waiting for this answer and will resume
+    automatically once the answer is provided.
+    """
+    print(f"\n[control] Assumption response for operation {operation_id}: '{request.answer}'")
+
+    # Get operation
+    operation = db.query(Operation).filter(Operation.id == operation_id).first()
+
+    if not operation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Operation not found"
+        )
+
+    # Verify team belongs to user
+    team = db.query(Team).filter(
+        Team.id == operation.team_id,
+        Team.user_id == current_user.id
+    ).first()
+
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    # Check if operation is waiting for input
+    if operation.status != "waiting_for_input":
+        return AssumptionResponseResponse(
+            success=False,
+            message=f"Operation is not waiting for input (current status: {operation.status})",
+            operation_id=operation_id,
+            resumed=False
+        )
+
+    # Check if execution is registered and waiting
+    if not EXECUTION_REGISTRY.is_waiting_for_input(operation_id):
+        return AssumptionResponseResponse(
+            success=False,
+            message="Operation is not waiting for assumption response in execution registry",
+            operation_id=operation_id,
+            resumed=False
+        )
+
+    # Provide the answer to the execution registry
+    # The blocked generator will pick this up and continue
+    if EXECUTION_REGISTRY.provide_input(operation_id, request.answer):
+        return AssumptionResponseResponse(
+            success=True,
+            message="Answer provided. Execution will resume.",
+            operation_id=operation_id,
+            resumed=True
+        )
+    else:
+        return AssumptionResponseResponse(
+            success=False,
+            message="Failed to provide answer. Execution state may have changed.",
+            operation_id=operation_id,
+            resumed=False
+        )
+
+
+# ==================== EXECUTION CHAT ENDPOINTS (Phase 3.2) ====================
+
+@router.get("/{operation_id}/messages", response_model=ExecutionMessagesResponse)
+async def get_execution_messages(
+    operation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all messages for an execution.
+
+    Returns chronological list of all messages in the execution transcript:
+    - User messages
+    - Agent messages (outputs, questions)
+    - Manager reviews and questions
+    - System status messages
+
+    Used to populate the execution chat panel in real-time.
+    """
+    print(f"\n[chat] Get messages for operation {operation_id}")
+
+    # Get operation
+    operation = db.query(Operation).filter(Operation.id == operation_id).first()
+
+    if not operation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Operation not found"
+        )
+
+    # Verify team belongs to user
+    team = db.query(Team).filter(
+        Team.id == operation.team_id,
+        Team.user_id == current_user.id
+    ).first()
+
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    # Get all messages for this operation, ordered chronologically
+    messages = db.query(ExecutionMessage).filter(
+        ExecutionMessage.operation_id == operation_id
+    ).order_by(ExecutionMessage.created_at.asc()).all()
+
+    print(f"[chat] Found {len(messages)} messages for operation {operation_id}")
+
+    return ExecutionMessagesResponse(
+        messages=messages,
+        total_count=len(messages),
+        operation_id=operation_id
+    )
+
+
+@router.post("/{operation_id}/messages", response_model=ExecutionMessageResponse)
+async def send_execution_message(
+    operation_id: int,
+    request: ExecutionMessageCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Send a message during execution.
+
+    Allows users to send instructions, questions, or comments to:
+    - Current agent (will be injected into next LLM call)
+    - Manager (Evo)
+    - Specific agent by name
+
+    The message is stored in the execution transcript and can be consumed
+    by the execution generator to inject into agent context.
+    """
+    print(f"\n[chat] User sending message to operation {operation_id}: '{request.content[:50]}...'")
+
+    # Get operation
+    operation = db.query(Operation).filter(Operation.id == operation_id).first()
+
+    if not operation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Operation not found"
+        )
+
+    # Verify team belongs to user
+    team = db.query(Team).filter(
+        Team.id == operation.team_id,
+        Team.user_id == current_user.id
+    ).first()
+
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    # Create execution message
+    message = ExecutionMessage(
+        operation_id=operation_id,
+        sender_type="user",
+        sender_name=current_user.username,
+        sender_id=current_user.id,
+        content=request.content,
+        message_type=request.message_type,
+        context={
+            "target": request.target,
+            "consumed": False,  # Will be marked True when injected into agent context
+            "sent_at": datetime.now(timezone.utc).isoformat()
+        }
+    )
+
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+
+    print(f"[chat] Created message {message.id} for operation {operation_id}")
+
+    # TODO Phase 3.3: If execution is running, this message should be injected
+    # into the agent's context at the next LLM call. This will be implemented
+    # in the execution generator.
+
+    return message
+
+
+@router.get("/pending-assumptions", response_model=PendingAssumptionsResponse)
+async def get_pending_assumptions(
+    team_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all operations with pending assumptions (waiting_for_input status).
+
+    Returns operations that are currently paused waiting for user input,
+    sorted by waiting time (oldest first = most urgent).
+
+    Used by the Inbox to show pending questions that need attention.
+    """
+    print(f"\n[pending-assumptions] Getting pending assumptions for team {team_id}")
+
+    # Verify team belongs to user
+    team = db.query(Team).filter(
+        Team.id == team_id,
+        Team.user_id == current_user.id
+    ).first()
+
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    # Get all operations in waiting_for_input status for this team
+    waiting_operations = db.query(Operation).filter(
+        Operation.team_id == team_id,
+        Operation.status == "waiting_for_input"
+    ).all()
+
+    print(f"[pending-assumptions] Found {len(waiting_operations)} operations waiting for input")
+
+    pending_assumptions = []
+
+    for operation in waiting_operations:
+        # Check if execution is registered and has pending assumption
+        state = EXECUTION_REGISTRY.get_state(operation.id)
+
+        if state and state.signal == ExecutionSignal.WAITING_FOR_INPUT and state.pending_assumption:
+            assumption_data = state.pending_assumption
+
+            # Get agent info
+            agent_name = assumption_data.get("agent_name", "Agent")
+            agent_photo = assumption_data.get("agent_photo")
+
+            # Calculate waiting duration
+            # The operation's updated_at should be when it entered waiting_for_input status
+            waiting_since = operation.updated_at or operation.created_at
+            waiting_duration = (datetime.now(timezone.utc) - waiting_since.replace(tzinfo=timezone.utc)).total_seconds()
+
+            pending_assumptions.append(PendingAssumptionResponse(
+                operation_id=operation.id,
+                operation_title=operation.title,
+                operation_description=operation.description,
+                node_id=assumption_data.get("node_id", ""),
+                node_name=assumption_data.get("node_name", ""),
+                agent_name=agent_name,
+                agent_photo=agent_photo,
+                question=assumption_data.get("question", ""),
+                context=assumption_data.get("context"),
+                options=assumption_data.get("options", []),
+                priority=assumption_data.get("priority", "normal"),
+                assumption_index=assumption_data.get("assumption_index", 0),
+                waiting_since=waiting_since,
+                waiting_duration_seconds=int(waiting_duration)
+            ))
+
+    # Sort by waiting time (oldest first = most urgent)
+    pending_assumptions.sort(key=lambda x: x.waiting_since)
+
+    print(f"[pending-assumptions] Returning {len(pending_assumptions)} pending assumptions")
+
+    return PendingAssumptionsResponse(
+        pending_assumptions=pending_assumptions,
+        total_count=len(pending_assumptions),
+        team_id=team_id
+    )
+
+
+@router.get("/agent-messages", response_model=AgentMessagesResponse)
+async def get_agent_messages(
+    team_id: int,
+    agent_name: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all execution messages for a specific agent across all operations.
+
+    Returns messages grouped by operation, showing the agent's questions,
+    outputs, and user interactions. Used by the Inbox specialist chat.
+    """
+    print(f"\n[agent-messages] Getting messages for agent '{agent_name}' in team {team_id}")
+
+    # Verify team belongs to user
+    team = db.query(Team).filter(
+        Team.id == team_id,
+        Team.user_id == current_user.id
+    ).first()
+
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    # Get all operations for this team
+    operations = db.query(Operation).filter(
+        Operation.team_id == team_id
+    ).order_by(Operation.created_at.desc()).all()
+
+    message_groups = []
+    total_messages = 0
+
+    for operation in operations:
+        # Get messages for this operation where:
+        # - Agent sent them (sender_name matches)
+        # - OR user sent them (to provide context)
+        messages = db.query(ExecutionMessage).filter(
+            ExecutionMessage.operation_id == operation.id
+        ).filter(
+            (ExecutionMessage.sender_name == agent_name) |
+            (ExecutionMessage.sender_type == "user")
+        ).order_by(ExecutionMessage.created_at).all()
+
+        if messages:
+            message_groups.append(AgentMessageGroup(
+                operation_id=operation.id,
+                operation_title=operation.title,
+                operation_status=operation.status,
+                messages=messages,
+                created_at=operation.created_at
+            ))
+            total_messages += len(messages)
+
+    print(f"[agent-messages] Found {len(message_groups)} operations with {total_messages} messages")
+
+    return AgentMessagesResponse(
+        message_groups=message_groups,
+        total_messages=total_messages,
+        agent_name=agent_name,
+        team_id=team_id
+    )
+
+
 @router.post("/{operation_id}/resume")
 async def resume_operation(
     operation_id: int,
@@ -1447,6 +2504,41 @@ async def compare_workflows(
         "team_id": team_id,
         "task_type": task_type,
         **comparison
+    }
+
+
+@router.get("/evolution/agent-performance/{team_id}")
+async def get_agent_performance(
+    team_id: int,
+    agent_name: str = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get per-agent performance stats aggregated from execution history.
+
+    Returns agents sorted by avg_quality (leaderboard order).
+    Optionally filter to a single agent with ?agent_name=...
+    """
+    # Verify team belongs to user
+    team = db.query(Team).filter(
+        Team.id == team_id,
+        Team.user_id == current_user.id
+    ).first()
+
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Team not found"
+        )
+
+    evolution_service = EvolutionService(db=db, team_id=team_id)
+    performances = evolution_service.get_agent_performance(agent_name=agent_name)
+
+    return {
+        "team_id": team_id,
+        "agents": [p.to_dict() for p in performances],
+        "total_agents": len(performances),
     }
 
 

@@ -5,11 +5,10 @@ import WelcomeReception from './WelcomeReception';
 import DepartmentSelection from './DepartmentSelection';
 import CustomTeamBuilder from './CustomTeamBuilder';
 import HiringReveal from './HiringReveal';
-import OperationFlow from '../operations/OperationFlow';
 import { type Agent } from '@/lib/agents';
 import { createTeam } from '@/lib/teams';
 
-type OnboardingStep = 'welcome' | 'department' | 'custom_team' | 'hiring' | 'operation';
+type OnboardingStep = 'welcome' | 'department' | 'custom_team' | 'hiring';
 
 interface OnboardingFlowProps {
   onComplete: () => void;
@@ -64,10 +63,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   };
 
   const handleHiringComplete = () => {
-    setStep('operation');
-  };
-
-  const handleOperationComplete = () => {
+    // Skip demo operation and complete onboarding
+    // User will be redirected to dashboard/HQ
     onComplete();
   };
 
@@ -91,12 +88,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           department={selectedDepartment!}
           customEmployees={customTeam}
           onComplete={handleHiringComplete}
-        />
-      )}
-      {step === 'operation' && customTeam.length > 0 && (
-        <OperationFlow
-          agents={customTeam}
-          onComplete={handleOperationComplete}
         />
       )}
     </>

@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTeamAgents, Agent } from '@/lib/services/agents';
 import { workflowService } from '@/lib/services/workflows/workflow.service';
+import type { ExecutionMessage } from '@/lib/services/workflows/types';
+import { useNotifications } from '@/lib/hooks/useNotifications';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 interface WarRoomLiveProps {
   taskId: number;
@@ -33,13 +36,29 @@ interface LogEntry {
 
 interface NodeStatus {
   nodeId: string;
-  status: 'pending' | 'active' | 'completed' | 'failed' | 'waiting';
+  status: 'pending' | 'active' | 'completed' | 'failed' | 'waiting' | 'waiting_for_input';
   activeTool?: string;
   progress?: number;
   output?: string;
 }
 
+interface AssumptionData {
+  operationId: number;
+  nodeId: string;
+  agentName: string;
+  agentPhoto?: string;
+  question: string;
+  context: string;
+  options: string[];
+  priority: string;
+  assumptionIndex: number;
+}
+
 export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescription, initialStatus = 'pending', onClose }: WarRoomLiveProps) {
+  // Notification hooks (Phase 6.1)
+  const { showNotification, playNotificationSound, canNotify } = useNotifications();
+  const { showToast } = useToast();
+
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [nodeStatuses, setNodeStatuses] = useState<NodeStatus[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -60,7 +79,15 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
   const [qualityScore, setQualityScore] = useState<number | null>(null);
+  const [currentAssumption, setCurrentAssumption] = useState<AssumptionData | null>(null);
+  const [assumptionAnswer, setAssumptionAnswer] = useState('');
+  const [isSubmittingAssumption, setIsSubmittingAssumption] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ExecutionMessage[]>([]);
+  const [isChatExpanded, setIsChatExpanded] = useState(false);
+  const [newChatMessage, setNewChatMessage] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
   const logContainerRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   // Get team agents for display
@@ -432,12 +459,156 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
         addLog('System', `Resuming from node ${data.from_node + 1}`, 'info');
         break;
 
+      case 'assumption_raised':
+        setCurrentAssumption({
+          operationId: data.operation_id,
+          nodeId: data.node_id,
+          agentName: data.agent_name,
+          agentPhoto: data.agent_photo,
+          question: data.question,
+          context: data.context,
+          options: data.options || [],
+          priority: data.priority,
+          assumptionIndex: data.assumption_index,
+        });
+        updateNodeStatus(data.node_id, { status: 'waiting_for_input' });
+        setIsPaused(true);
+        addLog(data.agent_name, `Needs your input: ${data.question}`, 'info');
+
+        // Trigger notifications (Phase 6.1)
+        playNotificationSound();
+
+        // Browser notification
+        if (canNotify) {
+          showNotification({
+            title: `${data.agent_name} needs your input`,
+            body: data.question,
+            tag: `assumption-${data.operation_id}-${data.assumption_index}`,
+            requireInteraction: true,
+            onClick: () => {
+              window.focus();
+            },
+          });
+        }
+
+        // Toast notification
+        showToast({
+          type: 'assumption',
+          title: `${data.agent_name} needs your input`,
+          message: data.question,
+          duration: 0, // Don't auto-dismiss
+          action: {
+            label: 'View',
+            onClick: () => {
+              // Scroll to assumption panel
+              const panel = document.querySelector('[data-assumption-panel]');
+              if (panel) {
+                panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+            },
+          },
+        });
+
+        break;
+
+      case 'assumption_answered':
+        setCurrentAssumption(null);
+        setAssumptionAnswer('');
+        setIsPaused(false);
+        addLog('System', 'Input received. Resuming execution...', 'info');
+        break;
+
+      case 'manager_question':
+        setCurrentAssumption({
+          operationId: data.operation_id,
+          nodeId: data.node_id,
+          agentName: 'Evo (Manager)',
+          agentPhoto: '/evo-avatar.png',
+          question: data.question,
+          context: data.context,
+          options: data.options || [],
+          priority: data.priority,
+          assumptionIndex: data.assumption_index,
+        });
+        updateNodeStatus(data.node_id, { status: 'waiting_for_input' });
+        setIsPaused(true);
+        addLog('Evo', `Manager needs your input: ${data.question}`, 'info');
+
+        // Trigger notifications (Phase 6.1)
+        playNotificationSound();
+
+        // Browser notification
+        if (canNotify) {
+          showNotification({
+            title: 'Evo (Manager) needs your input',
+            body: data.question,
+            tag: `manager-question-${data.operation_id}-${data.assumption_index}`,
+            requireInteraction: true,
+            onClick: () => {
+              window.focus();
+            },
+          });
+        }
+
+        // Toast notification
+        showToast({
+          type: 'assumption',
+          title: 'Evo (Manager) needs your input',
+          message: data.question,
+          duration: 0, // Don't auto-dismiss
+          action: {
+            label: 'View',
+            onClick: () => {
+              // Scroll to assumption panel
+              const panel = document.querySelector('[data-assumption-panel]');
+              if (panel) {
+                panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+            },
+          },
+        });
+
+        break;
+
       case 'error':
         setError(data.message);
         addLog('System', `Error: ${data.message}`, 'error');
         break;
     }
   }, [addLog, updateNodeStatus]);
+
+  // Submit assumption answer
+  const submitAssumptionAnswer = useCallback(async (answer: string) => {
+    if (!currentAssumption || isSubmittingAssumption) return;
+
+    setIsSubmittingAssumption(true);
+    try {
+      const response = await fetch(`/api/operations/${taskId}/assumption/respond`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          answer,
+          assumption_index: currentAssumption.assumptionIndex,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        addLog('System', 'Answer submitted. Execution will resume...', 'complete');
+        // The SSE event 'assumption_answered' will clear the assumption state
+      } else {
+        addLog('System', `Failed to submit answer: ${result.message}`, 'error');
+      }
+    } catch (err) {
+      console.error('Error submitting assumption answer:', err);
+      addLog('System', 'Failed to submit answer. Please try again.', 'error');
+    } finally {
+      setIsSubmittingAssumption(false);
+    }
+  }, [currentAssumption, taskId, isSubmittingAssumption, addLog]);
 
   // Submit rating
   const submitRating = useCallback(async () => {
@@ -463,6 +634,86 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
       setIsSubmittingRating(false);
     }
   }, [taskId, userRating, ratingFeedback, isSubmittingRating, addLog]);
+
+  // Load chat messages (execution transcript)
+  const loadChatMessages = useCallback(async () => {
+    try {
+      const result = await workflowService.getExecutionMessages(taskId);
+      if (result.success && result.messages) {
+        setChatMessages(result.messages);
+      }
+    } catch (err) {
+      console.error('Error loading chat messages:', err);
+    }
+  }, [taskId]);
+
+  // Send chat message
+  const sendChatMessage = useCallback(async () => {
+    if (!newChatMessage.trim() || isSendingMessage) return;
+
+    const messageContent = newChatMessage.trim();
+    setNewChatMessage('');
+    setIsSendingMessage(true);
+
+    try {
+      const result = await workflowService.sendExecutionMessage(
+        taskId,
+        messageContent,
+        'current_agent',
+        'chat'
+      );
+      if (result.success && result.message) {
+        // Add message to local state immediately
+        setChatMessages(prev => [...prev, result.message!]);
+        addLog('You', `Sent message: ${messageContent.substring(0, 50)}${messageContent.length > 50 ? '...' : ''}`, 'info');
+      } else {
+        addLog('System', `Failed to send message: ${result.error}`, 'error');
+      }
+    } catch (err) {
+      console.error('Error sending message:', err);
+      addLog('System', 'Failed to send message', 'error');
+    } finally {
+      setIsSendingMessage(false);
+    }
+  }, [taskId, newChatMessage, isSendingMessage, addLog]);
+
+  // Load messages on mount
+  useEffect(() => {
+    loadChatMessages();
+  }, [loadChatMessages]);
+
+  // Auto-scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    if (chatContainerRef.current && isChatExpanded) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatMessages, isChatExpanded]);
+
+  // Keyboard shortcuts for assumption quick replies (Phase 4.4)
+  useEffect(() => {
+    if (!currentAssumption || !currentAssumption.options || currentAssumption.options.length === 0) {
+      return;
+    }
+
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input field
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      // Number keys 1-9 for quick option selection
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= Math.min(9, currentAssumption.options.length)) {
+        e.preventDefault();
+        const selectedOption = currentAssumption.options[num - 1];
+        setAssumptionAnswer(selectedOption);
+        submitAssumptionAnswer(selectedOption);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [currentAssumption, submitAssumptionAnswer]);
 
   // Auto-start execution for pending tasks only
   useEffect(() => {
@@ -608,7 +859,8 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
               const isActive = nodeStatus?.status === 'active';
               const isCompleted = nodeStatus?.status === 'completed';
               const isFailed = nodeStatus?.status === 'failed';
-              const displayColor = isFailed ? '#EF4444' : nodeColor;
+              const isWaitingForInput = nodeStatus?.status === 'waiting_for_input';
+              const displayColor = isFailed ? '#EF4444' : isWaitingForInput ? '#F59E0B' : nodeColor;
 
               // Get agent photo
               const agentPhoto = node.agentPhoto || getAgentPhoto(node.agentName || node.agentRole);
@@ -617,8 +869,8 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
                 <div key={node.id} className="flex items-center">
                   {/* Node */}
                   <div className="relative">
-                    {/* Pulsing glow for active node */}
-                    {isActive && (
+                    {/* Pulsing glow for active or waiting node */}
+                    {(isActive || isWaitingForInput) && (
                       <div
                         className="absolute -inset-4 rounded-lg blur-2xl opacity-40 animate-pulse"
                         style={{ backgroundColor: displayColor }}
@@ -628,18 +880,18 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
                     {/* Node card */}
                     <div
                       className={`relative bg-[#0A0A0F] border rounded-lg p-5 w-64 transition-all ${
-                        isActive ? 'border-opacity-100' : 'border-opacity-50'
+                        (isActive || isWaitingForInput) ? 'border-opacity-100' : 'border-opacity-50'
                       } ${isCompleted ? 'opacity-70' : ''}`}
-                      style={{ borderColor: isActive ? displayColor : '#334155' }}
+                      style={{ borderColor: (isActive || isWaitingForInput) ? displayColor : '#334155' }}
                     >
                       {/* Order badge */}
                       <div
                         className={`absolute -top-2 -left-2 w-7 h-7 rounded-full flex items-center justify-center text-white font-semibold text-sm ${
-                          isCompleted ? 'bg-green-600' : isFailed ? 'bg-red-600' : ''
+                          isCompleted ? 'bg-green-600' : isFailed ? 'bg-red-600' : isWaitingForInput ? 'bg-amber-500 animate-pulse' : ''
                         }`}
-                        style={{ backgroundColor: isCompleted || isFailed ? undefined : displayColor }}
+                        style={{ backgroundColor: (isCompleted || isFailed || isWaitingForInput) ? undefined : displayColor }}
                       >
-                        {isCompleted ? '✓' : isFailed ? '✕' : node.order}
+                        {isCompleted ? '✓' : isFailed ? '✕' : isWaitingForInput ? '?' : node.order}
                       </div>
 
                       {/* Agent Photo */}
@@ -700,7 +952,8 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
                         <div className="text-xs text-center">
                           {isCompleted && <span className="text-green-500">Completed</span>}
                           {isFailed && <span className="text-red-500">Failed</span>}
-                          {isActive && <span className="text-[#6366F1]">In Progress</span>}
+                          {isWaitingForInput && <span className="text-amber-500 font-semibold">⚠️ Needs your input</span>}
+                          {isActive && !isWaitingForInput && <span className="text-[#6366F1]">In Progress</span>}
                           {nodeStatus?.status === 'pending' && <span className="text-slate-500">Pending</span>}
                         </div>
                       </div>
@@ -857,6 +1110,153 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
             </div>
           )}
         </div>
+
+        {/* Chat Panel (Phase 4.2) */}
+        {isChatExpanded ? (
+          <div className="w-96 border-l border-slate-800 bg-[#0A0A0F] flex flex-col">
+            {/* Chat Header */}
+            <div className="p-3 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+                <h3 className="text-xs font-semibold text-slate-400">EXECUTION CHAT</h3>
+                <span className="text-xs text-slate-500">({chatMessages.length})</span>
+              </div>
+              <button
+                onClick={() => setIsChatExpanded(false)}
+                className="text-slate-500 hover:text-slate-400 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Chat Messages */}
+            <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-hide">
+              {chatMessages.length === 0 ? (
+                <div className="text-center text-slate-600 text-xs py-8">
+                  No messages yet. Send a message to communicate with the agents during execution.
+                </div>
+              ) : (
+                chatMessages.map((msg) => {
+                  const isUser = msg.sender_type === 'user';
+                  const isAgent = msg.sender_type === 'agent';
+                  const isManager = msg.sender_type === 'manager';
+                  const isSystem = msg.sender_type === 'system';
+
+                  return (
+                    <div key={msg.id} className="flex items-start gap-2">
+                      {/* Avatar */}
+                      <div className="flex-shrink-0">
+                        {isUser ? (
+                          <div className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+                            <span className="text-xs text-blue-400">U</span>
+                          </div>
+                        ) : isAgent ? (
+                          <div className="w-6 h-6 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
+                            <span className="text-xs text-purple-400">A</span>
+                          </div>
+                        ) : isManager ? (
+                          <div className="w-6 h-6 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+                            <span className="text-xs text-indigo-400">E</span>
+                          </div>
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center">
+                            <span className="text-xs text-slate-400">S</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Message Content */}
+                      <div className="flex-1 min-w-0">
+                        {/* Header */}
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-xs font-medium ${
+                            isUser ? 'text-blue-400' :
+                            isAgent ? 'text-purple-400' :
+                            isManager ? 'text-indigo-400' :
+                            'text-slate-400'
+                          }`}>
+                            {msg.sender_name}
+                          </span>
+                          {msg.message_type !== 'chat' && (
+                            <span className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px] text-slate-500 uppercase">
+                              {msg.message_type}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-600">
+                            {new Date(msg.created_at).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        {/* Content */}
+                        <p className="text-xs text-slate-300 whitespace-pre-wrap break-words">
+                          {msg.content}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Chat Input */}
+            <div className="p-3 border-t border-slate-800">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newChatMessage}
+                  onChange={(e) => setNewChatMessage(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendChatMessage();
+                    }
+                  }}
+                  placeholder="Message to current agent..."
+                  disabled={isSendingMessage || isComplete || isCancelled}
+                  className="flex-1 px-3 py-2 bg-slate-800/50 border border-slate-700 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <button
+                  onClick={sendChatMessage}
+                  disabled={!newChatMessage.trim() || isSendingMessage || isComplete || isCancelled}
+                  className="px-3 py-2 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition-colors flex items-center gap-1"
+                >
+                  {isSendingMessage ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-600 mt-1.5">
+                Press Enter to send • Messages go to the current agent
+              </p>
+            </div>
+          </div>
+        ) : (
+          // Collapsed chat button
+          <div className="w-12 border-l border-slate-800 bg-[#0A0A0F] flex flex-col items-center py-4">
+            <button
+              onClick={() => setIsChatExpanded(true)}
+              className="relative p-2 text-slate-500 hover:text-purple-400 hover:bg-slate-800 rounded transition-colors"
+              title="Open Chat"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              {chatMessages.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-500 rounded-full text-[10px] text-white flex items-center justify-center">
+                  {chatMessages.length > 9 ? '9+' : chatMessages.length}
+                </span>
+              )}
+            </button>
+            <span className="text-[10px] text-slate-600 mt-2 [writing-mode:vertical-rl]">
+              CHAT
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Live Activity Log */}
@@ -914,6 +1314,132 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
           )}
         </div>
       </div>
+
+      {/* Assumption Panel (Phase 4.1) */}
+      {currentAssumption && (
+        <div
+          data-assumption-panel
+          className="flex-shrink-0 border-t border-slate-800 bg-gradient-to-br from-amber-500/10 to-orange-500/10 animate-in slide-in-from-bottom"
+        >
+          <div className="p-4">
+            {/* Header */}
+            <div className="flex items-start gap-4 mb-4">
+              {/* Agent Photo */}
+              {currentAssumption.agentPhoto && (
+                <img
+                  src={currentAssumption.agentPhoto}
+                  alt={currentAssumption.agentName}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-amber-500 ring-2 ring-amber-500/50 flex-shrink-0"
+                />
+              )}
+
+              <div className="flex-1">
+                {/* Badge */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-2 py-1 bg-amber-500/20 border border-amber-500/30 rounded text-xs font-semibold text-amber-400">
+                    {currentAssumption.agentName === 'Evo (Manager)' ? '🎯 MANAGER QUESTION' : '❓ AGENT QUESTION'}
+                  </span>
+                  <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                    currentAssumption.priority === 'high' || currentAssumption.priority === 'critical'
+                      ? 'bg-red-500/20 border border-red-500/30 text-red-400'
+                      : 'bg-slate-700 text-slate-400'
+                  }`}>
+                    {currentAssumption.priority.toUpperCase()}
+                  </span>
+                </div>
+
+                {/* Question */}
+                <h4 className="text-white font-semibold text-lg mb-1">
+                  {currentAssumption.agentName} needs your input
+                </h4>
+                <p className="text-amber-100 text-base mb-2">
+                  {currentAssumption.question}
+                </p>
+
+                {/* Context */}
+                {currentAssumption.context && (
+                  <p className="text-slate-400 text-sm mb-3">
+                    {currentAssumption.context}
+                  </p>
+                )}
+
+                {/* Options (if provided) - Smart Quick Actions */}
+                {currentAssumption.options && currentAssumption.options.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {currentAssumption.options.map((option, idx) => {
+                      // Smart styling based on option content
+                      const optionLower = option.toLowerCase();
+                      const isYes = optionLower === 'yes' || optionLower === 'y' || optionLower === 'proceed' || optionLower === 'continue' || optionLower === 'approve';
+                      const isNo = optionLower === 'no' || optionLower === 'n' || optionLower === 'cancel' || optionLower === 'decline';
+                      const isSkip = optionLower === 'skip' || optionLower === 'maybe later' || optionLower === 'not sure';
+                      const isCritical = optionLower.includes('critical') || optionLower.includes('urgent') || optionLower.includes('high priority');
+                      const isMinor = optionLower.includes('minor') || optionLower.includes('low') || optionLower.includes('low priority');
+
+                      let buttonClass = "px-4 py-2 bg-slate-800 hover:bg-amber-500/20 border border-slate-700 hover:border-amber-500/50 rounded text-sm text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed";
+
+                      if (isYes) {
+                        buttonClass = "px-4 py-2 bg-green-900/30 hover:bg-green-600/40 border border-green-600/50 hover:border-green-500 rounded text-sm text-green-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium";
+                      } else if (isNo) {
+                        buttonClass = "px-4 py-2 bg-red-900/30 hover:bg-red-600/40 border border-red-600/50 hover:border-red-500 rounded text-sm text-red-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium";
+                      } else if (isSkip) {
+                        buttonClass = "px-4 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 hover:border-slate-500 rounded text-sm text-slate-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed";
+                      } else if (isCritical) {
+                        buttonClass = "px-4 py-2 bg-red-900/30 hover:bg-red-500/30 border border-red-500/50 hover:border-red-400 rounded text-sm text-red-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-semibold";
+                      } else if (isMinor) {
+                        buttonClass = "px-4 py-2 bg-blue-900/30 hover:bg-blue-500/30 border border-blue-500/50 hover:border-blue-400 rounded text-sm text-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed";
+                      }
+
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            setAssumptionAnswer(option);
+                            submitAssumptionAnswer(option);
+                          }}
+                          disabled={isSubmittingAssumption}
+                          className={buttonClass}
+                          title={`Quick reply: ${option} (${idx + 1})`}
+                        >
+                          {option}
+                          {idx < 9 && (
+                            <span className="ml-2 text-xs opacity-60">
+                              {idx + 1}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Custom Answer Input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={assumptionAnswer}
+                    onChange={(e) => setAssumptionAnswer(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && assumptionAnswer.trim()) {
+                        submitAssumptionAnswer(assumptionAnswer);
+                      }
+                    }}
+                    placeholder={currentAssumption.options.length > 0 ? "Or type your own answer..." : "Type your answer..."}
+                    disabled={isSubmittingAssumption}
+                    className="flex-1 px-4 py-2 bg-slate-900 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/50 disabled:opacity-50"
+                  />
+                  <button
+                    onClick={() => assumptionAnswer.trim() && submitAssumptionAnswer(assumptionAnswer)}
+                    disabled={!assumptionAnswer.trim() || isSubmittingAssumption}
+                    className="px-6 py-2 bg-amber-500 hover:bg-amber-400 text-white font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSubmittingAssumption ? 'Submitting...' : 'Submit'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

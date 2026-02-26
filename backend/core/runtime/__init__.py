@@ -33,6 +33,7 @@ from .evolution import (
     WorkflowDNA,
     WorkflowStats,
     EvolutionSuggestion,
+    AgentPerformance,
 )
 
 from .quality_evaluator import (
@@ -58,6 +59,7 @@ __all__ = [
     "WorkflowDNA",
     "WorkflowStats",
     "EvolutionSuggestion",
+    "AgentPerformance",
     # Quality
     "QualityEvaluator",
     "QualityResult",
