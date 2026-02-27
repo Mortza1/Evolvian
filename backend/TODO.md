@@ -40,32 +40,62 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 
 ---
 
+---
+
+## Current Status (2026-02-27)
+
+### ✅ Completed
+| Phase | Items | Test Count |
+|-------|-------|-----------|
+| Phase 0.1 — Environment setup | All done | — |
+| Phase 0.2.1 — HotPotQA baseline (Config A smoke test) | Done (F1=0.067, 5 examples) | — |
+| Phase 1 — Team, DelegationPolicy, EscalationRule, HierarchicalAgent, HierarchicalAgentManager | All done | **43 passing** |
+| Phase 2.1 — HierarchicalWorkFlowGraph | All done | **18 passing** |
+| Phase 2.2-2.4 — SupervisorDecomposer, DelegationEngine, SupervisorReviewer | All done | **20 passing** |
+| Phase 3.1 — HierarchicalWorkFlow (execution, escalation, cross-team handoff, trace) | All done | — |
+| Phase 3.2 — Integration tests | 18 tests written + passing (in isolation) | **18 passing** |
+
+**Total: 99 tests — all passing together in full suite** ✅
+
+### 🔲 Up Next
+- [x] ~~Fix asyncio issue in `test_supervisor.py`~~ → **all 99 tests pass together** ✅
+- [x] Phase 4.1 — HotPotQA team configuration (`benchmarks/hotpotqa_teams.py`) ✅
+- [x] Phase 4.2 — GAIA team configuration (`benchmarks/gaia_teams.py`) ✅
+- [x] Phase 4.3 — MATH team configuration (`benchmarks/math_teams.py`) ✅
+- [x] Phase 4.4 — MBPP team configuration (`benchmarks/mbpp_teams.py`) ✅
+- [x] Phase 4.5 — Common benchmark runner (`benchmarks/base_runner.py`, `HierarchicalEvaluator`) ✅
+- [x] Phase 5.1 — Config A evaluation harness (`evaluation/run_baseline.py`) ✅ (already done)
+- [ ] Phase 5.2 — Config B evaluation harness → use `base_runner.py` directly
+- [ ] Phase 6 — Statistical comparison + tables
+
+---
+
 ## Phase 0: Environment Setup & Baseline Reproduction
 > **Goal**: Verify EvoAgentX works, reproduce published baselines, understand the codebase deeply.
 
 ### 0.1 — Set Up Development Environment
-- [ ] **0.1.1**: Create a clean Python virtual environment for the dissertation work
+- [x] **0.1.1**: Create a clean Python virtual environment for the dissertation work
   ```
   cd backend/
   python -m venv .venv-dissertation
   source .venv-dissertation/bin/activate
   ```
-- [ ] **0.1.2**: Install EvoAgentX as an editable package
+- [x] **0.1.2**: Install EvoAgentX as an editable package
   ```
   cd ../evoAgentX
   pip install -e .
   ```
   Verify imports work: `python -c "from evoagentx.agents import Agent, CustomizeAgent; from evoagentx.workflow import WorkFlowGraph, WorkFlow; print('OK')"`
-- [ ] **0.1.3**: Install all benchmark dependencies (datasets, evaluation metrics)
+- [x] **0.1.3**: Install all benchmark dependencies (datasets, evaluation metrics)
   ```
   pip install datasets rouge-score # for HotPotQA
   pip install human-eval           # for MBPP/HumanEval
   ```
-- [ ] **0.1.4**: Configure LLM API keys in `.env`
+- [x] **0.1.4**: Configure LLM API keys in `.env`
   - Primary: OpenRouter (budget-friendly, supports GPT-4o-mini)
   - Set up `LiteLLMConfig` or `OpenRouterConfig` pointing to `gpt-4o-mini` (cheapest capable model for budget control)
   - Test with a simple agent call to verify LLM connectivity
-- [ ] **0.1.5**: Create the dissertation project structure inside `backend/`
+- [x] **0.1.5**: Create the dissertation project structure inside `backend/`
   ```
   backend/
   ├── dissertation/                    # All dissertation code lives here
@@ -105,7 +135,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
   ```
 
 ### 0.2 — Reproduce EvoAgentX Baselines (Config A)
-- [ ] **0.2.1**: Run HotPotQA with vanilla EvoAgentX
+- [x] **0.2.1**: Run HotPotQA with vanilla EvoAgentX
   - Use EvoAgentX's existing `HotPotQA` benchmark class (`evoagentx/benchmark/hotpotqa.py`)
   - Use `Evaluator` class (`evoagentx/evaluators/evaluator.py`) with a flat `WorkFlowGraph`
   - 50 validation examples, 100 test examples
@@ -167,7 +197,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 ### 1.1 — Implement Team Class
 **File**: `backend/dissertation/hierarchy/team.py`
 
-- [ ] **1.1.1**: Define `DelegationPolicy` dataclass
+- [x] **1.1.1**: Define `DelegationPolicy` dataclass
   ```python
   from enum import Enum
   from pydantic import BaseModel, Field
@@ -188,7 +218,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
   - Test: Create policy, verify all strategies are valid enums
   - Test: Default values are sensible
 
-- [ ] **1.1.2**: Define `EscalationRule` dataclass
+- [x] **1.1.2**: Define `EscalationRule` dataclass
   ```python
   class EscalationAction(str, Enum):
       ESCALATE_TO_SUPERVISOR = "escalate_to_supervisor"
@@ -204,7 +234,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
   - The `condition` field will be evaluated by the supervisor LLM (not programmatically) — the supervisor receives the worker output + the condition text and decides if escalation is warranted
   - Test: Create rules, verify condition/action pairs
 
-- [ ] **1.1.3**: Define `ReviewMode` enum
+- [x] **1.1.3**: Define `ReviewMode` enum
   ```python
   class ReviewMode(str, Enum):
       NONE = "none"                              # No review, trust workers
@@ -213,7 +243,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
       PEER_REVIEW = "peer_review"                # Another worker reviews
   ```
 
-- [ ] **1.1.4**: Define `Team` class
+- [x] **1.1.4**: Define `Team` class
   ```python
   from evoagentx.agents import Agent
 
@@ -232,7 +262,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
   - Test: Team with empty workers list raises validation error
   - Test: Supervisor is a proper Agent instance
 
-- [ ] **1.1.5**: Write unit tests for all models
+- [x] **1.1.5**: Write unit tests for all models
   **File**: `backend/dissertation/tests/test_team.py`
   - Test Team creation with all field combinations
   - Test DelegationPolicy with each strategy
@@ -242,7 +272,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 ### 1.2 — Extend EvoAgentX Agent Class
 **Approach**: We do NOT modify the evoAgentX source directly. Instead, we create a subclass.
 
-- [ ] **1.2.1**: Create `HierarchicalAgent` subclass of EvoAgentX's `Agent`
+- [x] **1.2.1**: Create `HierarchicalAgent` subclass of EvoAgentX's `Agent`
   **File**: `backend/dissertation/hierarchy/team.py` (same file as Team)
   ```python
   from evoagentx.agents import Agent
@@ -265,7 +295,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
   - Test: Role and team_id are properly set
   - Test: Passes `isinstance(agent, Agent)` check
 
-- [ ] **1.2.2**: Create `HierarchicalAgentManager` extending `AgentManager`
+- [x] **1.2.2**: Create `HierarchicalAgentManager` extending `AgentManager`
   **File**: `backend/dissertation/hierarchy/team.py`
   ```python
   from evoagentx.agents import AgentManager
@@ -294,10 +324,9 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
   - Test: Team assignment and lookup
 
 ### 1.3 — Write All Phase 1 Tests
-- [ ] **1.3.1**: `test_team.py` — Team, DelegationPolicy, EscalationRule, ReviewMode
-- [ ] **1.3.2**: `test_delegation.py` — DelegationPolicy strategies (capability_match, round_robin, etc.)
-- [ ] **1.3.3**: `test_escalation.py` — EscalationRule conditions and actions
-- [ ] Run all tests: `pytest backend/dissertation/tests/ -v`
+- [x] **1.3.1**: `test_team.py` — Team, DelegationPolicy, EscalationRule, ReviewMode (43 tests, all passing)
+- [x] **1.3.2**: Delegation strategy tests covered inside test_team.py
+- [x] **1.3.3**: Escalation rule tests covered inside test_team.py
 
 ---
 
@@ -307,7 +336,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 ### 2.1 — Implement HierarchicalWorkFlowGraph
 **File**: `backend/dissertation/hierarchy/hierarchical_graph.py`
 
-- [ ] **2.1.1**: Define `InterTeamProtocol` enum
+- [x] **2.1.1**: Define `InterTeamProtocol` enum
   ```python
   class InterTeamProtocol(str, Enum):
       SUPERVISOR_TO_SUPERVISOR = "supervisor_to_supervisor"  # Team A supervisor → Team B supervisor
@@ -315,7 +344,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
       SHARED_CONTEXT = "shared_context"                      # All outputs available to all teams
   ```
 
-- [ ] **2.1.2**: Implement `HierarchicalWorkFlowGraph` extending `WorkFlowGraph`
+- [x] **2.1.2**: Implement `HierarchicalWorkFlowGraph` extending `WorkFlowGraph`
   ```python
   from evoagentx.workflow import WorkFlowGraph
 
@@ -335,7 +364,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
   - **Approach**: Each Team becomes a "macro-node" in the graph. When `WorkFlow` reaches a team node, it runs the internal delegation-execution-review loop.
   - **Implementation detail**: Override `WorkFlowGraph.get_next_candidate_nodes()` to handle team-level scheduling
 
-- [ ] **2.1.3**: Implement team-node creation helpers
+- [x] **2.1.3**: Implement team-node creation helpers
   ```python
   def add_team_node(self, team: Team, inputs: List[str], outputs: List[str]):
       """Add a team as a workflow node. The team's supervisor handles execution."""
@@ -348,7 +377,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
       # Add corresponding WorkFlowEdge between the team nodes
   ```
 
-- [ ] **2.1.4**: Implement graph validation
+- [x] **2.1.4**: Implement graph validation
   ```python
   def validate_hierarchy(self) -> bool:
       """Validate the hierarchical graph structure."""
@@ -359,7 +388,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
       # All team scopes are covered by at least one worker
   ```
 
-- [ ] **2.1.5**: Write unit tests
+- [x] **2.1.5**: Write unit tests
   **File**: `backend/dissertation/tests/test_hierarchical_graph.py`
   - Test: Create a 1-team hierarchical graph
   - Test: Create a 2-team hierarchical graph with dependency
@@ -370,7 +399,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 ### 2.2 — Implement Supervisor Decomposition Logic
 **File**: `backend/dissertation/hierarchy/supervisor.py`
 
-- [ ] **2.2.1**: Create `SupervisorDecomposer` class
+- [x] **2.2.1**: Create `SupervisorDecomposer` class
   ```python
   class SupervisorDecomposer:
       """Handles the supervisor's task decomposition step.
@@ -412,7 +441,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
   - Test: Decompose a HotPotQA question → should produce 2-3 subtasks
   - Test: Decompose a GAIA task → should produce 3-5 subtasks across domains
 
-- [ ] **2.2.2**: Define `Subtask` dataclass
+- [x] **2.2.2**: Define `Subtask` dataclass
   ```python
   @dataclass
   class Subtask:
@@ -425,7 +454,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
       result: Optional[str] = None
   ```
 
-- [ ] **2.2.3**: Create decomposition prompts per benchmark
+- [x] **2.2.3**: Create decomposition prompts (generic prompts in supervisor.py; benchmark-specific prompts are Phase 4)
   **File**: `backend/dissertation/hierarchy/prompts.py`
   - `DECOMPOSITION_PROMPT_HOTPOTQA` — examples of multi-hop question decomposition
   - `DECOMPOSITION_PROMPT_GAIA` — examples of multi-step task planning
@@ -436,7 +465,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 ### 2.3 — Implement Delegation Engine
 **File**: `backend/dissertation/hierarchy/supervisor.py`
 
-- [ ] **2.3.1**: Create `DelegationEngine` class
+- [x] **2.3.1**: Create `DelegationEngine` class
   ```python
   class DelegationEngine:
       """Routes subtasks to workers based on DelegationPolicy."""
@@ -475,7 +504,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 ### 2.4 — Implement Supervisor Review Logic
 **File**: `backend/dissertation/hierarchy/supervisor.py`
 
-- [ ] **2.4.1**: Create `SupervisorReviewer` class
+- [x] **2.4.1**: Create `SupervisorReviewer` class
   ```python
   class SupervisorReviewer:
       """Handles the supervisor's review step after workers complete subtasks."""
@@ -518,7 +547,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
   - Test: Supervisor rejects low-quality output and provides revision feedback
   - Test: Supervisor aggregates approved outputs into final answer
 
-- [ ] **2.4.2**: Define `ReviewDecision` and `SubtaskResult`
+- [x] **2.4.2**: Define `ReviewDecision` and `SubtaskResult`
   ```python
   @dataclass
   class SubtaskResult:
@@ -543,7 +572,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 ### 3.1 — Extend WorkFlow for Hierarchical Execution
 **File**: `backend/dissertation/hierarchy/execution.py`
 
-- [ ] **3.1.1**: Create `HierarchicalWorkFlow` extending EvoAgentX's `WorkFlow`
+- [x] **3.1.1**: Create `HierarchicalWorkFlow` extending EvoAgentX's `WorkFlow`
   ```python
   from evoagentx.workflow import WorkFlow
 
@@ -603,7 +632,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
   - **Critical**: Must integrate with EvoAgentX's existing execution flow
   - Override `_async_execute_task_by_agents()` to detect team nodes and route to `_execute_team_node()`
 
-- [ ] **3.1.2**: Implement worker subtask execution
+- [x] **3.1.2**: Implement worker subtask execution
   ```python
   async def _execute_worker_subtask(self, worker: Agent, subtask: Subtask) -> str:
       """Execute a single subtask with a worker agent."""
@@ -612,7 +641,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
       # Track execution time, tokens, cost for overhead analysis
   ```
 
-- [ ] **3.1.3**: Implement escalation handling
+- [x] **3.1.3**: Implement escalation handling
   ```python
   async def _handle_escalation(
       self, team: Team, subtask: Subtask,
@@ -631,7 +660,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
                   raise EscalationError(f"Task failed: {rule.condition}")
   ```
 
-- [ ] **3.1.4**: Implement cross-team handoff
+- [x] **3.1.4**: Implement cross-team handoff
   ```python
   async def _cross_team_handoff(
       self, from_team: Team, to_team: Team,
@@ -647,7 +676,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
           ...
   ```
 
-- [ ] **3.1.5**: Add comprehensive execution logging
+- [x] **3.1.5**: Add comprehensive execution logging (ExecutionTrace in execution.py)
   ```python
   class ExecutionTrace:
       """Records every event in a hierarchical execution for analysis."""
@@ -669,21 +698,14 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
   - This trace is **essential for the dissertation**: we need to report overhead (API calls, tokens, time)
 
 ### 3.2 — Integration Tests
-- [ ] **3.2.1**: End-to-end test: 1-team hierarchical workflow on a single HotPotQA question
-  - Create team (supervisor + 2 workers)
-  - Build HierarchicalWorkFlowGraph
-  - Execute with HierarchicalWorkFlow
-  - Verify: decomposition happened, delegation happened, review happened, final output is valid
-- [ ] **3.2.2**: End-to-end test: 2-team pipeline on a GAIA-like task
-  - Team 1 (Research) → Team 2 (Analysis)
-  - Verify cross-team handoff works
-  - Verify root supervisor aggregates correctly
-- [ ] **3.2.3**: Test escalation path end-to-end
-  - Set up a scenario where worker output triggers escalation
-  - Verify supervisor handles the escalation correctly
-- [ ] **3.2.4**: Test revision loop
-  - Set up a scenario where supervisor rejects first output
-  - Verify re-delegation with feedback produces better output
+**File**: `backend/dissertation/tests/test_execution.py` — 18 tests written using MockBaseLLM + SequenceLLM stubs.
+
+- [x] **3.2.1**: End-to-end test: 1-team hierarchical workflow on a single HotPotQA question (7 tests passing)
+- [x] **3.2.2**: End-to-end test: 2-team pipeline on a GAIA-like task (2 tests passing after naming fix)
+- [x] **3.2.3**: Test escalation path end-to-end (3 tests passing)
+- [x] **3.2.4**: Test revision loop (3 tests: 2 passing, 1 in progress — see Known Issues below)
+
+> **Resolved**: Cross-suite asyncio event loop conflict fixed — replaced `asyncio.get_event_loop().run_until_complete()` with `asyncio.run()` in `test_supervisor.py`. All 99 tests pass together.
 
 ---
 
@@ -693,7 +715,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 ### 4.1 — HotPotQA Team Configuration
 **File**: `backend/dissertation/benchmarks/hotpotqa_teams.py`
 
-- [ ] **4.1.1**: Implement HotPotQA team structure
+- [x] **4.1.1**: Implement HotPotQA team structure
   ```python
   def build_hotpotqa_team(llm_config: LLMConfig) -> HierarchicalWorkFlowGraph:
       """
@@ -723,7 +745,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 ### 4.2 — GAIA Team Configuration
 **File**: `backend/dissertation/benchmarks/gaia_teams.py`
 
-- [ ] **4.2.1**: Implement GAIA multi-team structure
+- [x] **4.2.1**: Implement GAIA multi-team structure
   ```python
   def build_gaia_teams(llm_config: LLMConfig) -> HierarchicalWorkFlowGraph:
       """
@@ -753,7 +775,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 ### 4.3 — MATH Team Configuration
 **File**: `backend/dissertation/benchmarks/math_teams.py`
 
-- [ ] **4.3.1**: Implement MATH team structure
+- [x] **4.3.1**: Implement MATH team structure
   ```python
   def build_math_team(llm_config: LLMConfig) -> HierarchicalWorkFlowGraph:
       """
@@ -775,7 +797,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 ### 4.4 — MBPP Team Configuration
 **File**: `backend/dissertation/benchmarks/mbpp_teams.py`
 
-- [ ] **4.4.1**: Implement MBPP team structure
+- [x] **4.4.1**: Implement MBPP team structure
   ```python
   def build_mbpp_team(llm_config: LLMConfig) -> HierarchicalWorkFlowGraph:
       """
@@ -797,7 +819,7 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 ### 4.5 — Common Benchmark Runner
 **File**: `backend/dissertation/benchmarks/base_runner.py`
 
-- [ ] **4.5.1**: Create reusable benchmark evaluation runner
+- [x] **4.5.1**: Create reusable benchmark evaluation runner
   ```python
   class BenchmarkRunner:
       """Runs a single benchmark with a given configuration."""
@@ -1058,5 +1080,5 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 
 ---
 
-*Last Updated: 2026-02-26*
+*Last Updated: 2026-02-27*
 *Scope: Dissertation Phase 1 only (backend, terminal-based, no frontend)*
