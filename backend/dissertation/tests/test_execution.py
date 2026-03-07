@@ -92,10 +92,13 @@ class SequenceLLM:
         self._responses = responses
         self._index = 0
 
-    async def async_generate(self, prompt: str = "", **kwargs) -> str:
+    def generate(self, prompt: str = "", **kwargs) -> str:
         r = self._responses[min(self._index, len(self._responses) - 1)]
         self._index += 1
         return r
+
+    async def async_generate(self, prompt: str = "", **kwargs) -> str:
+        return self.generate(prompt, **kwargs)
 
     @property
     def call_count(self) -> int:
@@ -113,13 +116,16 @@ class KeywordLLM:
         self._default = default
         self.calls: List[str] = []
 
-    async def async_generate(self, prompt: str = "", **kwargs) -> str:
+    def generate(self, prompt: str = "", **kwargs) -> str:
         self.calls.append(prompt[:100])
         p = prompt.lower()
         for keyword, response in self._rules.items():
             if keyword.lower() in p:
                 return response
         return self._default
+
+    async def async_generate(self, prompt: str = "", **kwargs) -> str:
+        return self.generate(prompt, **kwargs)
 
 
 # ---------------------------------------------------------------------------

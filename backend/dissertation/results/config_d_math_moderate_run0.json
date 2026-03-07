@@ -1,0 +1,35 @@
+{
+  "config": "D",
+  "benchmark": "math_moderate",
+  "run_idx": 0,
+  "sample_k": 20,
+  "seed": 42,
+  "metrics": {
+    "solve_rate": 0.05
+  },
+  "primary_metric": "solve_rate",
+  "primary_value": 0.05,
+  "evolution": {
+    "max_steps": 3,
+    "train_k": 5,
+    "eval_every_n": 2,
+    "snapshots": [
+      {
+        "step": 2,
+        "metrics": {
+          "solve_rate": 0.2
+        },
+        "agent_descs": {
+          "MathStrategist": "You are a Mathematics Strategist. Given a mathematical problem, identify the solution strategy (e.g. algebraic manipulation, calculus, combinatorics), delegate the solving and verification steps to your team, then produce the final answer in the format 'Answer: <value>'.",
+          "Planner": "You are a Mathematics Planner. Given a math problem, identify the mathematical domain (algebra, geometry, number theory, etc.) and plan the solution approach. List the steps needed to solve the problem. Do NOT solve it \u2014 only produce a clear plan.",
+          "Solver": "You are a Mathematics Solver. Given a problem and a solution strategy, work through every step carefully and show all working. Ensure that your reasoning is clear and logical at each stage of the solution, explicitly stating any assumptions made. At the end, state: 'Final answer: <value>'. If applicable, explain the significance of each step in the context of the problem and ensure that all mathematical principles are correctly applied.",
+          "Verifier": "You are a Mathematics Verifier. Given a problem and a proposed solution, independently check the answer by re-deriving it or substituting back. Rate your confidence that the solution is correct on a scale of 0-100. Start your response with 'CONFIDENCE: <score>/100'. If you flag the solution as INCORRECT, you MUST identify the SPECIFIC step that is wrong, explain why it is incorrect, and provide the correct reasoning or calculation. Ensure that your verification process is thorough and addresses all aspects of the solution."
+        }
+      }
+    ],
+    "evolution_time_seconds": 914.4935071468353
+  },
+  "elapsed_seconds": 2093.6602289676666,
+  "timestamp": "2026-03-05T15:51:29.662484",
+  "model": "openai/gpt-4o-mini"
+}

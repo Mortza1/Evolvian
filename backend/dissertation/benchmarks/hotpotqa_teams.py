@@ -1,5 +1,5 @@
 """
-HotPotQA hierarchical team configuration (Config B).
+HotPotQA hierarchical team configuration (Config C).
 
 Team structure:
   Supervisor: Research Coordinator
@@ -13,6 +13,10 @@ Team structure:
   Worker 2: Reasoner
     Synthesises retrieved facts into a concise answer for a sub-question.
     Skills: logical reasoning, evidence synthesis
+
+  Worker 3: Synthesiser
+    Combines sub-answers into a single final answer, resolving contradictions.
+    Skills: synthesis, aggregation, conflict resolution
 
 Delegation: capability_match
 Review:     supervisor_reviews_all
@@ -81,11 +85,24 @@ def build_hotpotqa_team(llm_config) -> tuple:
         llm_config=llm_config,
     )
 
+    synthesiser = HierarchicalAgent(
+        name="Synthesiser",
+        description=(
+            "You are a Synthesis Specialist. Given sub-answers to parts of a multi-hop "
+            "question, combine them into a single final answer. Resolve any contradictions "
+            "between sub-answers. Output ONLY the final short answer (a name, date, number, "
+            "or brief phrase)."
+        ),
+        role=AgentRole.WORKER,
+        authority_scope=["synthesis", "aggregation", "conflict resolution", "final answer"],
+        llm_config=llm_config,
+    )
+
     team = Team(
         team_id="hotpotqa_team",
         name="HotPotQA Research Team",
         supervisor=supervisor,
-        workers=[retriever, reasoner],
+        workers=[retriever, reasoner, synthesiser],
         scope=["multi-hop question answering"],
         delegation_policy=DelegationPolicy(
             strategy=DelegationStrategy.CAPABILITY_MATCH,

@@ -1,0 +1,39 @@
+{
+  "config": "D",
+  "benchmark": "hotpotqa",
+  "run_idx": 0,
+  "sample_k": 20,
+  "seed": 42,
+  "metrics": {
+    "f1": 0.1374927684065615,
+    "em": 0.0,
+    "acc": 0.6
+  },
+  "primary_metric": "f1",
+  "primary_value": 0.1374927684065615,
+  "evolution": {
+    "max_steps": 3,
+    "train_k": 5,
+    "eval_every_n": 2,
+    "snapshots": [
+      {
+        "step": 2,
+        "metrics": {
+          "f1": 0.1242375924728866,
+          "em": 0.0,
+          "acc": 0.5
+        },
+        "agent_descs": {
+          "ResearchCoordinator": "You are a Research Coordinator specialising in multi-hop question answering. Given a question and supporting context, decompose it into precise sub-questions, delegate retrieval and reasoning tasks to your team, then synthesise a final short answer (a name, date, number, or brief phrase).",
+          "Retriever": "You are a Retrieval Specialist. Given a sub-question and context paragraphs, extract the most relevant sentences or facts that directly address the sub-question. Be precise and quote from the context where possible.",
+          "Reasoner": "You are a Reasoning Specialist. Given a sub-question and retrieved facts, synthesise a concise, accurate answer. Use only the provided facts. Output a single short phrase or sentence.",
+          "Synthesiser": "You are a Synthesis Specialist. Given sub-answers to parts of a multi-hop question, combine them into a single final answer. Resolve any contradictions between sub-answers. Output ONLY the final short answer (a name, date, number, or brief phrase)."
+        }
+      }
+    ],
+    "evolution_time_seconds": 1366.7167620658875
+  },
+  "elapsed_seconds": 1730.5344948768616,
+  "timestamp": "2026-03-05T15:24:59.090675",
+  "model": "openai/gpt-4o-mini"
+}

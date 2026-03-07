@@ -14,6 +14,7 @@ export interface OperationConfig {
   document?: File;
   rulebook: string;
   context: string;
+  hierarchical?: boolean;
 }
 
 export default function OperationDashboard({ agents, onStartOperation, onBack }: OperationDashboardProps) {
@@ -21,6 +22,7 @@ export default function OperationDashboard({ agents, onStartOperation, onBack }:
   const [selectedRulebook, setSelectedRulebook] = useState('gdpr');
   const [context, setContext] = useState('');
   const [document, setDocument] = useState<File | null>(null);
+  const [hierarchicalMode, setHierarchicalMode] = useState(false);
 
   const rulebooks = [
     { id: 'gdpr', name: 'GDPR Standard', description: 'EU General Data Protection Regulation' },
@@ -41,13 +43,14 @@ export default function OperationDashboard({ agents, onStartOperation, onBack }:
     }
   };
 
-  const handleStartOperation = () => {
+  const handleStartOperation = (hierarchical = false) => {
     if (document || operationTitle) {
       onStartOperation({
         title: operationTitle || 'New Operation',
         document: document || undefined,
         rulebook: selectedRulebook,
         context,
+        hierarchical,
       });
     }
   };
@@ -261,18 +264,47 @@ export default function OperationDashboard({ agents, onStartOperation, onBack }:
                 </div>
               </div>
 
-              {/* Start Button */}
-              <button
-                onClick={handleStartOperation}
-                disabled={!canStart}
-                className={`w-full py-4 rounded-xl font-semibold transition-all ${
-                  canStart
-                    ? 'bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white shadow-lg shadow-[#6366F1]/30 hover:shadow-[#6366F1]/50 transform hover:scale-105'
-                    : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                }`}
-              >
-                {canStart ? 'Commence Operation' : 'Upload Document to Start'}
-              </button>
+              {/* Execution Mode */}
+              <div className="glass rounded-xl p-5 space-y-3">
+                <h3 className="text-sm font-semibold text-white">Execution Mode</h3>
+
+                {/* Standard */}
+                <button
+                  onClick={() => handleStartOperation(false)}
+                  disabled={!canStart}
+                  className={`w-full py-3 rounded-lg font-semibold transition-all text-sm ${
+                    canStart
+                      ? 'bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white shadow-lg shadow-[#6366F1]/20 hover:shadow-[#6366F1]/40 hover:scale-[1.02]'
+                      : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  {canStart ? '▶ Commence Operation' : 'Upload Document to Start'}
+                </button>
+
+                {/* Hierarchical */}
+                <button
+                  onClick={() => handleStartOperation(true)}
+                  disabled={!canStart}
+                  className={`w-full py-3 rounded-lg font-semibold transition-all text-sm relative overflow-hidden ${
+                    canStart
+                      ? 'bg-gradient-to-r from-[#7C3AED] to-[#6366F1] text-white shadow-lg shadow-[#7C3AED]/20 hover:shadow-[#7C3AED]/40 hover:scale-[1.02]'
+                      : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  {canStart && (
+                    <span className="absolute top-1 right-2 text-[9px] font-bold text-white/60 uppercase tracking-widest">
+                      AI
+                    </span>
+                  )}
+                  ◈ Run with Hierarchy
+                </button>
+
+                {/* Info blurb */}
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  <span className="text-[#818CF8] font-medium">Hierarchy mode</span> auto-builds a Supervisor + specialist team,
+                  decomposes your task, and reviews outputs before finalising — ideal for complex, multi-stage work.
+                </p>
+              </div>
             </div>
           </div>
         </div>

@@ -22,12 +22,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "evoAgentX")
 from evoagentx.benchmark.hotpotqa import HotPotQA
 from evoagentx.benchmark.math_benchmark import MATH
 from evoagentx.benchmark.mbpp import MBPP
+from dissertation.benchmarks.math_level45 import MATHLevel45
+from dissertation.benchmarks.math_levels import MATHLevel23, MATHByLevel
 from evoagentx.agents import CustomizeAgent, AgentManager
 from evoagentx.workflow.workflow_graph import WorkFlowGraph, WorkFlowNode
 from evoagentx.workflow.workflow import WorkFlow
 from evoagentx.evaluators.evaluator import Evaluator
 from evoagentx.models.openrouter_model import OpenRouterLLM
 from dissertation.config import get_llm_config, RESULTS_DIR, RANDOM_SEED
+from dissertation.evaluation.answer_extraction import make_hotpotqa_fns
 
 
 def _param(name: str, type_: str, description: str) -> dict:
@@ -65,7 +68,32 @@ def math_collate(example: dict) -> dict:
 
 
 def math_postprocess(output: str) -> str:
-    return output.strip() if output else ""
+    """Extract the final answer from model output for MATH evaluation.
+
+    The MATH benchmark's evaluate() calls extract_answer() which looks for
+    \\boxed{} first, then falls back to the last sentence. LLM outputs
+    typically use 'Answer: <value>' format instead of \\boxed{}, so we
+    extract that pattern here to pass a clean value to extract_answer().
+    """
+    if not output:
+        return ""
+    import re
+    # Try to find "Answer: <value>" or "Final answer: <value>" patterns
+    # Handle LaTeX delimiters: $...$, \(...\), and plain text
+    for pattern in [
+        r'(?:final\s+)?answer\s*(?:is|[:=])\s*\$([^$]+)\$',        # Answer: $v$ / answer is $v$
+        r'(?:final\s+)?answer\s*(?:is|[:=])\s*\\\(([^)]+)\\\)',     # Answer: \(v\) / answer is \(v\)
+        r'(?:final\s+)?answer\s*(?:is|[:=])\s*\\boxed\{([^}]+)\}',  # Answer: \boxed{v}
+        r'(?:final\s+)?answer\s*(?:is|[:=])\s*(.+?)(?:\n|$)',        # Answer: v (plain)
+    ]:
+        m = re.search(pattern, output, re.IGNORECASE)
+        if m:
+            answer = m.group(1).strip().rstrip('.*')
+            if answer:
+                # Wrap in \boxed{} so extract_answer() picks it up cleanly
+                return f"\\boxed{{{answer}}}"
+    # Fallback: return stripped output for extract_answer's last-sentence heuristic
+    return output.strip()
 
 
 def mbpp_collate(example: dict) -> dict:
@@ -220,6 +248,36 @@ BENCHMARK_REGISTRY = {
         "postprocess": mbpp_postprocess,
         "primary_metric": "pass_at_1",
     },
+    "math_hard": {
+        "class": MATHLevel45,
+        "kwargs": {"mode": "all"},
+        "eval_mode": "test",
+        "workflow_fn": build_math_flat_workflow,
+        "collate": math_collate,
+        "postprocess": math_postprocess,
+        "primary_metric": "solve_rate",
+    },
+    "math_moderate": {
+        "class": MATHLevel23,
+        "kwargs": {"mode": "all"},
+        "eval_mode": "test",
+        "workflow_fn": build_math_flat_workflow,
+        "collate": math_collate,
+        "postprocess": math_postprocess,
+        "primary_metric": "solve_rate",
+    },
+    **{
+        f"math_l{lvl}": {
+            "class": MATHByLevel,
+            "kwargs": {"mode": "all", "level": lvl},
+            "eval_mode": "test",
+            "workflow_fn": build_math_flat_workflow,
+            "collate": math_collate,
+            "postprocess": math_postprocess,
+            "primary_metric": "solve_rate",
+        }
+        for lvl in range(1, 6)
+    },
 }
 
 
@@ -237,7 +295,7 @@ def run_baseline(benchmark_name: str, sample_k: int = 10, seed: int = RANDOM_SEE
         dict with results
     """
     cfg = BENCHMARK_REGISTRY[benchmark_name]
-    llm_config = get_llm_config(temperature=0.1, max_tokens=512)
+    llm_config = get_llm_config(temperature=0.1, max_tokens=1024)
     llm = OpenRouterLLM(config=llm_config)
 
     print(f"\n{'='*60}")
@@ -251,12 +309,18 @@ def run_baseline(benchmark_name: str, sample_k: int = 10, seed: int = RANDOM_SEE
     # Build flat workflow
     graph, agent_manager = cfg["workflow_fn"](llm_config)
 
+    # For HotPotQA use extraction-aware collate/postprocess; others use registry defaults
+    if benchmark_name == "hotpotqa":
+        collate_fn, postprocess_fn = make_hotpotqa_fns(llm)
+    else:
+        collate_fn, postprocess_fn = cfg["collate"], cfg["postprocess"]
+
     # Create evaluator with benchmark-specific collate/postprocess
     evaluator = Evaluator(
         llm=llm,
         agent_manager=agent_manager,
-        collate_func=cfg["collate"],
-        output_postprocess_func=cfg["postprocess"],
+        collate_func=collate_fn,
+        output_postprocess_func=postprocess_fn,
         verbose=True,
     )
 

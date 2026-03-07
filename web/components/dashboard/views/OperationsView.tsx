@@ -131,6 +131,7 @@ export default function OperationsView({ teamId }: OperationsViewProps) {
             workflowNodes={workflowNodes}
             taskDescription={activeTask.description}
             initialStatus={activeTask.status}
+            hierarchical={activeTask.hierarchical}
             onClose={() => {
               setShowWarRoom(false);
               setActiveTaskId(null);

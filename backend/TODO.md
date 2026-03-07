@@ -65,8 +65,11 @@ The existing Evolvian backend is a **web platform** (FastAPI + SQLAlchemy + SSE)
 - [x] Phase 4.4 — MBPP team configuration (`benchmarks/mbpp_teams.py`) ✅
 - [x] Phase 4.5 — Common benchmark runner (`benchmarks/base_runner.py`, `HierarchicalEvaluator`) ✅
 - [x] Phase 5.1 — Config A evaluation harness (`evaluation/run_baseline.py`) ✅ (already done)
-- [ ] Phase 5.2 — Config B evaluation harness → use `base_runner.py` directly
-- [ ] Phase 6 — Statistical comparison + tables
+- [x] Phase 5.2 — Config B evaluation harness (`evaluation/run_hierarchical.py`) ✅
+- [x] Phase 5.3 — Config C evaluation harness (`evaluation/run_hierarchical_evo.py`, `HierarchicalEvolutionOptimiser`) ✅
+- [x] Phase 5.4 — Cost tracking (`scripts/cost_tracker.py`, `CostTracker`) ✅
+- [x] `scripts/run_experiment.py` — wired Configs B + C, added `--costs` flag ✅
+- [x] Phase 6 — Statistical comparison + tables (`evaluation/compare_results.py`) ✅
 
 ---
 

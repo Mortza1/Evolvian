@@ -1,0 +1,15 @@
+{
+  "config": "B",
+  "benchmark": "math_hard",
+  "run_idx": 0,
+  "sample_k": 5,
+  "seed": 42,
+  "metrics": {
+    "solve_rate": 0.0
+  },
+  "primary_metric": "solve_rate",
+  "primary_value": 0.0,
+  "elapsed_seconds": 381.4198389053345,
+  "timestamp": "2026-02-27T05:30:21.729962",
+  "model": "openai/gpt-4o-mini"
+}

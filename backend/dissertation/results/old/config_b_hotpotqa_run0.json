@@ -1,0 +1,17 @@
+{
+  "config": "B",
+  "benchmark": "hotpotqa",
+  "run_idx": 0,
+  "sample_k": 5,
+  "seed": 42,
+  "metrics": {
+    "f1": 0.15207642031171445,
+    "em": 0.0,
+    "acc": 0.8
+  },
+  "primary_metric": "f1",
+  "primary_value": 0.15207642031171445,
+  "elapsed_seconds": 68.74549913406372,
+  "timestamp": "2026-02-27T03:42:55.622901",
+  "model": "openai/gpt-4o-mini"
+}

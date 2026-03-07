@@ -53,3 +53,4 @@ Thumbs.db
 
 evoAgentX/
 backend/test_runtime.py
+*.md

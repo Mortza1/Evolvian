@@ -1,16 +1,17 @@
 """
-Config B benchmark runner: HierarchicalWorkFlow evaluation.
+Config C benchmark runner: HierarchicalWorkFlow evaluation.
 
 Provides:
   - HierarchicalEvaluator  — subclasses Evaluator to use HierarchicalWorkFlow
-  - run_hierarchical()     — runs Config B on a single benchmark
-  - run_all_hierarchical() — runs Config B on all benchmarks
+  - run_hierarchical()     — runs Config C on a single benchmark
+  - run_all_hierarchical() — runs Config C on all benchmarks
 
 Usage:
     python -m dissertation.benchmarks.base_runner --benchmark hotpotqa --sample-k 10
     python -m dissertation.benchmarks.base_runner --benchmark all --sample-k 50
 """
 import sys
+import copy
 import time
 import json
 import argparse
@@ -31,9 +32,13 @@ from dissertation.config import get_llm_config, RESULTS_DIR, RANDOM_SEED
 from dissertation.hierarchy.hierarchical_graph import HierarchicalWorkFlowGraph
 from dissertation.hierarchy.execution import HierarchicalWorkFlow
 from dissertation.benchmarks.hotpotqa_teams import build_hotpotqa_team
-from dissertation.benchmarks.gaia_teams import build_gaia_teams
 from dissertation.benchmarks.math_teams import build_math_team
 from dissertation.benchmarks.mbpp_teams import build_mbpp_team
+from dissertation.benchmarks.math_level45 import MATHLevel45
+from dissertation.benchmarks.math_levels import MATHLevel23, MATHByLevel
+from dissertation.evaluation.answer_extraction import make_hotpotqa_fns
+# GAIA excluded from registry — dataset requires special access (TODO 0.2.2)
+# from dissertation.benchmarks.gaia_teams import build_gaia_teams
 
 # Re-use collate/postprocess from baseline (same format, different workflow)
 from dissertation.evaluation.run_baseline import (
@@ -64,13 +69,14 @@ class HierarchicalEvaluator(Evaluator):
         **kwargs,
     ) -> Union[str, Tuple[str, list]]:
         if isinstance(graph, HierarchicalWorkFlowGraph):
-            # Reset node states so the graph can be re-executed per example
+            # Deep-copy nodes and edges so reset_graph() doesn't corrupt
+            # the original graph's state between evaluation examples.
             graph_copy = HierarchicalWorkFlowGraph(
                 goal=graph.goal,
-                nodes=graph.nodes,
-                edges=graph.edges,
+                nodes=copy.deepcopy(graph.nodes),
+                edges=copy.deepcopy(graph.edges),
                 teams=graph.teams,
-                team_graph=graph.team_graph,
+                team_graph=dict(graph.team_graph),
                 inter_team_protocol=graph.inter_team_protocol,
             )
             graph_copy.reset_graph()
@@ -121,6 +127,36 @@ BENCHMARK_REGISTRY = {
         "postprocess": mbpp_postprocess,
         "primary_metric": "pass_at_1",
     },
+    "math_hard": {
+        "class": MATHLevel45,
+        "kwargs": {"mode": "all"},
+        "eval_mode": "test",
+        "workflow_fn": build_math_team,
+        "collate": math_collate,
+        "postprocess": math_postprocess,
+        "primary_metric": "solve_rate",
+    },
+    "math_moderate": {
+        "class": MATHLevel23,
+        "kwargs": {"mode": "all"},
+        "eval_mode": "test",
+        "workflow_fn": build_math_team,
+        "collate": math_collate,
+        "postprocess": math_postprocess,
+        "primary_metric": "solve_rate",
+    },
+    **{
+        f"math_l{lvl}": {
+            "class": MATHByLevel,
+            "kwargs": {"mode": "all", "level": lvl},
+            "eval_mode": "test",
+            "workflow_fn": build_math_team,
+            "collate": math_collate,
+            "postprocess": math_postprocess,
+            "primary_metric": "solve_rate",
+        }
+        for lvl in range(1, 6)
+    },
 }
 
 
@@ -135,7 +171,7 @@ def run_hierarchical(
     run_idx: int = 0,
 ) -> dict:
     """
-    Run Config B (hierarchical team workflow, no evolution) on one benchmark.
+    Run Config C (hierarchical team workflow, no evolution) on one benchmark.
 
     Args:
         benchmark_name: One of "hotpotqa", "math", "mbpp"
@@ -147,11 +183,11 @@ def run_hierarchical(
         dict with results
     """
     cfg = BENCHMARK_REGISTRY[benchmark_name]
-    llm_config = get_llm_config(temperature=0.1, max_tokens=512)
+    llm_config = get_llm_config(temperature=0.1, max_tokens=1024)
     llm = OpenRouterLLM(config=llm_config)
 
     print(f"\n{'='*60}")
-    print(f"Config B (Hierarchical) | {benchmark_name.upper()} | run {run_idx+1} | n={sample_k}")
+    print(f"Config C (Hierarchical) | {benchmark_name.upper()} | run {run_idx+1} | n={sample_k}")
     print(f"{'='*60}")
 
     print("Loading benchmark data...")
@@ -160,11 +196,16 @@ def run_hierarchical(
     print("Building hierarchical team workflow...")
     graph, agent_manager = cfg["workflow_fn"](llm_config)
 
+    if benchmark_name == "hotpotqa":
+        collate_fn, postprocess_fn = make_hotpotqa_fns(llm)
+    else:
+        collate_fn, postprocess_fn = cfg["collate"], cfg["postprocess"]
+
     evaluator = HierarchicalEvaluator(
         llm=llm,
         agent_manager=agent_manager,
-        collate_func=cfg["collate"],
-        output_postprocess_func=cfg["postprocess"],
+        collate_func=collate_fn,
+        output_postprocess_func=postprocess_fn,
         verbose=True,
     )
 
@@ -183,7 +224,7 @@ def run_hierarchical(
     elapsed = time.time() - t_start
 
     result = {
-        "config": "B",
+        "config": "C",
         "benchmark": benchmark_name,
         "run_idx": run_idx,
         "sample_k": sample_k,
@@ -196,7 +237,7 @@ def run_hierarchical(
         "model": llm_config.model,
     }
 
-    out_path = RESULTS_DIR / f"config_b_{benchmark_name}_run{run_idx}.json"
+    out_path = RESULTS_DIR / f"config_c_{benchmark_name}_run{run_idx}.json"
     out_path.write_text(json.dumps(result, indent=2))
     print(f"\nResults saved to {out_path}")
     print(f"Primary metric ({cfg['primary_metric']}): {result['primary_value']:.4f}")
@@ -207,7 +248,7 @@ def run_hierarchical(
 
 
 def run_all_hierarchical(sample_k: int = 10, num_runs: int = 1) -> dict:
-    """Run Config B on all available benchmarks."""
+    """Run Config C on all available benchmarks."""
     all_results = {}
     for bench in BENCHMARK_REGISTRY:
         bench_results = []
@@ -217,7 +258,7 @@ def run_all_hierarchical(sample_k: int = 10, num_runs: int = 1) -> dict:
         all_results[bench] = bench_results
 
     print("\n" + "="*60)
-    print("HIERARCHICAL SUMMARY (Config B)")
+    print("HIERARCHICAL SUMMARY (Config C)")
     print("="*60)
     print(f"{'Benchmark':<12} {'Metric':<12} {'Score':>8}")
     print("-"*35)
@@ -235,7 +276,7 @@ def run_all_hierarchical(sample_k: int = 10, num_runs: int = 1) -> dict:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run Config B hierarchical evaluation")
+    parser = argparse.ArgumentParser(description="Run Config C hierarchical evaluation")
     parser.add_argument("--benchmark", default="hotpotqa",
                         choices=list(BENCHMARK_REGISTRY.keys()) + ["all"],
                         help="Which benchmark to run")

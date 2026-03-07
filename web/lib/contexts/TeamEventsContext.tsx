@@ -36,7 +36,6 @@ interface TeamEventsProviderProps {
 export function TeamEventsProvider({ children, teamId }: TeamEventsProviderProps) {
   const [teamState, setTeamState] = useState<TeamState | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
   const subscribersRef = useRef<Map<string, Set<(data: any) => void>>>(new Map());
 
   const subscribe = useCallback((eventType: string, callback: (data: any) => void) => {
@@ -67,114 +66,98 @@ export function TeamEventsProvider({ children, teamId }: TeamEventsProviderProps
   useEffect(() => {
     if (!teamId) return;
 
-    console.log('[TeamEvents] Connecting to team event stream:', teamId);
+    let aborted = false;
+    const abortController = new AbortController();
 
-    const eventSource = new EventSource(`${process.env.NEXT_PUBLIC_API_URL}/api/teams/${teamId}/events`, {
-      withCredentials: true,
-    });
+    const connect = async () => {
+      const token = localStorage.getItem('access_token');
+      if (!token) return;
 
-    eventSourceRef.current = eventSource;
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      console.log('[TeamEvents] Connecting to team event stream:', teamId);
 
-    eventSource.onopen = () => {
-      console.log('[TeamEvents] Connected');
-      setIsConnected(true);
+      try {
+        const response = await fetch(`${baseUrl}/api/teams/${teamId}/events`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          signal: abortController.signal,
+        });
+
+        if (!response.ok || !response.body) {
+          console.error('[TeamEvents] Failed to connect:', response.status);
+          return;
+        }
+
+        setIsConnected(true);
+        console.log('[TeamEvents] Connected');
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let currentEventType = 'message';
+
+        while (!aborted) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              currentEventType = line.slice(7).trim();
+            } else if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                switch (currentEventType) {
+                  case 'team_state':
+                    setTeamState(data);
+                    emit('team_state', data);
+                    break;
+                  case 'assumption_raised':
+                    emit('assumption_raised', data);
+                    setTeamState((prev) => prev ? { ...prev, pending_assumptions: prev.pending_assumptions + 1 } : null);
+                    break;
+                  case 'assumption_answered':
+                    emit('assumption_answered', data);
+                    setTeamState((prev) => prev ? { ...prev, pending_assumptions: data.pending_count } : null);
+                    break;
+                  case 'operation_created':
+                    emit('operation_created', data);
+                    setTeamState((prev) => prev ? { ...prev, total_operations: prev.total_operations + data.count } : null);
+                    break;
+                  case 'active_operations_changed':
+                    emit('active_operations_changed', data);
+                    setTeamState((prev) => prev ? { ...prev, active_operations: data.active_count } : null);
+                    break;
+                  default:
+                    emit(currentEventType, data);
+                }
+              } catch {
+                // ignore malformed lines
+              }
+              currentEventType = 'message';
+            }
+          }
+        }
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+        console.warn('[TeamEvents] Connection lost, retrying in 5s');
+      }
+
+      if (!aborted) {
+        setIsConnected(false);
+        setTimeout(connect, 5000);
+      }
     };
 
-    // Handle team_state event (initial state + periodic updates)
-    eventSource.addEventListener('team_state', (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        console.log('[TeamEvents] team_state:', data);
-        setTeamState(data);
-        emit('team_state', data);
-      } catch (error) {
-        console.error('[TeamEvents] Error parsing team_state:', error);
-      }
-    });
-
-    // Handle assumption_raised event
-    eventSource.addEventListener('assumption_raised', (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        console.log('[TeamEvents] assumption_raised:', data);
-        emit('assumption_raised', data);
-
-        // Update state
-        setTeamState((prev) => prev ? { ...prev, pending_assumptions: prev.pending_assumptions + 1 } : null);
-      } catch (error) {
-        console.error('[TeamEvents] Error parsing assumption_raised:', error);
-      }
-    });
-
-    // Handle assumption_answered event
-    eventSource.addEventListener('assumption_answered', (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        console.log('[TeamEvents] assumption_answered:', data);
-        emit('assumption_answered', data);
-
-        // Update state
-        setTeamState((prev) => prev ? { ...prev, pending_assumptions: data.pending_count } : null);
-      } catch (error) {
-        console.error('[TeamEvents] Error parsing assumption_answered:', error);
-      }
-    });
-
-    // Handle operation_created event
-    eventSource.addEventListener('operation_created', (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        console.log('[TeamEvents] operation_created:', data);
-        emit('operation_created', data);
-
-        // Update state
-        setTeamState((prev) => prev ? { ...prev, total_operations: prev.total_operations + data.count } : null);
-      } catch (error) {
-        console.error('[TeamEvents] Error parsing operation_created:', error);
-      }
-    });
-
-    // Handle active_operations_changed event
-    eventSource.addEventListener('active_operations_changed', (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        console.log('[TeamEvents] active_operations_changed:', data);
-        emit('active_operations_changed', data);
-
-        // Update state
-        setTeamState((prev) => prev ? { ...prev, active_operations: data.active_count } : null);
-      } catch (error) {
-        console.error('[TeamEvents] Error parsing active_operations_changed:', error);
-      }
-    });
-
-    // Handle error event
-    eventSource.addEventListener('error', (e: any) => {
-      try {
-        const data = e.data ? JSON.parse(e.data) : { error: 'Unknown error' };
-        console.error('[TeamEvents] Server error:', data);
-        emit('error', data);
-      } catch (error) {
-        console.error('[TeamEvents] Connection error:', error);
-      }
-    });
-
-    eventSource.onerror = (error) => {
-      console.error('[TeamEvents] Connection error:', error);
-      setIsConnected(false);
-
-      // Auto-reconnect after 5 seconds
-      setTimeout(() => {
-        console.log('[TeamEvents] Attempting to reconnect...');
-        eventSource.close();
-      }, 5000);
-    };
+    connect();
 
     return () => {
-      console.log('[TeamEvents] Disconnecting from team event stream');
-      eventSource.close();
-      eventSourceRef.current = null;
+      aborted = true;
+      abortController.abort();
       setIsConnected(false);
+      console.log('[TeamEvents] Disconnected');
     };
   }, [teamId, emit]);
 

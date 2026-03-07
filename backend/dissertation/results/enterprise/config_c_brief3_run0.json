@@ -1,0 +1,36 @@
+{
+  "config": "C",
+  "brief_id": 3,
+  "brief_title": "Build vs Buy: Customer Support Chatbot",
+  "report": "### RESEARCH BRIEF: Build vs Buy: Customer Support Chatbot\n\n#### TOPIC:\nBuild-vs-buy analysis for a customer support chatbot for an e-commerce company handling 5,000 support tickets per month, with a current team of 8 support agents.\n\n#### 1. Requirements Specification\nThe minimum functional requirements for the chatbot include:\n- **Natural Language Processing (NLP)**: Ability to understand and process customer inquiries.\n- **Integration Capabilities**: Seamless integration with existing e-commerce platforms and CRM systems.\n- **Ticketing System Integration**: Automatic ticket creation and tracking for unresolved issues.\n- **Multi-channel Support**: Functionality across web, mobile, and social media platforms.\n- **Analytics and Reporting**: Tools for monitoring performance metrics and customer satisfaction.\n- **User Authentication**: Secure access for customers to retrieve order information and account details.\n\n#### 2. Build Option: Tech Stack, Team Size, Timeline, Cost\n**Tech Stack:**\n- **Frontend**: React.js for user interface development.\n- **Backend**: Node.js with Express for server-side logic.\n- **Database**: MongoDB for storing user interactions and ticket data.\n- **NLP Framework**: Rasa or Dialogflow for natural language understanding.\n- **Hosting**: AWS or Google Cloud for scalable deployment.\n- **Version Control**: Git for source code management.\n- **CI/CD Tools**: Jenkins or GitHub Actions for continuous integration and deployment.\n\n**Team Size:**\n- **Project Manager**: 1\n- **Frontend Developer**: 1\n- **Backend Developer**: 1\n- **NLP Specialist**: 1\n- **QA Engineer**: 1\n- **DevOps Engineer**: 1\n- **UX/UI Designer**: 1\n- **Business Analyst**: 1\n- **Total Team Size**: 9\n\n**Timeline:**\n- **Phase 1: Requirements Gathering**: 1 month\n- **Phase 2: Design**: 1 month\n- **Phase 3: Development**: 3 months\n- **Phase 4: Testing**: 1 month\n- **Phase 5: Deployment**: 1 month\n- **Total Timeline**: 7 months\n\n**Cost Estimate:**\n- **Total Annual Salaries**: $595,000\n- **7-Month Cost**: $346,250\n- **Infrastructure Costs**: $20,000\n- **Total Build Cost**: $366,250\n\n#### 3. Buy Option: Vendor Comparison\n**Comparison of Vendors: Intercom, Zendesk AI, and Freshdesk**\n\n| Vendor        | Key Features                                           | Starting Price (per agent/month) |\n|---------------|-------------------------------------------------------|-----------------------------------|\n| Intercom      | AI chatbot, customizable workflows, analytics         | $39 (Starter)                     |\n| Zendesk AI    | Answer Bot, multichannel support, knowledge base      | $19 (Essential)                   |\n| Freshdesk     | Freddy AI, omnichannel support, customizable responses | Free (Basic)                      |\n\n**Total Cost for 3 Years:**\n- Intercom: $150,000\n- Zendesk AI: $135,000\n- Freshdesk: $120,000\n- **Recommended Buy Option:** Freshdesk at $120,000\n\n#### 4. Total Cost of Ownership (TCO) Analysis Over 3 Years\n- **TCO Build Option:** $720,000\n- **TCO Buy Option (Freshdesk):** $120,000\n- **3-Year TCO Difference:** $600,000 savings by choosing Freshdesk.\n\n#### 5. Recommendation\n**Recommended Option:** Buy Freshdesk\n\n**Top Three Risks:**\n1. **Vendor Reliability:** Dependence on the vendor for uptime and support.\n2. **Feature Limitations:** Potential gaps in features compared to a custom-built solution.\n3. **Integration Challenges:** Possible issues integrating with existing systems.\n\n### Conclusion\nThe analysis indicates that purchasing Freshdesk is significantly more cost-effective than building an in-house solution, with a TCO difference of $600,000 over three years. While there are inherent risks in relying on a vendor, the benefits of reduced development time, lower maintenance complexity, and immediate access to advanced features outweigh these concerns.",
+  "elapsed_seconds": 122.33149194717407,
+  "structural_metrics": {
+    "review_loops": 1,
+    "escalations": 1,
+    "revisions": 0
+  },
+  "run_idx": 0,
+  "timestamp": "2026-03-05T23:44:59.445621",
+  "model": "openai/gpt-4o-mini",
+  "scores": {
+    "quality": {
+      "completeness": 10.0,
+      "analytical_depth": 8.0,
+      "accuracy": 9.0,
+      "coherence": 8.0,
+      "actionability": 9.0,
+      "overall": 8.85,
+      "raw_judge_output": "COMPLETENESS: 10/10 - The report includes all required sections and answers all specific questions from the brief comprehensively.\n\nANALYTICAL_DEPTH: 8/10 - The report provides a solid analysis supported by data, though it could benefit from deeper exploration of the implications of the risks mentioned.\n\nACCURACY: 9/10 - The facts presented are consistent, and conclusions logically follow from the analysis, with no apparent contradictions.\n\nCOHERENCE: 8/10 - The report flows logically, but the executive summary could be more explicitly tied to the body for enhanced clarity.\n\nACTIONABILITY: 9/10 - The recommendation is clear and justified, providing a solid basis for decision-making, though additional implementation steps could enhance it further.\n\nOVERALL: 8.6/10"
+    },
+    "alignment": {
+      "answered": 5,
+      "partially": 0,
+      "missing": 0,
+      "total": 5,
+      "alignment_score": 1.0,
+      "raw_judge_output": "1. What are the minimum functional requirements for the chatbot? \u2014 ANSWERED  \n2. What engineering team and timeline would be needed to build a comparable system in-house? \u2014 ANSWERED  \n3. How do Intercom, Zendesk AI, and Freshdesk compare on features and pricing? \u2014 ANSWERED  \n4. What is the 3-year TCO difference between the build and the recommended buy option? \u2014 ANSWERED  \n5. What is the recommended option and what are the top three risks? \u2014 ANSWERED  \n\nALIGNMENT_SCORE: 5 / 5"
+    },
+    "overall": 8.85,
+    "alignment_score": 1.0
+  }
+}

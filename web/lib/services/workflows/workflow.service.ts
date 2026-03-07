@@ -81,7 +81,7 @@ class WorkflowService {
         analysis: analysisResult.analysis,
       }, { timeout: 120000 });
 
-      if (!workflowResult.success) {
+      if (!workflowResult.success || !workflowResult.workflow) {
         return { success: false, error: 'Failed to design workflow' };
       }
 
@@ -127,6 +127,10 @@ class WorkflowService {
 
       if (!result.success) {
         return { success: false, error: 'Failed to process task' };
+      }
+
+      if (!result.workflow) {
+        return { success: false, error: 'Workflow generation failed — please try again' };
       }
 
       const graph = this.designToGraph(result.workflow);

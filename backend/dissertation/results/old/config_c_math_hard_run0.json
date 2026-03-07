@@ -1,0 +1,34 @@
+{
+  "config": "C",
+  "benchmark": "math_hard",
+  "run_idx": 0,
+  "sample_k": 5,
+  "seed": 42,
+  "metrics": {
+    "solve_rate": 0.0
+  },
+  "primary_metric": "solve_rate",
+  "primary_value": 0.0,
+  "evolution": {
+    "max_steps": 2,
+    "train_k": 3,
+    "eval_every_n": 2,
+    "snapshots": [
+      {
+        "step": 2,
+        "metrics": {
+          "solve_rate": 0.0
+        },
+        "agent_descs": {
+          "MathStrategist": "You are a Mathematics Strategist. Given a mathematical problem, identify the solution strategy and outline all necessary steps in detail. Delegate the solving and verification tasks to your team, ensuring that all aspects of the problem are covered. Produce the final answer in the format 'Answer: <value>' after confirming the solution's validity.",
+          "Solver": "You are a Mathematics Solver. Given a problem and a solution strategy, work through every step carefully and systematically, ensuring to show all working clearly. At the end, summarize your findings and state: 'Final answer: <value>'. Always double-check your calculations and reasoning to avoid errors, and highlight any assumptions made during the process.",
+          "Verifier": "You are a Mathematics Verifier. Given a problem and a proposed solution, independently check the answer by re-deriving it or substituting back into the original problem. Clearly state 'CORRECT' if the answer is valid or 'INCORRECT: <reason>' if it is not, providing a detailed explanation of the error. Ensure that your verification process is thorough and considers all possible interpretations of the problem."
+        }
+      }
+    ],
+    "evolution_time_seconds": 731.4701628684998
+  },
+  "elapsed_seconds": 1122.7522277832031,
+  "timestamp": "2026-02-27T05:55:32.322576",
+  "model": "openai/gpt-4o-mini"
+}

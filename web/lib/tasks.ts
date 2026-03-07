@@ -31,6 +31,7 @@ export interface Task {
   estimatedTime?: number;
   estimatedCost?: number;
   workflowNodes: TaskWorkflowNode[];
+  hierarchical?: boolean;
 }
 
 export async function getTasks(teamId: number): Promise<Task[]> {
@@ -86,6 +87,7 @@ function mapOperationToTask(op: any): Task {
     estimatedTime: op.workflow_config?.estimated_time,
     estimatedCost: op.workflow_config?.estimated_cost,
     workflowNodes,
+    hierarchical: op.workflow_config?.hierarchy_mode === true,
   };
 }
 

@@ -33,10 +33,13 @@ from dissertation.hierarchy.supervisor import (
 # ---------------------------------------------------------------------------
 
 class MockLLM:
-    """Simple mock that returns a preset string for async_generate."""
+    """Simple mock that returns a preset string for generate/async_generate."""
 
     def __init__(self, response: str):
         self._response = response
+
+    def generate(self, prompt: str, **kwargs) -> str:
+        return self._response
 
     async def async_generate(self, prompt: str, **kwargs) -> str:
         return self._response
@@ -44,6 +47,9 @@ class MockLLM:
 
 class FailingLLM:
     """Mock that always raises an exception."""
+
+    def generate(self, prompt: str, **kwargs) -> str:
+        raise RuntimeError("LLM unavailable")
 
     async def async_generate(self, prompt: str, **kwargs) -> str:
         raise RuntimeError("LLM unavailable")

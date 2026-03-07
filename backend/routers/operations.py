@@ -1739,6 +1739,214 @@ async def execute_operation(
     )
 
 
+@router.post("/{operation_id}/execute-hierarchical")
+async def execute_operation_hierarchical(
+    operation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Execute an operation using the hierarchical multi-agent engine.
+
+    Automatically builds a Supervisor + specialist worker team from the
+    operation's task description, then runs:
+      Supervisor decomposes → delegates to workers → reviews → revises → approves
+
+    Returns the same SSE event stream as /execute, plus hierarchy-specific events:
+      - hierarchy_decompose: Supervisor breaking down the task
+      - hierarchy_delegate: Assigning subtasks to workers
+      - hierarchy_worker_start/complete: Worker execution
+      - hierarchy_escalate: Worker output escalated to supervisor
+      - hierarchy_review: Supervisor reviewing outputs
+      - hierarchy_revise: Requesting revisions
+      - hierarchy_complete: Final output produced
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+
+    operation = db.query(Operation).filter(Operation.id == operation_id).first()
+    if not operation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operation not found")
+
+    team = db.query(Team).filter(
+        Team.id == operation.team_id,
+        Team.user_id == current_user.id
+    ).first()
+    if not team:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    agents = db.query(Agent).filter(Agent.team_id == operation.team_id).all()
+
+    return StreamingResponse(
+        generate_hierarchical_execution_events(operation, team, agents, db),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
+def generate_hierarchical_execution_events(
+    operation: Operation,
+    team: Team,
+    agents: List[Agent],
+    db,
+) -> Generator[str, None, None]:
+    """
+    SSE generator for hierarchical execution.
+
+    Uses auto_build to create a team from the task description,
+    then runs HierarchicalWorkFlow with SSE emit wired in.
+    All hierarchy events are forwarded to the client alongside
+    the standard start/complete/error events.
+    """
+    import asyncio
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+
+    def emit(event_type: str, data: Dict[str, Any]) -> str:
+        return f"data: {json.dumps({'type': event_type, **data})}\n\n"
+
+    task = operation.description or operation.title
+    print(f"\n[hierarchy] Starting hierarchical execution for op {operation.id}: {task[:80]}")
+
+    # Update operation status
+    operation.status = "active"
+    operation.started_at = datetime.now(timezone.utc)
+    wc = operation.workflow_config or {}
+    wc["hierarchy_mode"] = True
+    operation.workflow_config = wc
+    db.commit()
+
+    yield emit("start", {
+        "operation_id": operation.id,
+        "message": "Hierarchical execution starting...",
+        "mode": "hierarchical",
+    })
+
+    try:
+        # ── 1. Auto-build the team from the task ──────────────────────────
+        yield emit("hierarchy_decompose", {
+            "team_id": "auto_team",
+            "supervisor": "Evo",
+            "message": "Designing specialist team for your task...",
+        })
+
+        from dissertation.hierarchy.auto_build import build_hierarchy_from_task_with_llm_service
+        from dissertation.hierarchy.auto_build import build_hierarchy_from_task
+        from dissertation.config import get_llm_config
+        from dissertation.hierarchy.execution import HierarchicalWorkFlow
+        from evoagentx.models.openrouter_model import OpenRouterLLM
+
+        llm_config = get_llm_config(temperature=0.1, max_tokens=2048)
+        graph, agent_manager, team_spec = build_hierarchy_from_task(task, llm_config=llm_config)
+
+        supervisor_name = team_spec["supervisor"]["name"]
+        worker_names = [w["name"] for w in team_spec["workers"]]
+
+        yield emit("hierarchy_decompose", {
+            "team_id": "auto_team",
+            "supervisor": supervisor_name,
+            "workers": worker_names,
+            "team_name": team_spec.get("team_name", "Auto Team"),
+            "reasoning": team_spec.get("reasoning", ""),
+            "message": f"Team ready: {supervisor_name} + {', '.join(worker_names)}",
+        })
+
+        # ── 2. Collected SSE events from hierarchy engine ─────────────────
+        sse_queue: List[str] = []
+
+        def sse_emit_callback(event_type: str, data: Dict[str, Any]):
+            sse_queue.append(emit(event_type, data))
+
+        # ── 3. Run the hierarchical workflow ──────────────────────────────
+        llm = OpenRouterLLM(config=llm_config)
+        workflow = HierarchicalWorkFlow(
+            graph=graph,
+            agent_manager=agent_manager,
+            llm=llm,
+        )
+
+        # Run in a thread executor so we can yield SSE from sync generator
+        loop = asyncio.new_event_loop()
+
+        async def _run():
+            return await workflow.async_execute(
+                inputs={"task": task},
+                sse_emit=sse_emit_callback,
+            )
+
+        # Poll the queue while the async task runs
+        import threading
+
+        result_holder: List = [None, None]  # [output, error]
+
+        def _thread_target():
+            try:
+                result_holder[0] = loop.run_until_complete(_run())
+            except Exception as e:
+                result_holder[1] = str(e)
+            finally:
+                loop.close()
+
+        thread = threading.Thread(target=_thread_target, daemon=True)
+        thread.start()
+
+        while thread.is_alive():
+            # Flush any queued SSE events
+            while sse_queue:
+                yield sse_queue.pop(0)
+            time.sleep(0.2)
+
+        # Final flush after thread completes
+        while sse_queue:
+            yield sse_queue.pop(0)
+
+        thread.join()
+
+        if result_holder[1]:
+            raise RuntimeError(result_holder[1])
+
+        final_output = result_holder[0] or ""
+
+        # ── 4. Save result ────────────────────────────────────────────────
+        operation.status = "completed"
+        operation.completed_at = datetime.now(timezone.utc)
+        operation.workflow_config = operation.workflow_config or {}
+        operation.workflow_config["hierarchy_result"] = final_output[:5000]
+        operation.workflow_config["hierarchy_team"] = team_spec
+        operation.workflow_config["hierarchy_trace"] = workflow.trace.summary()
+        db.commit()
+
+        trace = workflow.trace.summary()
+        yield emit("complete", {
+            "operation_id": operation.id,
+            "output": final_output,
+            "output_length": len(final_output),
+            "hierarchy_metrics": {
+                "review_loops": trace.get("event_counts", {}).get("review", 0),
+                "escalations": trace.get("event_counts", {}).get("escalation", 0),
+                "revisions": trace.get("event_counts", {}).get("revision", 0),
+                "total_events": trace.get("total_events", 0),
+                "elapsed_s": trace.get("total_elapsed_s", 0),
+            },
+            "message": "Hierarchical execution complete",
+        })
+
+    except Exception as e:
+        print(f"[hierarchy] ERROR: {e}")
+        operation.status = "failed"
+        db.commit()
+        yield emit("error", {
+            "operation_id": operation.id,
+            "message": f"Hierarchical execution failed: {str(e)}",
+        })
+
+
 @router.get("/{operation_id}/status")
 async def get_operation_status(
     operation_id: int,

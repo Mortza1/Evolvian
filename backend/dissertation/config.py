@@ -47,3 +47,8 @@ def get_llm_config(temperature: float = 0.1, max_tokens: int = 512) -> OpenRoute
         temperature=temperature,
         max_tokens=max_tokens,
     )
+
+
+def get_extraction_llm_config() -> OpenRouterConfig:
+    """Get a lightweight LLM config for answer extraction (low tokens, temp=0)."""
+    return get_llm_config(temperature=0.0, max_tokens=64)

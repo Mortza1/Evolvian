@@ -137,6 +137,7 @@ export default function BoardView({ teamId }: BoardViewProps) {
               workflowNodes={workflowNodes}
               taskDescription={activeTask.description}
               initialStatus={activeTask.status}
+              hierarchical={activeTask.hierarchical}
               onClose={handleCloseWarRoom}
             />
           </div>

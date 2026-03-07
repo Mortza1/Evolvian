@@ -24,6 +24,7 @@ interface WarRoomLiveProps {
   taskDescription: string;
   initialStatus?: 'pending' | 'active' | 'completed' | 'failed' | 'paused' | 'cancelled';
   onClose?: () => void;
+  hierarchical?: boolean;
 }
 
 interface LogEntry {
@@ -54,7 +55,7 @@ interface AssumptionData {
   assumptionIndex: number;
 }
 
-export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescription, initialStatus = 'pending', onClose }: WarRoomLiveProps) {
+export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescription, initialStatus = 'pending', onClose, hierarchical = false }: WarRoomLiveProps) {
   // Notification hooks (Phase 6.1)
   const { showNotification, playNotificationSound, canNotify } = useNotifications();
   const { showToast } = useToast();
@@ -79,6 +80,9 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
   const [qualityScore, setQualityScore] = useState<number | null>(null);
+  const useHierarchy = true;
+  const [hierarchyTeam, setHierarchyTeam] = useState<{ supervisor: string; workers: string[]; teamName: string } | null>(null);
+  const [hierarchyMetrics, setHierarchyMetrics] = useState<{ review_loops: number; escalations: number; revisions: number } | null>(null);
   const [currentAssumption, setCurrentAssumption] = useState<AssumptionData | null>(null);
   const [assumptionAnswer, setAssumptionAnswer] = useState('');
   const [isSubmittingAssumption, setIsSubmittingAssumption] = useState(false);
@@ -172,7 +176,10 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
 
     try {
       // Use fetch with SSE parsing since EventSource doesn't support auth headers
-      const response = await fetch(`${baseUrl}/api/operations/${taskId}/execute`, {
+      const endpoint = useHierarchy
+        ? `${baseUrl}/api/operations/${taskId}/execute-hierarchical`
+        : `${baseUrl}/api/operations/${taskId}/execute`;
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -435,7 +442,12 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
       case 'complete':
         setIsComplete(true);
         setTotalCost(data.total_cost || 0);
-        addLog('System', `Operation completed! Total cost: $${(data.total_cost || 0).toFixed(2)}`, 'complete');
+        if (data.hierarchy_metrics) {
+          setHierarchyMetrics(data.hierarchy_metrics);
+          addLog('System', `Operation complete — ${data.hierarchy_metrics.review_loops} review loops, ${data.hierarchy_metrics.escalations} escalations, ${data.hierarchy_metrics.revisions} revisions`, 'complete');
+        } else {
+          addLog('System', `Operation completed! Total cost: $${(data.total_cost || 0).toFixed(2)}`, 'complete');
+        }
         break;
 
       case 'paused':
@@ -457,6 +469,65 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
 
       case 'resumed':
         addLog('System', `Resuming from node ${data.from_node + 1}`, 'info');
+        break;
+
+      // ── Hierarchy events ──────────────────────────────────────────────
+      case 'hierarchy_decompose':
+        if (data.workers) {
+          // Second decompose event — team is ready
+          setHierarchyTeam({
+            supervisor: data.supervisor,
+            workers: data.workers,
+            teamName: data.team_name || 'Hierarchical Team',
+          });
+          addLog(data.supervisor, `Team ready: ${data.workers.join(', ')}`, 'info');
+          if (data.reasoning) {
+            addLog(data.supervisor, data.reasoning, 'info');
+          }
+        } else {
+          addLog(data.supervisor || 'Supervisor', data.message || 'Decomposing task...', 'llm');
+        }
+        break;
+
+      case 'hierarchy_delegate':
+        addLog('Supervisor', data.message || `→ ${data.worker}: ${data.subtask_description}`, 'info');
+        break;
+
+      case 'hierarchy_worker_start':
+        addLog(data.worker, data.message || `Working on subtask...`, 'llm');
+        break;
+
+      case 'hierarchy_worker_complete':
+        addLog(data.worker, data.message || 'Subtask complete', 'output');
+        if (data.output_preview) {
+          addLog(data.worker, `Preview: ${data.output_preview.slice(0, 120)}...`, 'output');
+        }
+        break;
+
+      case 'hierarchy_escalate':
+        addLog('⚠ Escalation', data.message || `${data.from_worker} → ${data.to_worker}`, 'error');
+        setHierarchyMetrics(m => ({ review_loops: m?.review_loops ?? 0, escalations: (m?.escalations ?? 0) + 1, revisions: m?.revisions ?? 0 }));
+        break;
+
+      case 'hierarchy_review':
+        if (data.approved) {
+          addLog(data.supervisor || 'Supervisor', data.message || '✓ Output approved', 'complete');
+        } else {
+          addLog(data.supervisor || 'Supervisor', data.message || 'Reviewing outputs...', 'llm');
+          setHierarchyMetrics(m => ({ review_loops: (m?.review_loops ?? 0) + 1, escalations: m?.escalations ?? 0, revisions: m?.revisions ?? 0 }));
+        }
+        break;
+
+      case 'hierarchy_revise':
+        addLog('Supervisor', data.message || `Requesting revision ${data.revision_round}...`, 'tool');
+        setHierarchyMetrics(m => ({ review_loops: m?.review_loops ?? 0, escalations: m?.escalations ?? 0, revisions: (m?.revisions ?? 0) + 1 }));
+        break;
+
+      case 'hierarchy_complete':
+        addLog('✓ Hierarchy', data.message || 'All outputs approved', 'complete');
+        if (data.output_length) {
+          addLog('System', `Final output: ${data.output_length.toLocaleString()} characters`, 'complete');
+        }
         break;
 
       case 'assumption_raised':
@@ -740,7 +811,14 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
       <div className="flex-shrink-0 p-6 border-b border-slate-800">
         <div className="flex items-center justify-between mb-2">
           <div>
-            <h1 className="text-xl font-semibold text-white">Execution Theatre</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold text-white">Execution Theatre</h1>
+              {useHierarchy && (
+                <span className="px-2 py-0.5 bg-purple-500/20 border border-purple-500/40 rounded text-xs text-purple-300 font-semibold uppercase tracking-wider">
+                  ◈ Hierarchy
+                </span>
+              )}
+            </div>
             <p className="text-sm text-slate-500 mt-1">{taskDescription}</p>
           </div>
           <div className="flex items-center gap-3">
@@ -852,134 +930,241 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
       <div className="flex-1 flex overflow-hidden">
         {/* Workflow Graph */}
         <div className="flex-1 p-8 overflow-auto scrollbar-hide">
-          <div className="flex items-center justify-center gap-6 min-w-max">
-            {workflowNodes.map((node, idx) => {
-              const nodeStatus = nodeStatuses.find(s => s.nodeId === node.id);
-              const nodeColor = colors[idx % colors.length];
-              const isActive = nodeStatus?.status === 'active';
-              const isCompleted = nodeStatus?.status === 'completed';
-              const isFailed = nodeStatus?.status === 'failed';
-              const isWaitingForInput = nodeStatus?.status === 'waiting_for_input';
-              const displayColor = isFailed ? '#EF4444' : isWaitingForInput ? '#F59E0B' : nodeColor;
-
-              // Get agent photo
-              const agentPhoto = node.agentPhoto || getAgentPhoto(node.agentName || node.agentRole);
-
-              return (
-                <div key={node.id} className="flex items-center">
-                  {/* Node */}
+          {useHierarchy ? (
+            /* ── Hierarchy Tree View ─────────────────────────────────── */
+            <div className="flex flex-col items-center min-h-[280px] py-4">
+              {hierarchyTeam ? (
+                <>
+                  {/* Supervisor Node */}
                   <div className="relative">
-                    {/* Pulsing glow for active or waiting node */}
-                    {(isActive || isWaitingForInput) && (
-                      <div
-                        className="absolute -inset-4 rounded-lg blur-2xl opacity-40 animate-pulse"
-                        style={{ backgroundColor: displayColor }}
-                      ></div>
+                    {isExecuting && (
+                      <div className="absolute -inset-3 rounded-xl blur-xl opacity-20 bg-purple-500 animate-pulse"></div>
                     )}
-
-                    {/* Node card */}
-                    <div
-                      className={`relative bg-[#0A0A0F] border rounded-lg p-5 w-64 transition-all ${
-                        (isActive || isWaitingForInput) ? 'border-opacity-100' : 'border-opacity-50'
-                      } ${isCompleted ? 'opacity-70' : ''}`}
-                      style={{ borderColor: (isActive || isWaitingForInput) ? displayColor : '#334155' }}
-                    >
-                      {/* Order badge */}
-                      <div
-                        className={`absolute -top-2 -left-2 w-7 h-7 rounded-full flex items-center justify-center text-white font-semibold text-sm ${
-                          isCompleted ? 'bg-green-600' : isFailed ? 'bg-red-600' : isWaitingForInput ? 'bg-amber-500 animate-pulse' : ''
-                        }`}
-                        style={{ backgroundColor: (isCompleted || isFailed || isWaitingForInput) ? undefined : displayColor }}
-                      >
-                        {isCompleted ? '✓' : isFailed ? '✕' : isWaitingForInput ? '?' : node.order}
+                    <div className="relative px-8 py-5 bg-[#0A0A0F] border-2 border-purple-500/60 rounded-xl w-72 text-center shadow-lg shadow-purple-500/10">
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-gradient-to-r from-[#7C3AED] to-[#6366F1] rounded-full text-[10px] text-white font-bold uppercase tracking-widest whitespace-nowrap">
+                        Supervisor
                       </div>
-
-                      {/* Agent Photo */}
-                      <div className="mb-4">
-                        {agentPhoto ? (
-                          <img
-                            src={agentPhoto}
-                            alt={node.agentName || node.agentRole}
-                            className={`w-16 h-16 rounded-full object-cover mx-auto border-2 ${
-                              isActive ? 'ring-2 ring-offset-2 ring-offset-[#0A0A0F]' : ''
-                            }`}
-                            style={{ borderColor: displayColor }}
-                          />
-                        ) : (
-                          <div
-                            className={`w-16 h-16 rounded-full mx-auto flex items-center justify-center text-white text-xl font-bold border-2`}
-                            style={{ backgroundColor: `${displayColor}40`, borderColor: displayColor }}
-                          >
-                            {(node.agentName || node.agentRole).substring(0, 2).toUpperCase()}
-                          </div>
-                        )}
+                      <div className="w-14 h-14 bg-gradient-to-br from-[#7C3AED] to-[#6366F1] rounded-full flex items-center justify-center mx-auto mt-2 mb-3 ring-2 ring-purple-500/30">
+                        <span className="text-white font-bold text-xl">{hierarchyTeam.supervisor.substring(0, 2).toUpperCase()}</span>
                       </div>
-
-                      {/* Agent name */}
-                      <h3 className="text-base font-semibold text-white text-center mb-1">
-                        {node.agentName || node.agentRole}
-                      </h3>
-                      <div className="text-xs text-slate-500 text-center mb-3">{node.agentRole}</div>
-
-                      {/* Action */}
-                      <p className="text-xs text-slate-400 text-center leading-relaxed mb-3">
-                        {node.name || node.action || node.description}
-                      </p>
-
-                      {/* Tool indicator */}
-                      {isActive && nodeStatus?.activeTool && (
-                        <div className="flex items-center justify-center gap-2 p-2 bg-[#6366F1]/10 border border-[#6366F1]/30 rounded mb-3">
-                          <div className="w-3 h-3 border-2 border-[#6366F1] border-t-transparent rounded-full animate-spin"></div>
-                          <span className="text-xs text-[#6366F1] font-medium">{nodeStatus.activeTool}</span>
-                        </div>
-                      )}
-
-                      {/* Progress bar */}
-                      {(isActive || isCompleted) && nodeStatus?.progress !== undefined && (
-                        <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                          <div
-                            className="h-full transition-all duration-500 rounded-full"
-                            style={{
-                              width: `${nodeStatus.progress}%`,
-                              backgroundColor: isCompleted ? '#22C55E' : nodeColor,
-                            }}
-                          ></div>
-                        </div>
-                      )}
-
-                      {/* Status */}
-                      <div className="mt-3 pt-3 border-t border-slate-800">
-                        <div className="text-xs text-center">
-                          {isCompleted && <span className="text-green-500">Completed</span>}
-                          {isFailed && <span className="text-red-500">Failed</span>}
-                          {isWaitingForInput && <span className="text-amber-500 font-semibold">⚠️ Needs your input</span>}
-                          {isActive && !isWaitingForInput && <span className="text-[#6366F1]">In Progress</span>}
-                          {nodeStatus?.status === 'pending' && <span className="text-slate-500">Pending</span>}
-                        </div>
-                      </div>
-
-                      {/* Output preview */}
-                      {nodeStatus?.output && (
-                        <div className="mt-3 p-2 bg-slate-900 rounded text-xs text-slate-400 max-h-20 overflow-hidden">
-                          {nodeStatus.output.substring(0, 100)}...
+                      <div className="text-white font-semibold text-sm">{hierarchyTeam.supervisor}</div>
+                      <div className="text-xs text-purple-300 mt-0.5">Orchestrates · Reviews · Approves</div>
+                      {isExecuting && (
+                        <div className="mt-2.5 flex items-center justify-center gap-1">
+                          <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Connection line */}
-                  {idx < workflowNodes.length - 1 && (
-                    <div className="flex items-center mx-4">
-                      <div className="w-12 h-0.5 bg-slate-700"></div>
-                      <svg className="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
+                  {/* Vertical line from supervisor */}
+                  <div className="w-px h-6 bg-gradient-to-b from-purple-500/60 to-purple-500/20"></div>
+
+                  {/* Workers row with horizontal connector */}
+                  <div className="relative flex items-start gap-3">
+                    {/* Horizontal bar across workers */}
+                    {hierarchyTeam.workers.length > 1 && (
+                      <div
+                        className="absolute top-0 h-px bg-purple-500/30"
+                        style={{
+                          left: `calc(${100 / (hierarchyTeam.workers.length * 2)}%)`,
+                          right: `calc(${100 / (hierarchyTeam.workers.length * 2)}%)`,
+                        }}
+                      ></div>
+                    )}
+                    {hierarchyTeam.workers.map((worker) => (
+                      <div key={worker} className="flex flex-col items-center">
+                        {/* Vertical drop to worker */}
+                        <div className="w-px h-6 bg-purple-500/30"></div>
+                        {/* Worker card */}
+                        <div className="px-4 py-4 bg-[#0A0A0F] border border-indigo-500/40 hover:border-indigo-400/60 rounded-xl w-44 text-center transition-colors">
+                          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/40 rounded-full flex items-center justify-center mx-auto mb-2">
+                            <span className="text-indigo-300 font-semibold text-sm">{worker.substring(0, 2).toUpperCase()}</span>
+                          </div>
+                          <div className="text-white text-xs font-semibold truncate" title={worker}>{worker}</div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">Specialist</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Metrics row */}
+                  <div className="mt-8 flex items-center gap-8">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-purple-400 tabular-nums">{hierarchyMetrics?.review_loops ?? 0}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">Review Loops</div>
                     </div>
-                  )}
+                    <div className="w-px h-10 bg-slate-800"></div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-amber-400 tabular-nums">{hierarchyMetrics?.escalations ?? 0}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">Escalations</div>
+                    </div>
+                    <div className="w-px h-10 bg-slate-800"></div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-400 tabular-nums">{hierarchyMetrics?.revisions ?? 0}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">Revisions</div>
+                    </div>
+                  </div>
+
+                  {/* Team name badge */}
+                  <div className="mt-4 px-4 py-1.5 bg-purple-900/20 border border-purple-500/20 rounded-full">
+                    <span className="text-xs text-purple-300 font-medium">{hierarchyTeam.teamName}</span>
+                  </div>
+                </>
+              ) : isExecuting ? (
+                /* Building team... */
+                <div className="flex flex-col items-center gap-4 py-16">
+                  <div className="relative">
+                    <div className="w-16 h-16 border-2 border-purple-500/20 rounded-full"></div>
+                    <div className="absolute inset-0 w-16 h-16 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                  <div className="text-slate-400 text-sm">Building hierarchy team...</div>
+                  <div className="text-xs text-slate-600">Analysing task and auto-generating specialist team</div>
                 </div>
-              );
-            })}
-          </div>
+              ) : (
+                /* Not yet started */
+                <div className="flex flex-col items-center gap-4 py-16">
+                  <div className="w-16 h-16 bg-purple-500/10 border border-purple-500/30 rounded-full flex items-center justify-center">
+                    <span className="text-2xl text-purple-400">◈</span>
+                  </div>
+                  <div className="text-slate-400 text-sm">Hierarchy mode enabled</div>
+                  <div className="text-xs text-slate-600">Team will be auto-built when execution starts</div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* ── Flat Workflow Nodes ────────────────────────────────── */
+            <div className="flex items-center justify-center gap-6 min-w-max">
+              {workflowNodes.map((node, idx) => {
+                const nodeStatus = nodeStatuses.find(s => s.nodeId === node.id);
+                const nodeColor = colors[idx % colors.length];
+                const isActive = nodeStatus?.status === 'active';
+                const isCompleted = nodeStatus?.status === 'completed';
+                const isFailed = nodeStatus?.status === 'failed';
+                const isWaitingForInput = nodeStatus?.status === 'waiting_for_input';
+                const displayColor = isFailed ? '#EF4444' : isWaitingForInput ? '#F59E0B' : nodeColor;
+
+                // Get agent photo
+                const agentPhoto = node.agentPhoto || getAgentPhoto(node.agentName || node.agentRole);
+
+                return (
+                  <div key={node.id} className="flex items-center">
+                    {/* Node */}
+                    <div className="relative">
+                      {/* Pulsing glow for active or waiting node */}
+                      {(isActive || isWaitingForInput) && (
+                        <div
+                          className="absolute -inset-4 rounded-lg blur-2xl opacity-40 animate-pulse"
+                          style={{ backgroundColor: displayColor }}
+                        ></div>
+                      )}
+
+                      {/* Node card */}
+                      <div
+                        className={`relative bg-[#0A0A0F] border rounded-lg p-5 w-64 transition-all ${
+                          (isActive || isWaitingForInput) ? 'border-opacity-100' : 'border-opacity-50'
+                        } ${isCompleted ? 'opacity-70' : ''}`}
+                        style={{ borderColor: (isActive || isWaitingForInput) ? displayColor : '#334155' }}
+                      >
+                        {/* Order badge */}
+                        <div
+                          className={`absolute -top-2 -left-2 w-7 h-7 rounded-full flex items-center justify-center text-white font-semibold text-sm ${
+                            isCompleted ? 'bg-green-600' : isFailed ? 'bg-red-600' : isWaitingForInput ? 'bg-amber-500 animate-pulse' : ''
+                          }`}
+                          style={{ backgroundColor: (isCompleted || isFailed || isWaitingForInput) ? undefined : displayColor }}
+                        >
+                          {isCompleted ? '✓' : isFailed ? '✕' : isWaitingForInput ? '?' : node.order}
+                        </div>
+
+                        {/* Agent Photo */}
+                        <div className="mb-4">
+                          {agentPhoto ? (
+                            <img
+                              src={agentPhoto}
+                              alt={node.agentName || node.agentRole}
+                              className={`w-16 h-16 rounded-full object-cover mx-auto border-2 ${
+                                isActive ? 'ring-2 ring-offset-2 ring-offset-[#0A0A0F]' : ''
+                              }`}
+                              style={{ borderColor: displayColor }}
+                            />
+                          ) : (
+                            <div
+                              className={`w-16 h-16 rounded-full mx-auto flex items-center justify-center text-white text-xl font-bold border-2`}
+                              style={{ backgroundColor: `${displayColor}40`, borderColor: displayColor }}
+                            >
+                              {(node.agentName || node.agentRole).substring(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Agent name */}
+                        <h3 className="text-base font-semibold text-white text-center mb-1">
+                          {node.agentName || node.agentRole}
+                        </h3>
+                        <div className="text-xs text-slate-500 text-center mb-3">{node.agentRole}</div>
+
+                        {/* Action */}
+                        <p className="text-xs text-slate-400 text-center leading-relaxed mb-3">
+                          {node.name || node.action || node.description}
+                        </p>
+
+                        {/* Tool indicator */}
+                        {isActive && nodeStatus?.activeTool && (
+                          <div className="flex items-center justify-center gap-2 p-2 bg-[#6366F1]/10 border border-[#6366F1]/30 rounded mb-3">
+                            <div className="w-3 h-3 border-2 border-[#6366F1] border-t-transparent rounded-full animate-spin"></div>
+                            <span className="text-xs text-[#6366F1] font-medium">{nodeStatus.activeTool}</span>
+                          </div>
+                        )}
+
+                        {/* Progress bar */}
+                        {(isActive || isCompleted) && nodeStatus?.progress !== undefined && (
+                          <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className="h-full transition-all duration-500 rounded-full"
+                              style={{
+                                width: `${nodeStatus.progress}%`,
+                                backgroundColor: isCompleted ? '#22C55E' : nodeColor,
+                              }}
+                            ></div>
+                          </div>
+                        )}
+
+                        {/* Status */}
+                        <div className="mt-3 pt-3 border-t border-slate-800">
+                          <div className="text-xs text-center">
+                            {isCompleted && <span className="text-green-500">Completed</span>}
+                            {isFailed && <span className="text-red-500">Failed</span>}
+                            {isWaitingForInput && <span className="text-amber-500 font-semibold">⚠️ Needs your input</span>}
+                            {isActive && !isWaitingForInput && <span className="text-[#6366F1]">In Progress</span>}
+                            {nodeStatus?.status === 'pending' && <span className="text-slate-500">Pending</span>}
+                          </div>
+                        </div>
+
+                        {/* Output preview */}
+                        {nodeStatus?.output && (
+                          <div className="mt-3 p-2 bg-slate-900 rounded text-xs text-slate-400 max-h-20 overflow-hidden">
+                            {nodeStatus.output.substring(0, 100)}...
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Connection line */}
+                    {idx < workflowNodes.length - 1 && (
+                      <div className="flex items-center mx-4">
+                        <div className="w-12 h-0.5 bg-slate-700"></div>
+                        <svg className="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Completion Summary + Rating */}
           {isComplete && (

@@ -34,6 +34,7 @@ class Subtask:
     assigned_worker: Optional[str] = None
     status: str = "pending"   # pending | running | completed | failed
     result: Optional[str] = None
+    original_task: Optional[str] = None   # original user task for worker context
 
 
 @dataclass
@@ -134,6 +135,16 @@ class SupervisorDecomposer:
     def __init__(self, supervisor_llm):
         self._llm = supervisor_llm
 
+    async def _llm_call(self, prompt: str) -> str:
+        """Run generate() in a thread executor (retry-backed, non-blocking)."""
+        import functools
+        await asyncio.sleep(1.0)  # 1s gap to avoid rate limiting
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, functools.partial(self._llm.generate, prompt)
+        )
+        return result if isinstance(result, str) else str(result)
+
     async def decompose(self, task: str, workers: List) -> List[Subtask]:
         """
         Decompose `task` into subtasks given the available workers.
@@ -144,16 +155,19 @@ class SupervisorDecomposer:
         prompt = DECOMPOSITION_PROMPT.format(task=task, workers=worker_desc)
 
         try:
-            response = await self._llm.async_generate(prompt=prompt)
-            text = response if isinstance(response, str) else str(response)
-            return self._parse_subtasks(text)
+            text = await self._llm_call(prompt)
+            subtasks = self._parse_subtasks(text)
         except Exception:
             # Fallback: one subtask, all workers eligible
-            return [Subtask(
+            subtasks = [Subtask(
                 subtask_id="subtask_1",
                 description=task,
                 required_skills=[],
             )]
+        # Attach the original task to every subtask so workers have full context
+        for s in subtasks:
+            s.original_task = task
+        return subtasks
 
     def _format_workers(self, workers: List) -> str:
         lines = []
@@ -163,14 +177,44 @@ class SupervisorDecomposer:
             lines.append(f"- {w.name}: {w.description}  [skills: {scope_str}]")
         return "\n".join(lines) if lines else "- (no workers)"
 
+    @staticmethod
+    def _extract_json_block(text: str, open_ch: str, close_ch: str) -> Optional[str]:
+        """Extract the first balanced JSON block (array or object) from text."""
+        start = text.find(open_ch)
+        if start == -1:
+            return None
+        depth = 0
+        in_string = False
+        escape = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if escape:
+                escape = False
+                continue
+            if ch == '\\' and in_string:
+                escape = True
+                continue
+            if ch == '"' and not escape:
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == open_ch:
+                depth += 1
+            elif ch == close_ch:
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+        return None
+
     def _parse_subtasks(self, text: str) -> List[Subtask]:
         # Strip markdown fences if present
         text = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
-        # Extract JSON array
-        match = re.search(r"\[.*\]", text, re.DOTALL)
-        if not match:
+        # Extract first balanced JSON array
+        json_str = self._extract_json_block(text, '[', ']')
+        if not json_str:
             raise ValueError(f"No JSON array found in decomposition response: {text[:200]}")
-        data = json.loads(match.group())
+        data = json.loads(json_str)
         subtasks = []
         for i, item in enumerate(data):
             subtasks.append(Subtask(
@@ -232,13 +276,12 @@ class DelegationEngine:
         best_score = -1
         for w in self.workers:
             scope = getattr(w, "authority_scope", [])
-            # Count exact matches + partial matches (lowercase)
-            exact = sum(1 for s in subtask.required_skills if s in scope)
-            partial = sum(
-                1 for s in subtask.required_skills
-                if any(s.lower() in sc.lower() or sc.lower() in s.lower() for sc in scope)
-            )
-            score = exact * 2 + partial
+            score = 0
+            for s in subtask.required_skills:
+                if s in scope:
+                    score += 2  # exact match
+                elif any(s.lower() in sc.lower() or sc.lower() in s.lower() for sc in scope):
+                    score += 1  # partial match only
             if score > best_score:
                 best_score = score
                 best_worker = w
@@ -267,6 +310,16 @@ class SupervisorReviewer:
     def __init__(self, supervisor_llm):
         self._llm = supervisor_llm
 
+    async def _llm_call(self, prompt: str) -> str:
+        """Run generate() in a thread executor (retry-backed, non-blocking)."""
+        import functools
+        await asyncio.sleep(1.0)  # 1s gap to avoid rate limiting
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, functools.partial(self._llm.generate, prompt)
+        )
+        return result if isinstance(result, str) else str(result)
+
     async def review(
         self,
         task: str,
@@ -288,8 +341,7 @@ class SupervisorReviewer:
         prompt = REVIEW_PROMPT.format(task=task, results=results_str)
 
         try:
-            response = await self._llm.async_generate(prompt=prompt)
-            text = response if isinstance(response, str) else str(response)
+            text = await self._llm_call(prompt)
             return self._parse_review(text)
         except Exception:
             # Fallback: approve and aggregate
@@ -308,8 +360,8 @@ class SupervisorReviewer:
         results_str = self._format_results(results)
         prompt = AGGREGATE_PROMPT.format(task=task, results=results_str)
         try:
-            response = await self._llm.async_generate(prompt=prompt)
-            return response if isinstance(response, str) else str(response)
+            text = await self._llm_call(prompt)
+            return text
         except Exception:
             # Fallback: concatenate
             return "\n\n".join(r.output for r in results)
@@ -322,10 +374,10 @@ class SupervisorReviewer:
 
     def _parse_review(self, text: str) -> ReviewDecision:
         text = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if not match:
+        json_str = SupervisorDecomposer._extract_json_block(text, '{', '}')
+        if not json_str:
             raise ValueError(f"No JSON object in review response: {text[:200]}")
-        data = json.loads(match.group())
+        data = json.loads(json_str)
         return ReviewDecision(
             approved=bool(data.get("approved", True)),
             final_output=data.get("final_output"),

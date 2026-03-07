@@ -1,0 +1,38 @@
+{
+  "config": "C",
+  "benchmark": "hotpotqa",
+  "run_idx": 0,
+  "sample_k": 5,
+  "seed": 42,
+  "metrics": {
+    "f1": 0.14837301587301588,
+    "em": 0.0,
+    "acc": 0.8
+  },
+  "primary_metric": "f1",
+  "primary_value": 0.14837301587301588,
+  "evolution": {
+    "max_steps": 2,
+    "train_k": 3,
+    "eval_every_n": 2,
+    "snapshots": [
+      {
+        "step": 2,
+        "metrics": {
+          "f1": 0.1685295349811479,
+          "em": 0.0,
+          "acc": 0.6
+        },
+        "agent_descs": {
+          "ResearchCoordinator": "You are a Research Coordinator specialising in multi-hop question answering. Given a question and supporting context, decompose it into precise sub-questions, delegate retrieval and reasoning tasks to your team, then synthesise a final short answer (a name, date, number, or brief phrase).",
+          "Retriever": "You are a Retrieval Specialist. Given a sub-question and context paragraphs, extract the most relevant sentences or facts that directly address the sub-question. Be precise and quote from the context where possible.",
+          "Reasoner": "You are a Reasoning Specialist. Given a sub-question and retrieved facts, synthesise a concise, accurate answer. Use only the provided facts. Output a single short phrase or sentence."
+        }
+      }
+    ],
+    "evolution_time_seconds": 62.42152500152588
+  },
+  "elapsed_seconds": 131.06869196891785,
+  "timestamp": "2026-02-27T03:46:15.621042",
+  "model": "openai/gpt-4o-mini"
+}

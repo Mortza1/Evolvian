@@ -1,5 +1,5 @@
 """
-MBPP hierarchical team configuration (Config B).
+MBPP hierarchical team configuration (Config C).
 
 Team structure:
   Supervisor: Architect

@@ -1,20 +1,24 @@
 """
-MATH hierarchical team configuration (Config B).
+MATH hierarchical team configuration (Config C).
 
 Team structure:
   Supervisor: MathStrategist
     Reads the problem, decides on solution strategy, delegates solving and
     verification steps, makes the final decision based on solver + verifier output.
 
-  Worker 1: Solver
+  Worker 1: Planner
+    Identifies the mathematical domain, plans the solution approach, lists steps.
+    Skills: planning, strategy, domain identification
+
+  Worker 2: Solver
     Executes mathematical steps: algebra, calculus, combinatorics, etc.
     Shows all working. Produces a numerical or symbolic answer.
 
-  Worker 2: Verifier
-    Checks the solver's work for errors. Independently re-derives or spot-checks
-    the answer. Reports whether the answer is correct and why.
+  Worker 3: Verifier
+    Checks the solver's work for errors. Uses graded confidence (0-100).
+    Reports whether the answer is correct and why.
 
-Delegation: capability_match (Solver gets computation tasks, Verifier gets checking tasks)
+Delegation: capability_match (Planner gets strategy, Solver gets computation, Verifier gets checking)
 Review:     supervisor_reviews_all
 Escalation: if Verifier finds an error → escalate to supervisor for resolution
 """
@@ -57,6 +61,19 @@ def build_math_team(llm_config) -> tuple:
         llm_config=llm_config,
     )
 
+    planner = HierarchicalAgent(
+        name="Planner",
+        description=(
+            "You are a Mathematics Planner. Given a math problem, identify the "
+            "mathematical domain (algebra, geometry, number theory, etc.) and plan "
+            "the solution approach. List the steps needed to solve the problem. "
+            "Do NOT solve it — only produce a clear plan."
+        ),
+        role=AgentRole.WORKER,
+        authority_scope=["planning", "strategy", "domain identification", "math planning"],
+        llm_config=llm_config,
+    )
+
     solver = HierarchicalAgent(
         name="Solver",
         description=(
@@ -74,7 +91,11 @@ def build_math_team(llm_config) -> tuple:
         description=(
             "You are a Mathematics Verifier. Given a problem and a proposed solution, "
             "independently check the answer by re-deriving it or substituting back. "
-            "State 'CORRECT' or 'INCORRECT: <reason>' at the start of your response."
+            "Rate your confidence that the solution is correct on a scale of 0-100. "
+            "Start your response with 'CONFIDENCE: <score>/100'. "
+            "Flag as INCORRECT only if confidence < 30. If you flag INCORRECT, you "
+            "MUST identify the SPECIFIC step that is wrong (e.g. 'Step 3 is wrong "
+            "because...'). If you cannot point to a specific error, default to CORRECT."
         ),
         role=AgentRole.WORKER,
         authority_scope=["verification", "checking", "proof checking", "error detection"],
@@ -85,14 +106,14 @@ def build_math_team(llm_config) -> tuple:
         team_id="math_team",
         name="MATH Team",
         supervisor=supervisor,
-        workers=[solver, verifier],
+        workers=[planner, solver, verifier],
         scope=["mathematical problem solving"],
         delegation_policy=DelegationPolicy(
             strategy=DelegationStrategy.CAPABILITY_MATCH,
         ),
         escalation_rules=[
             EscalationRule(
-                condition="verifier reports the answer is INCORRECT or solution is incomplete",
+                condition="verifier confidence is below 30 AND a specific error step is identified",
                 action=EscalationAction.ESCALATE_TO_SUPERVISOR,
                 max_retries=1,
             ),

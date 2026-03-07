@@ -161,10 +161,20 @@ class HierarchicalWorkFlow(WorkFlow):
 
     The trace attribute records every delegation/review/escalation event
     for dissertation overhead analysis.
+
+    SSE integration:
+    Pass an `sse_emit` callable to async_execute() to stream hierarchy events
+    through the existing Evolvian SSE channel:
+        await workflow.async_execute(inputs={...}, sse_emit=emit_fn)
+    Where emit_fn(event_type: str, data: dict) -> None.
+    Events emitted: hierarchy_decompose, hierarchy_delegate, hierarchy_worker_start,
+    hierarchy_worker_complete, hierarchy_escalate, hierarchy_review, hierarchy_revise,
+    hierarchy_complete.
     """
 
     # Not a Pydantic field — initialised in init_module
     _trace: Optional[ExecutionTrace] = None
+    _sse_emit = None  # Optional[Callable[[str, dict], None]]
 
     def init_module(self):
         super().init_module()
@@ -182,6 +192,14 @@ class HierarchicalWorkFlow(WorkFlow):
     # Environment, no second LLM call needed.
     # ------------------------------------------------------------------
 
+    def _emit(self, event_type: str, data: dict):
+        """Fire an SSE event if a callback was registered, otherwise no-op."""
+        if self._sse_emit is not None:
+            try:
+                self._sse_emit(event_type, data)
+            except Exception:
+                pass  # Never let SSE errors break execution
+
     async def async_execute(self, inputs: dict = {}, **kwargs) -> str:
         """
         Execute the workflow asynchronously.
@@ -191,7 +209,13 @@ class HierarchicalWorkFlow(WorkFlow):
         (avoids the WorkFlowManager's LLM-based extract_output call).
 
         For plain WorkFlowGraph: delegates to the standard WorkFlow.
+
+        Optional kwarg:
+            sse_emit: Callable[[str, dict], None] — called for each hierarchy
+                      event so the caller can stream it over SSE.
         """
+        self._sse_emit = kwargs.pop("sse_emit", None)
+
         if not isinstance(self.graph, HierarchicalWorkFlowGraph):
             return await super().async_execute(inputs, **kwargs)
 
@@ -287,9 +311,21 @@ class HierarchicalWorkFlow(WorkFlow):
         supervisor_llm = self._get_agent_llm(team.supervisor)
 
         # Step 1 — Decompose
+        self._emit("hierarchy_decompose", {
+            "team_id": team.team_id,
+            "supervisor": team.supervisor.name,
+            "message": f"{team.supervisor.name} is decomposing the task...",
+        })
         decomposer = SupervisorDecomposer(supervisor_llm=supervisor_llm)
         subtasks = await decomposer.decompose(task=task_input, workers=team.workers)
         self.trace.log_decomposition(team.team_id, task_input, subtasks)
+        self._emit("hierarchy_decompose", {
+            "team_id": team.team_id,
+            "supervisor": team.supervisor.name,
+            "subtask_count": len(subtasks),
+            "subtasks": [{"id": s.subtask_id, "description": s.description[:120]} for s in subtasks],
+            "message": f"{team.supervisor.name} decomposed into {len(subtasks)} subtasks",
+        })
 
         # Step 2 — Assign
         engine = DelegationEngine(
@@ -304,20 +340,44 @@ class HierarchicalWorkFlow(WorkFlow):
                 worker_name=worker.name,
                 strategy=team.delegation_policy.strategy.value,
             )
+            self._emit("hierarchy_delegate", {
+                "team_id": team.team_id,
+                "subtask_id": subtask.subtask_id,
+                "worker": worker.name,
+                "subtask_description": subtask.description[:120],
+                "message": f"→ {worker.name}: {subtask.description[:80]}...",
+            })
 
         # Step 3 — Execute workers (with escalation checks)
         results: List[SubtaskResult] = []
         for subtask in subtasks:
             worker_name = subtask.assigned_worker
             worker = team.get_worker(worker_name) or team.supervisor
+
+            self._emit("hierarchy_worker_start", {
+                "team_id": team.team_id,
+                "worker": worker.name,
+                "subtask_id": subtask.subtask_id,
+                "message": f"{worker.name} is working on: {subtask.description[:80]}...",
+            })
+
             result = await self._execute_worker_subtask(
                 team_id=team.team_id,
                 worker=worker,
                 subtask=subtask,
             )
 
+            self._emit("hierarchy_worker_complete", {
+                "team_id": team.team_id,
+                "worker": worker.name,
+                "subtask_id": subtask.subtask_id,
+                "output_preview": result.output[:200],
+                "message": f"{worker.name} completed subtask",
+            })
+
             # Step 3.5 — Escalation check
             if team.escalation_rules:
+                pre_escalation_worker = result.worker_name
                 result = await self._check_escalation(
                     team=team,
                     subtask=subtask,
@@ -325,10 +385,23 @@ class HierarchicalWorkFlow(WorkFlow):
                     engine=engine,
                     supervisor_llm=supervisor_llm,
                 )
+                if result.worker_name != pre_escalation_worker:
+                    self._emit("hierarchy_escalate", {
+                        "team_id": team.team_id,
+                        "subtask_id": subtask.subtask_id,
+                        "from_worker": pre_escalation_worker,
+                        "to_worker": result.worker_name,
+                        "message": f"⚠ Escalated: {pre_escalation_worker} → {result.worker_name}",
+                    })
 
             results.append(result)
 
         # Step 4 — Review loop
+        self._emit("hierarchy_review", {
+            "team_id": team.team_id,
+            "supervisor": team.supervisor.name,
+            "message": f"{team.supervisor.name} is reviewing all outputs...",
+        })
         reviewer = SupervisorReviewer(supervisor_llm=supervisor_llm)
         final_output = await self._review_loop(
             team=team,
@@ -336,6 +409,7 @@ class HierarchicalWorkFlow(WorkFlow):
             results=results,
             reviewer=reviewer,
             engine=engine,
+            original_subtasks=subtasks,
         )
 
         # Step 5 — Store output in Environment and mark node complete
@@ -347,11 +421,33 @@ class HierarchicalWorkFlow(WorkFlow):
             to_node=task.name,
             output_len=len(final_output),
         )
+        self._emit("hierarchy_complete", {
+            "team_id": team.team_id,
+            "output_length": len(final_output),
+            "message": f"✓ {team.name} complete — {len(final_output)} chars produced",
+        })
         logger.info(f"[Hierarchy] Team '{team.team_id}' done. Output: {len(final_output)} chars")
 
     # ------------------------------------------------------------------
     # Worker subtask execution
     # ------------------------------------------------------------------
+
+    async def _llm_call(self, llm, prompt: str) -> str:
+        """
+        Run generate() in a thread executor.
+        The @retry decorator on single_generate handles transient 402/rate-limit
+        errors from OpenRouter by backing off and retrying.
+        Mock LLMs in tests implement generate() returning a plain string.
+        A small pre-call sleep prevents cascading rate-limit errors when multiple
+        workers fire in quick succession.
+        """
+        import functools
+        await asyncio.sleep(1.0)  # 1s gap between LLM calls to avoid rate limiting
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, functools.partial(llm.generate, prompt)
+        )
+        return result if isinstance(result, str) else str(result)
 
     async def _execute_worker_subtask(
         self,
@@ -363,15 +459,19 @@ class HierarchicalWorkFlow(WorkFlow):
         t0 = time.time()
         worker_llm = self._get_agent_llm(worker)
 
+        original_task = getattr(subtask, "original_task", None)
+        task_context = (
+            f"ORIGINAL QUESTION:\n{original_task}\n\n" if original_task else ""
+        )
         prompt = (
             f"You are {worker.name}: {worker.description}\n\n"
-            f"Your task:\n{subtask.description}\n\n"
+            f"{task_context}"
+            f"YOUR SUBTASK:\n{subtask.description}\n\n"
             "Provide a clear, concise answer:"
         )
 
         try:
-            output = await worker_llm.async_generate(prompt=prompt)
-            output = output if isinstance(output, str) else str(output)
+            output = await self._llm_call(worker_llm, prompt)
         except Exception as e:
             logger.warning(f"[Hierarchy] Worker '{worker.name}' failed: {e}")
             output = f"[Worker {worker.name} failed: {e}]"
@@ -476,12 +576,53 @@ class HierarchicalWorkFlow(WorkFlow):
         Ask the supervisor LLM whether the escalation condition is triggered.
 
         Also applies simple heuristics (empty output) without an LLM call.
+        For verifier outputs, parses confidence scores and checks for specific
+        error identification before escalating.
         """
+        import re
+
         # Fast heuristic: empty or very short output always escalates
         if not output or output.strip() == "" or output.startswith("[Worker"):
             return True
 
-        # LLM evaluation
+        # Confidence-based heuristic for verifier outputs
+        # Look for "CONFIDENCE: XX/100" pattern
+        confidence_match = re.search(r'CONFIDENCE:\s*(\d+)\s*/\s*100', output, re.IGNORECASE)
+        if confidence_match:
+            confidence = int(confidence_match.group(1))
+            # Only escalate if confidence < 30 AND a specific error step is cited
+            if confidence >= 30:
+                return False  # Confident enough — no escalation
+            # Check for specific error identification (e.g. "Step X is wrong")
+            has_specific_error = bool(re.search(
+                r'(?:step\s+\d|line\s+\d|error\s+(?:in|at)|wrong\s+(?:in|at|because))',
+                output,
+                re.IGNORECASE,
+            ))
+            if not has_specific_error:
+                # Verifier says INCORRECT but can't point to specific error — treat as CORRECT
+                logger.info(
+                    "[Hierarchy] Verifier override: low confidence but no specific error cited — "
+                    "treating as CORRECT"
+                )
+                return False
+            return True  # Low confidence + specific error = escalate
+
+        # Check for binary INCORRECT without confidence — apply specific-error check
+        if re.search(r'\bINCORRECT\b', output, re.IGNORECASE):
+            has_specific_error = bool(re.search(
+                r'(?:step\s+\d|line\s+\d|error\s+(?:in|at)|wrong\s+(?:in|at|because))',
+                output,
+                re.IGNORECASE,
+            ))
+            if not has_specific_error:
+                logger.info(
+                    "[Hierarchy] Verifier override: INCORRECT without specific error — "
+                    "treating as CORRECT"
+                )
+                return False
+
+        # LLM evaluation for other conditions
         prompt = (
             f"You are evaluating whether a worker's output should trigger escalation.\n\n"
             f"ESCALATION CONDITION: {condition}\n\n"
@@ -490,9 +631,8 @@ class HierarchicalWorkFlow(WorkFlow):
             "Answer with only 'yes' or 'no':"
         )
         try:
-            response = await supervisor_llm.async_generate(prompt=prompt)
-            text = (response if isinstance(response, str) else str(response)).lower().strip()
-            return text.startswith("yes")
+            response = await self._llm_call(supervisor_llm, prompt)
+            return response.lower().strip().startswith("yes")
         except Exception:
             return False  # On LLM failure, do not escalate
 
@@ -512,8 +652,7 @@ class HierarchicalWorkFlow(WorkFlow):
             "Please provide a better answer to this subtask:"
         )
         try:
-            output = await supervisor_llm.async_generate(prompt=prompt)
-            output = output if isinstance(output, str) else str(output)
+            output = await self._llm_call(supervisor_llm, prompt)
         except Exception as e:
             output = worker_result  # Fallback: keep original
 
@@ -567,8 +706,14 @@ class HierarchicalWorkFlow(WorkFlow):
         results: List[SubtaskResult],
         reviewer: SupervisorReviewer,
         engine: DelegationEngine,
+        original_subtasks: Optional[List[Subtask]] = None,
     ) -> str:
         """Run the supervisor review + optional revision loop."""
+        # Build lookup for original skills so revisions get proper routing
+        skills_map: Dict[str, List[str]] = {}
+        if original_subtasks:
+            skills_map = {s.subtask_id: s.required_skills for s in original_subtasks}
+
         revision_round = 0
         while True:
             decision = await reviewer.review(
@@ -583,7 +728,21 @@ class HierarchicalWorkFlow(WorkFlow):
             )
 
             if decision.approved or revision_round >= MAX_REVISION_ROUNDS:
+                self._emit("hierarchy_review", {
+                    "team_id": team.team_id,
+                    "approved": True,
+                    "revision_round": revision_round,
+                    "message": f"✓ {team.supervisor.name} approved output (round {revision_round})",
+                })
                 return decision.final_output or self._concat_results(results)
+
+            revision_round += 1
+            self._emit("hierarchy_revise", {
+                "team_id": team.team_id,
+                "revision_round": revision_round,
+                "revisions_needed": list(decision.revisions_needed),
+                "message": f"↺ Revision {revision_round}: {len(decision.revisions_needed)} subtask(s) need rework",
+            })
 
             # Re-execute flagged subtasks with feedback
             revised_results = []
@@ -596,11 +755,12 @@ class HierarchicalWorkFlow(WorkFlow):
                 revised_subtask = Subtask(
                     subtask_id=result.subtask_id,
                     description=(
-                        f"Revision {revision_round + 1} of subtask '{result.subtask_id}'.\n"
+                        f"Revision {revision_round} of subtask '{result.subtask_id}'.\n"
                         f"Feedback: {feedback}\n\n"
                         "Please provide an improved answer."
                     ),
-                    required_skills=[],
+                    required_skills=skills_map.get(result.subtask_id, []),
+                    original_task=task_input,
                 )
 
                 worker = engine.assign(revised_subtask)
@@ -608,7 +768,7 @@ class HierarchicalWorkFlow(WorkFlow):
                     team_id=team.team_id,
                     subtask_id=result.subtask_id,
                     worker_name=worker.name,
-                    round_=revision_round + 1,
+                    round_=revision_round,
                 )
                 revised_result = await self._execute_worker_subtask(
                     team_id=team.team_id,
@@ -618,7 +778,6 @@ class HierarchicalWorkFlow(WorkFlow):
                 revised_results.append(revised_result)
 
             results = revised_results
-            revision_round += 1
 
     # ------------------------------------------------------------------
     # Helpers
