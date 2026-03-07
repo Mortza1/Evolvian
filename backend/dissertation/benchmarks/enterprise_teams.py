@@ -1,13 +1,6 @@
-"""
-Enterprise Research-to-Report team configuration.
+"""Enterprise Research-to-Report team configuration (Configs C and D).
 
-Builds a HierarchicalWorkFlowGraph with:
-  - Project Supervisor  — decomposes brief, delegates, reviews, approves
-  - Research Analyst    — gathers information on assigned sub-topics
-  - Data Analyst        — performs analysis, comparisons, estimates
-  - Report Writer       — structures final report per brief requirements
-
-Used by Config C (hierarchical) and Config D (hierarchical + evolution).
+Team: ProjectSupervisor + ResearchAnalyst + DataAnalyst + ReportWriter.
 """
 import sys
 from pathlib import Path
@@ -23,11 +16,7 @@ from dissertation.hierarchy.hierarchical_graph import HierarchicalWorkFlowGraph
 
 
 def build_enterprise_team(llm_config) -> tuple:
-    """
-    Build hierarchical team + graph for the enterprise Research-to-Report benchmark.
-
-    Returns (HierarchicalWorkFlowGraph, AgentManager).
-    """
+    """Build hierarchical team for the enterprise Research-to-Report benchmark."""
     from evoagentx.agents import AgentManager
 
     supervisor = HierarchicalAgent(

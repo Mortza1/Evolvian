@@ -1,10 +1,4 @@
-"""
-Config C benchmark runner: HierarchicalWorkFlow evaluation.
-
-Provides:
-  - HierarchicalEvaluator  — subclasses Evaluator to use HierarchicalWorkFlow
-  - run_hierarchical()     — runs Config C on a single benchmark
-  - run_all_hierarchical() — runs Config C on all benchmarks
+"""Config C benchmark runner: HierarchicalWorkFlow evaluation.
 
 Usage:
     python -m dissertation.benchmarks.base_runner --benchmark hotpotqa --sample-k 10
@@ -34,8 +28,7 @@ from dissertation.hierarchy.execution import HierarchicalWorkFlow
 from dissertation.benchmarks.hotpotqa_teams import build_hotpotqa_team
 from dissertation.benchmarks.math_teams import build_math_team
 from dissertation.benchmarks.mbpp_teams import build_mbpp_team
-from dissertation.benchmarks.math_level45 import MATHLevel45
-from dissertation.benchmarks.math_levels import MATHLevel23, MATHByLevel
+from dissertation.benchmarks.math_levels import MATHLevel23, MATHByLevel, MATHLevel45
 from dissertation.evaluation.answer_extraction import make_hotpotqa_fns
 # GAIA excluded from registry — dataset requires special access (TODO 0.2.2)
 # from dissertation.benchmarks.gaia_teams import build_gaia_teams
@@ -48,18 +41,8 @@ from dissertation.evaluation.run_baseline import (
 )
 
 
-# ---------------------------------------------------------------------------
-# HierarchicalEvaluator
-# ---------------------------------------------------------------------------
-
 class HierarchicalEvaluator(Evaluator):
-    """
-    Evaluator that uses HierarchicalWorkFlow instead of the plain WorkFlow.
-
-    Override only _execute_workflow_graph so that HierarchicalWorkFlowGraph
-    instances are run through HierarchicalWorkFlow, preserving the full
-    decompose → delegate → execute → review loop.
-    """
+    """Evaluator that routes HierarchicalWorkFlowGraph through HierarchicalWorkFlow."""
 
     def _execute_workflow_graph(
         self,
@@ -69,8 +52,6 @@ class HierarchicalEvaluator(Evaluator):
         **kwargs,
     ) -> Union[str, Tuple[str, list]]:
         if isinstance(graph, HierarchicalWorkFlowGraph):
-            # Deep-copy nodes and edges so reset_graph() doesn't corrupt
-            # the original graph's state between evaluation examples.
             graph_copy = HierarchicalWorkFlowGraph(
                 goal=graph.goal,
                 nodes=copy.deepcopy(graph.nodes),
@@ -91,13 +72,8 @@ class HierarchicalEvaluator(Evaluator):
                 return output, workflow.environment.get()
             return output
 
-        # Fall back to standard WorkFlow for non-hierarchical graphs
         return super()._execute_workflow_graph(graph, inputs, return_trajectory, **kwargs)
 
-
-# ---------------------------------------------------------------------------
-# Benchmark registry
-# ---------------------------------------------------------------------------
 
 BENCHMARK_REGISTRY = {
     "hotpotqa": {
@@ -160,28 +136,13 @@ BENCHMARK_REGISTRY = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Runner
-# ---------------------------------------------------------------------------
-
 def run_hierarchical(
     benchmark_name: str,
     sample_k: int = 10,
     seed: int = RANDOM_SEED,
     run_idx: int = 0,
 ) -> dict:
-    """
-    Run Config C (hierarchical team workflow, no evolution) on one benchmark.
-
-    Args:
-        benchmark_name: One of "hotpotqa", "math", "mbpp"
-        sample_k:       How many examples to evaluate
-        seed:           Random seed for sampling
-        run_idx:        Which repetition (0, 1, 2) — affects the filename
-
-    Returns:
-        dict with results
-    """
+    """Run Config C (hierarchical, no evolution) on one benchmark."""
     cfg = BENCHMARK_REGISTRY[benchmark_name]
     llm_config = get_llm_config(temperature=0.1, max_tokens=1024)
     llm = OpenRouterLLM(config=llm_config)
@@ -190,10 +151,7 @@ def run_hierarchical(
     print(f"Config C (Hierarchical) | {benchmark_name.upper()} | run {run_idx+1} | n={sample_k}")
     print(f"{'='*60}")
 
-    print("Loading benchmark data...")
     benchmark = cfg["class"](**cfg["kwargs"])
-
-    print("Building hierarchical team workflow...")
     graph, agent_manager = cfg["workflow_fn"](llm_config)
 
     if benchmark_name == "hotpotqa":
@@ -210,8 +168,6 @@ def run_hierarchical(
     )
 
     t_start = time.time()
-
-    print(f"Evaluating {sample_k} examples...")
     metrics = evaluator.evaluate(
         graph=graph,
         benchmark=benchmark,
@@ -270,10 +226,6 @@ def run_all_hierarchical(sample_k: int = 10, num_runs: int = 1) -> dict:
 
     return all_results
 
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Config C hierarchical evaluation")

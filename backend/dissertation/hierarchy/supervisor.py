@@ -20,9 +20,6 @@ from dissertation.hierarchy.team import (
     HierarchicalAgent,
 )
 
-# ---------------------------------------------------------------------------
-# Data types
-# ---------------------------------------------------------------------------
 
 @dataclass
 class Subtask:
@@ -53,9 +50,6 @@ class ReviewDecision:
     revisions_needed: List[str] = field(default_factory=list)   # subtask_ids to redo
 
 
-# ---------------------------------------------------------------------------
-# Prompts
-# ---------------------------------------------------------------------------
 
 DECOMPOSITION_PROMPT = """\
 You are a supervisor agent. Your task is to decompose the following assignment into clear subtasks that your worker agents can execute independently.
@@ -122,9 +116,6 @@ WORKER OUTPUTS:
 Write one clear, concise final answer. Do not include meta-commentary — just the answer:"""
 
 
-# ---------------------------------------------------------------------------
-# SupervisorDecomposer
-# ---------------------------------------------------------------------------
 
 class SupervisorDecomposer:
     """
@@ -228,9 +219,6 @@ class SupervisorDecomposer:
         return subtasks
 
 
-# ---------------------------------------------------------------------------
-# DelegationEngine
-# ---------------------------------------------------------------------------
 
 class DelegationEngine:
     """
@@ -296,9 +284,6 @@ class DelegationEngine:
         return min(self.workers, key=lambda w: self._assignment_counts.get(w.name, 0))
 
 
-# ---------------------------------------------------------------------------
-# SupervisorReviewer
-# ---------------------------------------------------------------------------
 
 class SupervisorReviewer:
     """

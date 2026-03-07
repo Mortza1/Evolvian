@@ -55,9 +55,7 @@ from dissertation.evaluation.run_baseline import (
 from dissertation.evaluation.answer_extraction import make_hotpotqa_fns
 
 
-# ---------------------------------------------------------------------------
 # Optimiser prompts
-# ---------------------------------------------------------------------------
 
 _ANALYSE_PROMPT = """\
 You are an expert in multi-agent system design. You are helping optimise a \
@@ -95,9 +93,7 @@ Rules:
 _NO_FAILURES_MSG = "All training examples produced correct outputs — no updates needed."
 
 
-# ---------------------------------------------------------------------------
 # HierarchicalEvolutionOptimiser
-# ---------------------------------------------------------------------------
 
 class HierarchicalEvolutionOptimiser:
     """
@@ -353,9 +349,7 @@ class HierarchicalEvolutionOptimiser:
         )
 
 
-# ---------------------------------------------------------------------------
 # Runner
-# ---------------------------------------------------------------------------
 
 def run_hierarchical_evo(
     benchmark_name: str,
@@ -515,9 +509,7 @@ def run_all_hierarchical_evo(
     return all_results
 
 
-# ---------------------------------------------------------------------------
 # CLI
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

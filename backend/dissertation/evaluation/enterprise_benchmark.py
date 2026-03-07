@@ -36,9 +36,7 @@ ENTERPRISE_RESULTS_DIR = RESULTS_DIR / "enterprise"
 ENTERPRISE_RESULTS_DIR.mkdir(exist_ok=True)
 
 
-# ---------------------------------------------------------------------------
 # Config A — single generalist agent (direct LLM call)
-# ---------------------------------------------------------------------------
 
 def run_config_a_on_brief(brief: ResearchBrief, llm_config) -> dict:
     """Run Config A (single agent) on one brief. Uses sync generate() to avoid 402."""
@@ -73,9 +71,7 @@ def run_config_a_on_brief(brief: ResearchBrief, llm_config) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
 # Config B — flat pipeline (Research Analyst → Data Analyst → Report Writer)
-# ---------------------------------------------------------------------------
 
 def run_config_b_on_brief(brief: ResearchBrief, llm_config) -> dict:
     """Run Config B (3-agent flat pipeline) on one brief. Uses sync generate() to avoid 402."""
@@ -144,9 +140,7 @@ def run_config_b_on_brief(brief: ResearchBrief, llm_config) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
 # Config C — hierarchical team
-# ---------------------------------------------------------------------------
 
 def run_config_c_on_brief(brief: ResearchBrief, llm_config) -> dict:
     """Run Config C (hierarchical) on one brief. Captures structural metrics."""
@@ -182,9 +176,7 @@ def run_config_c_on_brief(brief: ResearchBrief, llm_config) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 def _extract_output(workflow_result, key: str) -> str:
     """Pull string output from workflow result (handles dict or string)."""
@@ -215,9 +207,7 @@ def _extract_structural_metrics(trace) -> dict:
     return {"review_loops": review_loops, "escalations": escalations, "revisions": revisions}
 
 
-# ---------------------------------------------------------------------------
 # Main runner
-# ---------------------------------------------------------------------------
 
 def run_config_on_briefs(
     config: str,

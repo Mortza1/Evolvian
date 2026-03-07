@@ -22,9 +22,7 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "evoAgentX"))
 
 
-# ---------------------------------------------------------------------------
 # Pricing table (USD per 1 000 tokens, as of 2025-06)
-# ---------------------------------------------------------------------------
 
 # Prices are approximate — update if OpenRouter changes them.
 _PRICE_PER_1K = {
@@ -246,9 +244,7 @@ class CostTracker:
         self.records = []
 
 
-# ---------------------------------------------------------------------------
 # Module-level singleton for convenience
-# ---------------------------------------------------------------------------
 
 _global_tracker: Optional[CostTracker] = None
 
@@ -261,9 +257,7 @@ def get_tracker(budget_cap_usd: float = 20.0) -> CostTracker:
     return _global_tracker
 
 
-# ---------------------------------------------------------------------------
 # CLI: show cost log
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     log_path = Path(__file__).parent.parent / "results" / "cost_log.json"

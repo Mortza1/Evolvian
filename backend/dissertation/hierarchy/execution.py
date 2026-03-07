@@ -1,31 +1,7 @@
-"""
-HierarchicalWorkFlow — executes a HierarchicalWorkFlowGraph.
+"""HierarchicalWorkFlow — executes a HierarchicalWorkFlowGraph.
 
-When the execution engine encounters a team node, instead of running a
-plain agent, it runs the full supervisor loop:
-
-    1. Supervisor DECOMPOSES the task into subtasks
-    2. DelegationEngine ASSIGNS each subtask to a worker
-    3. Workers EXECUTE their subtasks (via LLM async_generate)
-    4. After each worker, ESCALATION RULES are checked — if triggered,
-       the supervisor handles the subtask directly, retries with a
-       different worker, or fails the task.
-    5. SupervisorReviewer REVIEWS outputs and either:
-       - Approves and synthesises a final answer, or
-       - Requests revisions (up to MAX_REVISION_ROUNDS)
-    6. Final output is stored in the Environment for downstream nodes.
-       CROSS-TEAM HANDOFF is handled automatically: the Environment
-       accumulates all outputs, so the next team reads upstream results.
-
-Non-team nodes execute via the standard WorkFlow path.
-
-Usage:
-    workflow = HierarchicalWorkFlow(
-        graph=hierarchical_graph,
-        llm=llm,
-        agent_manager=agent_manager,
-    )
-    output = workflow.execute(inputs={"question": "..."})
+For team nodes, runs the full supervisor loop: decompose → delegate → execute →
+check escalation → review → synthesise. Non-team nodes use the standard WorkFlow path.
 """
 import asyncio
 import time
@@ -53,17 +29,11 @@ MAX_REVISION_ROUNDS = 2
 MAX_ESCALATION_RETRIES = 2
 
 
-# ---------------------------------------------------------------------------
-# EscalationError
-# ---------------------------------------------------------------------------
 
 class EscalationError(RuntimeError):
     """Raised when an escalation rule with FAIL_TASK action is triggered."""
 
 
-# ---------------------------------------------------------------------------
-# ExecutionTrace — records every event for analysis
-# ---------------------------------------------------------------------------
 
 @dataclass
 class TraceEvent:
@@ -145,9 +115,6 @@ class ExecutionTrace:
         }
 
 
-# ---------------------------------------------------------------------------
-# HierarchicalWorkFlow
-# ---------------------------------------------------------------------------
 
 class HierarchicalWorkFlow(WorkFlow):
     """

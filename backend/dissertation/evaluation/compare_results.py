@@ -26,9 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "evoAgentX")
 from dissertation.config import RESULTS_DIR
 
 
-# ---------------------------------------------------------------------------
 # Config / benchmark ordering (for consistent table layout)
-# ---------------------------------------------------------------------------
 
 CONFIG_ORDER   = ["A", "B", "C", "D"]
 CONFIG_LABELS  = {
@@ -60,9 +58,7 @@ BENCH_METRICS  = {
 SIG_LEVELS = [(0.01, "**"), (0.05, "*")]   # tightest first
 
 
-# ---------------------------------------------------------------------------
 # Data loading
-# ---------------------------------------------------------------------------
 
 def load_results(results_dir: Path = RESULTS_DIR) -> dict:
     """
@@ -118,9 +114,7 @@ def load_overhead(results_dir: Path = RESULTS_DIR) -> dict:
     return result
 
 
-# ---------------------------------------------------------------------------
 # Statistical tests
-# ---------------------------------------------------------------------------
 
 def significance_marker(p: float) -> str:
     for threshold, marker in SIG_LEVELS:
@@ -168,9 +162,7 @@ def pairwise_tests(data: dict) -> dict:
     return results
 
 
-# ---------------------------------------------------------------------------
 # Formatting helpers
-# ---------------------------------------------------------------------------
 
 def fmt_score(values: list[float]) -> str:
     """Format as mean ± std (or single value if only one run)."""
@@ -195,9 +187,7 @@ def _col(text: str, width: int, align: str = "<") -> str:
     return fmt.format(text)
 
 
-# ---------------------------------------------------------------------------
 # Table 1 — Performance comparison
-# ---------------------------------------------------------------------------
 
 def print_performance_table(data: dict, tests: dict) -> None:
     """Print Table 1: performance (primary metric) per config × benchmark."""
@@ -260,9 +250,7 @@ def print_performance_table(data: dict, tests: dict) -> None:
     print(sep)
 
 
-# ---------------------------------------------------------------------------
 # Table 2 — Overhead comparison
-# ---------------------------------------------------------------------------
 
 def print_overhead_table(overhead: dict) -> None:
     """Print Table 2: wall-clock time per config × benchmark."""
@@ -316,9 +304,7 @@ def print_overhead_table(overhead: dict) -> None:
     print(sep)
 
 
-# ---------------------------------------------------------------------------
 # Table 3 — Significance test summary
-# ---------------------------------------------------------------------------
 
 def print_significance_table(tests: dict, data: dict) -> None:
     """Print full p-value table for all pairwise comparisons."""
@@ -359,9 +345,7 @@ def print_significance_table(tests: dict, data: dict) -> None:
     print(sep)
 
 
-# ---------------------------------------------------------------------------
 # LaTeX output
-# ---------------------------------------------------------------------------
 
 def print_latex_table(data: dict, tests: dict) -> None:
     """Print Table 1 as a LaTeX booktabs table."""
@@ -423,9 +407,7 @@ def print_latex_table(data: dict, tests: dict) -> None:
     print("% ──────────────────────────────────────────────────────────────\n")
 
 
-# ---------------------------------------------------------------------------
 # Plots
-# ---------------------------------------------------------------------------
 
 def plot_comparison(data: dict, save_dir: Optional[Path] = None) -> None:
     """
@@ -537,9 +519,7 @@ def plot_overhead(overhead: dict, save_dir: Optional[Path] = None) -> None:
     plt.close(fig)
 
 
-# ---------------------------------------------------------------------------
 # Main
-# ---------------------------------------------------------------------------
 
 def compare(
     results_dir: Path = RESULTS_DIR,

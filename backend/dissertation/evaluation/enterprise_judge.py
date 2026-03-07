@@ -39,9 +39,7 @@ QUALITY_WEIGHTS = {
     "actionability": 0.15,
 }
 
-# ---------------------------------------------------------------------------
 # Judge prompts
-# ---------------------------------------------------------------------------
 
 QUALITY_JUDGE_SYSTEM = """\
 You are an expert business report evaluator. You will receive an original research brief \
@@ -95,9 +93,7 @@ REPORT:
 {report}"""
 
 
-# ---------------------------------------------------------------------------
 # Scoring logic
-# ---------------------------------------------------------------------------
 
 def _get_judge_llm():
     global JUDGE_LLM_CONFIG
@@ -192,9 +188,7 @@ def _parse_alignment(text: str, total_questions: int) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
 # Score a single result file
-# ---------------------------------------------------------------------------
 
 def score_result_file(result_path: Path, llm=None) -> dict:
     """Load a saved result JSON, score it, save scores back."""
@@ -233,9 +227,7 @@ def score_result_file(result_path: Path, llm=None) -> dict:
     return data
 
 
-# ---------------------------------------------------------------------------
 # Score all results + print summary table
-# ---------------------------------------------------------------------------
 
 def score_all(results_dir: Path = ENTERPRISE_RESULTS_DIR):
     llm = _get_judge_llm()

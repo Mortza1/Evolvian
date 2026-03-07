@@ -1,26 +1,6 @@
-"""
-HotPotQA hierarchical team configuration (Config C).
+"""HotPotQA hierarchical team configuration (Config C).
 
-Team structure:
-  Supervisor: Research Coordinator
-    Receives the multi-hop question + context, decomposes into sub-questions,
-    reviews sub-answers, synthesises the final answer.
-
-  Worker 1: Retriever
-    Extracts relevant facts from the provided context for a given sub-question.
-    Skills: information retrieval, context extraction
-
-  Worker 2: Reasoner
-    Synthesises retrieved facts into a concise answer for a sub-question.
-    Skills: logical reasoning, evidence synthesis
-
-  Worker 3: Synthesiser
-    Combines sub-answers into a single final answer, resolving contradictions.
-    Skills: synthesis, aggregation, conflict resolution
-
-Delegation: capability_match
-Review:     supervisor_reviews_all
-Escalation: if output is empty or too short, supervisor takes over
+Team: ResearchCoordinator (supervisor) + Retriever + Reasoner + Synthesiser.
 """
 import sys
 from pathlib import Path
@@ -42,12 +22,7 @@ def _p(name: str, type_: str = "str", description: str = "") -> dict:
 
 
 def build_hotpotqa_team(llm_config) -> tuple:
-    """
-    Build a single-team HierarchicalWorkFlowGraph for HotPotQA.
-
-    Returns:
-        (HierarchicalWorkFlowGraph, AgentManager)
-    """
+    """Build a HierarchicalWorkFlowGraph for HotPotQA. Returns (graph, agent_manager)."""
     supervisor = HierarchicalAgent(
         name="ResearchCoordinator",
         description=(

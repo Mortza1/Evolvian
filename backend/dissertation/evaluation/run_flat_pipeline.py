@@ -36,9 +36,7 @@ from dissertation.evaluation.run_baseline import (
 from dissertation.evaluation.answer_extraction import make_hotpotqa_fns
 
 
-# ---------------------------------------------------------------------------
 # Flat pipeline workflow builders (3 chained agents, no supervisor)
-# ---------------------------------------------------------------------------
 
 def build_hotpotqa_flat_pipeline(llm_config) -> tuple:
     """
@@ -361,9 +359,7 @@ def build_mbpp_flat_pipeline(llm_config) -> tuple:
     return graph, agent_manager
 
 
-# ---------------------------------------------------------------------------
 # Benchmark registry (flat pipeline versions)
-# ---------------------------------------------------------------------------
 
 from dissertation.benchmarks.math_level45 import MATHLevel45
 from dissertation.benchmarks.math_levels import MATHLevel23, MATHByLevel
@@ -432,9 +428,7 @@ PIPELINE_BENCHMARK_REGISTRY = {
 }
 
 
-# ---------------------------------------------------------------------------
 # Runner
-# ---------------------------------------------------------------------------
 
 def run_flat_pipeline(
     benchmark_name: str,
@@ -534,9 +528,7 @@ def run_all_flat_pipeline(sample_k: int = 10, num_runs: int = 1) -> dict:
     return all_results
 
 
-# ---------------------------------------------------------------------------
 # CLI
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Config B flat pipeline evaluation")

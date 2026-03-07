@@ -1,9 +1,4 @@
-"""
-Config A: Vanilla EvoAgentX flat workflow baseline.
-
-Runs each benchmark with a single CustomizeAgent in a flat WorkFlowGraph.
-This reproduces the EvoAgentX paper's baseline configuration and gives us
-the Config A numbers for the dissertation comparison table.
+"""Config A: Vanilla EvoAgentX flat workflow baseline.
 
 Usage:
     python -m dissertation.evaluation.run_baseline --benchmark hotpotqa --sample-k 10
@@ -22,8 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "evoAgentX")
 from evoagentx.benchmark.hotpotqa import HotPotQA
 from evoagentx.benchmark.math_benchmark import MATH
 from evoagentx.benchmark.mbpp import MBPP
-from dissertation.benchmarks.math_level45 import MATHLevel45
-from dissertation.benchmarks.math_levels import MATHLevel23, MATHByLevel
+from dissertation.benchmarks.math_levels import MATHLevel23, MATHByLevel, MATHLevel45
 from evoagentx.agents import CustomizeAgent, AgentManager
 from evoagentx.workflow.workflow_graph import WorkFlowGraph, WorkFlowNode
 from evoagentx.workflow.workflow import WorkFlow
@@ -34,13 +28,8 @@ from dissertation.evaluation.answer_extraction import make_hotpotqa_fns
 
 
 def _param(name: str, type_: str, description: str) -> dict:
-    """Helper: create an input/output parameter dict for CustomizeAgent/WorkFlowNode."""
     return {"name": name, "type": type_, "description": description}
 
-
-# ---------------------------------------------------------------------------
-# Collate / postprocess functions per benchmark
-# ---------------------------------------------------------------------------
 
 def hotpotqa_collate(example: dict) -> dict:
     """Format a HotPotQA example as workflow inputs."""
@@ -107,10 +96,6 @@ def mbpp_collate(example: dict) -> dict:
 def mbpp_postprocess(output: str) -> str:
     return output.strip() if output else ""
 
-
-# ---------------------------------------------------------------------------
-# Flat workflow builders per benchmark
-# ---------------------------------------------------------------------------
 
 def build_hotpotqa_flat_workflow(llm_config) -> tuple:
     """
@@ -216,10 +201,6 @@ def build_mbpp_flat_workflow(llm_config) -> tuple:
     return graph, agent_manager
 
 
-# ---------------------------------------------------------------------------
-# Benchmark runner
-# ---------------------------------------------------------------------------
-
 BENCHMARK_REGISTRY = {
     "hotpotqa": {
         "class": HotPotQA,
@@ -281,19 +262,8 @@ BENCHMARK_REGISTRY = {
 }
 
 
-def run_baseline(benchmark_name: str, sample_k: int = 10, seed: int = RANDOM_SEED, run_idx: int = 0):
-    """
-    Run Config A (vanilla EvoAgentX flat workflow) on one benchmark.
-
-    Args:
-        benchmark_name: One of "hotpotqa", "math", "mbpp"
-        sample_k: How many examples to evaluate
-        seed: Random seed for sampling
-        run_idx: Which repetition (0, 1, 2) — affects the filename
-
-    Returns:
-        dict with results
-    """
+def run_baseline(benchmark_name: str, sample_k: int = 10, seed: int = RANDOM_SEED, run_idx: int = 0) -> dict:
+    """Run Config A (flat single-agent workflow) on one benchmark."""
     cfg = BENCHMARK_REGISTRY[benchmark_name]
     llm_config = get_llm_config(temperature=0.1, max_tokens=1024)
     llm = OpenRouterLLM(config=llm_config)
@@ -302,20 +272,14 @@ def run_baseline(benchmark_name: str, sample_k: int = 10, seed: int = RANDOM_SEE
     print(f"Config A (Baseline) | {benchmark_name.upper()} | run {run_idx+1} | n={sample_k}")
     print(f"{'='*60}")
 
-    # Load benchmark
-    print("Loading benchmark data...")
     benchmark = cfg["class"](**cfg["kwargs"])
-
-    # Build flat workflow
     graph, agent_manager = cfg["workflow_fn"](llm_config)
 
-    # For HotPotQA use extraction-aware collate/postprocess; others use registry defaults
     if benchmark_name == "hotpotqa":
         collate_fn, postprocess_fn = make_hotpotqa_fns(llm)
     else:
         collate_fn, postprocess_fn = cfg["collate"], cfg["postprocess"]
 
-    # Create evaluator with benchmark-specific collate/postprocess
     evaluator = Evaluator(
         llm=llm,
         agent_manager=agent_manager,
@@ -324,11 +288,7 @@ def run_baseline(benchmark_name: str, sample_k: int = 10, seed: int = RANDOM_SEE
         verbose=True,
     )
 
-    # Track timing
     t_start = time.time()
-
-    # Run evaluation
-    print(f"Evaluating {sample_k} examples...")
     metrics = evaluator.evaluate(
         graph=graph,
         benchmark=benchmark,
@@ -337,10 +297,8 @@ def run_baseline(benchmark_name: str, sample_k: int = 10, seed: int = RANDOM_SEE
         seed=seed,
         update_agents=True,
     )
-
     elapsed = time.time() - t_start
 
-    # Collect result
     result = {
         "config": "A",
         "benchmark": benchmark_name,
@@ -355,28 +313,25 @@ def run_baseline(benchmark_name: str, sample_k: int = 10, seed: int = RANDOM_SEE
         "model": llm_config.model,
     }
 
-    # Save to results/
     out_path = RESULTS_DIR / f"config_a_{benchmark_name}_run{run_idx}.json"
     out_path.write_text(json.dumps(result, indent=2))
     print(f"\nResults saved to {out_path}")
     print(f"Primary metric ({cfg['primary_metric']}): {result['primary_value']:.4f}")
     print(f"All metrics: {metrics}")
     print(f"Elapsed: {elapsed:.1f}s")
-
     return result
 
 
-def run_all_baselines(sample_k: int = 10, num_runs: int = 1):
+def run_all_baselines(sample_k: int = 10, num_runs: int = 1) -> dict:
     """Run Config A on all available benchmarks."""
     all_results = {}
     for bench in BENCHMARK_REGISTRY:
-        bench_results = []
-        for run_i in range(num_runs):
-            r = run_baseline(bench, sample_k=sample_k, seed=RANDOM_SEED + run_i, run_idx=run_i)
-            bench_results.append(r)
+        bench_results = [
+            run_baseline(bench, sample_k=sample_k, seed=RANDOM_SEED + i, run_idx=i)
+            for i in range(num_runs)
+        ]
         all_results[bench] = bench_results
 
-    # Print summary table
     print("\n" + "="*60)
     print("BASELINE SUMMARY (Config A)")
     print("="*60)
@@ -384,16 +339,10 @@ def run_all_baselines(sample_k: int = 10, num_runs: int = 1):
     print("-"*35)
     for bench, results in all_results.items():
         primary_metric = BENCHMARK_REGISTRY[bench]["primary_metric"]
-        scores = [r["primary_value"] for r in results]
-        mean = sum(scores) / len(scores)
+        mean = sum(r["primary_value"] for r in results) / len(results)
         print(f"{bench:<12} {primary_metric:<12} {mean:>8.4f}")
-
     return all_results
 
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Config A baseline evaluation")

@@ -1,26 +1,6 @@
-"""
-MATH hierarchical team configuration (Config C).
+"""MATH hierarchical team configuration (Config C).
 
-Team structure:
-  Supervisor: MathStrategist
-    Reads the problem, decides on solution strategy, delegates solving and
-    verification steps, makes the final decision based on solver + verifier output.
-
-  Worker 1: Planner
-    Identifies the mathematical domain, plans the solution approach, lists steps.
-    Skills: planning, strategy, domain identification
-
-  Worker 2: Solver
-    Executes mathematical steps: algebra, calculus, combinatorics, etc.
-    Shows all working. Produces a numerical or symbolic answer.
-
-  Worker 3: Verifier
-    Checks the solver's work for errors. Uses graded confidence (0-100).
-    Reports whether the answer is correct and why.
-
-Delegation: capability_match (Planner gets strategy, Solver gets computation, Verifier gets checking)
-Review:     supervisor_reviews_all
-Escalation: if Verifier finds an error → escalate to supervisor for resolution
+Team: MathStrategist (supervisor) + Planner + Solver + Verifier.
 """
 import sys
 from pathlib import Path
@@ -42,12 +22,7 @@ def _p(name: str, type_: str = "str", description: str = "") -> dict:
 
 
 def build_math_team(llm_config) -> tuple:
-    """
-    Build a single-team HierarchicalWorkFlowGraph for MATH.
-
-    Returns:
-        (HierarchicalWorkFlowGraph, AgentManager)
-    """
+    """Build a HierarchicalWorkFlowGraph for MATH. Returns (graph, agent_manager)."""
     supervisor = HierarchicalAgent(
         name="MathStrategist",
         description=(
