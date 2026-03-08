@@ -67,72 +67,97 @@ Try asking:
   };
 
   return (
-    <div className="flex flex-col h-full max-h-screen">
-      {/* Context Bar */}
-      <div className="flex-shrink-0 p-4 border-b border-slate-700/50">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#A3FF12] to-[#FFB800] flex items-center justify-center">
-            <svg className="w-6 h-6 text-[#0B0E14]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+    <div
+      className="flex h-full max-h-screen flex-col"
+      style={{ background: '#080E11', fontFamily: "'Syne', sans-serif" }}
+    >
+      {/* Header */}
+      <div
+        className="shrink-0 border-b px-4 py-3"
+        style={{ borderColor: '#162025' }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border"
+            style={{ background: '#0F1E1B', borderColor: '#5A9E8F30' }}
+          >
+            <svg className="h-3.5 w-3.5 text-[#5A9E8F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
             </svg>
           </div>
-          <div className="flex-1">
-            <div className="text-sm font-semibold text-white">Brand Intelligence</div>
-            <div className="text-xs text-slate-400">
-              Personal Branding • {graph.metadata.totalSize} of brand knowledge
-            </div>
+          <div>
+            <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700 }} className="text-[13px] text-[#D8D4CC] leading-none">
+              Intelligence
+            </p>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="mt-0.5 text-[10px] text-[#2E4248]">
+              {graph.metadata.totalSize} indexed
+            </p>
           </div>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[80%] rounded-lg p-4 ${
-                message.role === 'user'
-                  ? 'bg-[#6366F1] text-white'
-                  : 'glass text-slate-200'
-              }`}
-            >
-              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+      <div className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+        {messages.map((msg) => {
+          const isUser = msg.role === 'user';
+          return (
+            <div key={msg.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+              <div
+                className="max-w-[88%] rounded-md px-3 py-2.5 text-[12px] leading-relaxed"
+                style={{
+                  background: isUser ? '#182E2B' : '#111A1D',
+                  border: `1px solid ${isUser ? '#5A9E8F28' : '#1E2D30'}`,
+                  borderBottomRightRadius: isUser ? 2 : undefined,
+                  borderBottomLeftRadius: !isUser ? 2 : undefined,
+                  color: isUser ? '#D8D4CC' : '#B8B2AA',
+                }}
+              >
+                <p className="whitespace-pre-wrap">{msg.content}</p>
 
-              {/* Sources */}
-              {message.sources && message.sources.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-slate-700/50">
-                  <div className="text-xs font-semibold text-slate-400 mb-2">Sources:</div>
-                  {message.sources.map((source, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => onSelectNode(source.nodeId)}
-                      className="block w-full text-left mb-2 p-2 bg-[#020617]/50 rounded text-xs hover:bg-[#020617]/70 transition-all"
-                    >
-                      <div className="font-semibold text-[#06B6D4]">{source.label}</div>
-                      {source.evidence && (
-                        <div className="text-slate-400 mt-1 italic">"{source.evidence}"</div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
+                {/* Sources */}
+                {msg.sources && msg.sources.length > 0 && (
+                  <div className="mt-2.5 space-y-1.5 border-t pt-2.5" style={{ borderColor: '#1E2D30' }}>
+                    <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[10px] uppercase tracking-widest text-[#2E4248]">
+                      Sources
+                    </p>
+                    {msg.sources.map((source, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => onSelectNode(source.nodeId)}
+                        className="block w-full rounded border px-2.5 py-2 text-left text-[11px] transition-all"
+                        style={{ background: '#0B1215', borderColor: '#1E2D30', color: '#5A9E8F' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#5A9E8F30'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1E2D30'; }}
+                      >
+                        <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }}>{source.label}</p>
+                        {source.evidence && (
+                          <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="mt-0.5 italic text-[10px] text-[#3A5056]">
+                            "{source.evidence}"
+                          </p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {isTyping && (
           <div className="flex justify-start">
-            <div className="glass rounded-lg p-4">
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-[#A3FF12] rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-[#FFB800] rounded-full animate-bounce delay-100"></div>
-                  <div className="w-2 h-2 bg-[#A3FF12] rounded-full animate-bounce delay-200"></div>
-                </div>
-                <span className="text-xs text-slate-400">Analyzing your brand intelligence...</span>
+            <div
+              className="rounded-md rounded-bl-[2px] border px-3 py-2.5"
+              style={{ background: '#111A1D', borderColor: '#1E2D30' }}
+            >
+              <div className="flex items-center gap-1.5">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="block h-1.5 w-1.5 rounded-full bg-[#5A9E8F] animate-typing-dot"
+                    style={{ animationDelay: `${i * 0.18}s` }}
+                  />
+                ))}
               </div>
             </div>
           </div>
@@ -140,22 +165,30 @@ Try asking:
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="flex-shrink-0 p-4 border-t border-slate-700/50">
-        <div className="relative">
+      <form
+        onSubmit={handleSubmit}
+        className="shrink-0 border-t px-4 py-3"
+        style={{ borderColor: '#162025' }}
+      >
+        <div className="flex items-center gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about your brand strategy, colors, audience, personality..."
-            className="w-full px-4 py-3 pr-12 bg-[#020617]/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#A3FF12] focus:border-transparent transition-all"
+            placeholder="Query the graph…"
+            className="flex-1 rounded-md border bg-[#111A1D] px-3 py-2 text-[12px] text-[#D8D4CC] placeholder-[#2E4248] outline-none transition-all"
+            style={{ borderColor: '#1E2D30', fontFamily: "'Syne', sans-serif" }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = '#5A9E8F50'; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = '#1E2D30'; }}
           />
           <button
             type="submit"
             disabled={!input.trim()}
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-[#A3FF12] text-[#0B0E14] flex items-center justify-center hover:bg-[#8FE010] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md border transition-all disabled:cursor-not-allowed disabled:opacity-30"
+            style={{ borderColor: '#5A9E8F40', background: '#5A9E8F12', color: '#5A9E8F' }}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
           </button>
         </div>

@@ -133,6 +133,151 @@ async def get_operations(
     return operations
 
 
+@router.get("/pending-assumptions", response_model=PendingAssumptionsResponse)
+async def get_pending_assumptions(
+    team_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all operations with pending assumptions (waiting_for_input status).
+
+    Returns operations that are currently paused waiting for user input,
+    sorted by waiting time (oldest first = most urgent).
+
+    Used by the Inbox to show pending questions that need attention.
+    """
+    print(f"\n[pending-assumptions] Getting pending assumptions for team {team_id}")
+
+    # Verify team belongs to user
+    team = db.query(Team).filter(
+        Team.id == team_id,
+        Team.user_id == current_user.id
+    ).first()
+
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    # Get all operations in waiting_for_input status for this team
+    waiting_operations = db.query(Operation).filter(
+        Operation.team_id == team_id,
+        Operation.status == "waiting_for_input"
+    ).all()
+
+    print(f"[pending-assumptions] Found {len(waiting_operations)} operations waiting for input")
+
+    pending_assumptions = []
+
+    for operation in waiting_operations:
+        # Check if execution is registered and has pending assumption
+        state = EXECUTION_REGISTRY.get_state(operation.id)
+
+        if state and state.signal == ExecutionSignal.WAITING_FOR_INPUT and state.pending_assumption:
+            assumption_data = state.pending_assumption
+
+            # Get agent info
+            agent_name = assumption_data.get("agent_name", "Agent")
+            agent_photo = assumption_data.get("agent_photo")
+
+            # Calculate waiting duration
+            waiting_since = operation.updated_at or operation.created_at
+            waiting_duration = (datetime.now(timezone.utc) - waiting_since.replace(tzinfo=timezone.utc)).total_seconds()
+
+            pending_assumptions.append(PendingAssumptionResponse(
+                operation_id=operation.id,
+                operation_title=operation.title,
+                operation_description=operation.description,
+                node_id=assumption_data.get("node_id", ""),
+                node_name=assumption_data.get("node_name", ""),
+                agent_name=agent_name,
+                agent_photo=agent_photo,
+                question=assumption_data.get("question", ""),
+                context=assumption_data.get("context"),
+                options=assumption_data.get("options", []),
+                priority=assumption_data.get("priority", "normal"),
+                assumption_index=assumption_data.get("assumption_index", 0),
+                waiting_since=waiting_since,
+                waiting_duration_seconds=int(waiting_duration)
+            ))
+
+    # Sort by waiting time (oldest first = most urgent)
+    pending_assumptions.sort(key=lambda x: x.waiting_since)
+
+    print(f"[pending-assumptions] Returning {len(pending_assumptions)} pending assumptions")
+
+    return PendingAssumptionsResponse(
+        pending_assumptions=pending_assumptions,
+        total_count=len(pending_assumptions),
+        team_id=team_id
+    )
+
+
+@router.get("/agent-messages", response_model=AgentMessagesResponse)
+async def get_agent_messages(
+    team_id: int,
+    agent_name: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all execution messages for a specific agent across all operations.
+
+    Returns messages grouped by operation, showing the agent's questions,
+    outputs, and user interactions. Used by the Inbox specialist chat.
+    """
+    print(f"\n[agent-messages] Getting messages for agent '{agent_name}' in team {team_id}")
+
+    # Verify team belongs to user
+    team = db.query(Team).filter(
+        Team.id == team_id,
+        Team.user_id == current_user.id
+    ).first()
+
+    if not team:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    # Get all operations for this team
+    operations = db.query(Operation).filter(
+        Operation.team_id == team_id
+    ).order_by(Operation.created_at.desc()).all()
+
+    message_groups = []
+    total_messages = 0
+
+    for operation in operations:
+        messages = db.query(ExecutionMessage).filter(
+            ExecutionMessage.operation_id == operation.id
+        ).filter(
+            (ExecutionMessage.sender_name == agent_name) |
+            (ExecutionMessage.sender_type == "user")
+        ).order_by(ExecutionMessage.created_at).all()
+
+        if messages:
+            message_groups.append(AgentMessageGroup(
+                operation_id=operation.id,
+                operation_title=operation.title,
+                operation_status=operation.status,
+                messages=messages,
+                created_at=operation.created_at
+            ))
+            total_messages += len(messages)
+
+    print(f"[agent-messages] Found {len(message_groups)} operations with {total_messages} messages")
+
+    return AgentMessagesResponse(
+        message_groups=message_groups,
+        total_messages=total_messages,
+        agent_name=agent_name,
+        team_id=team_id
+    )
+
+
 @router.get("/{operation_id}", response_model=OperationResponse)
 async def get_operation(
     operation_id: int,
@@ -2355,155 +2500,6 @@ async def send_execution_message(
     return message
 
 
-@router.get("/pending-assumptions", response_model=PendingAssumptionsResponse)
-async def get_pending_assumptions(
-    team_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Get all operations with pending assumptions (waiting_for_input status).
-
-    Returns operations that are currently paused waiting for user input,
-    sorted by waiting time (oldest first = most urgent).
-
-    Used by the Inbox to show pending questions that need attention.
-    """
-    print(f"\n[pending-assumptions] Getting pending assumptions for team {team_id}")
-
-    # Verify team belongs to user
-    team = db.query(Team).filter(
-        Team.id == team_id,
-        Team.user_id == current_user.id
-    ).first()
-
-    if not team:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
-
-    # Get all operations in waiting_for_input status for this team
-    waiting_operations = db.query(Operation).filter(
-        Operation.team_id == team_id,
-        Operation.status == "waiting_for_input"
-    ).all()
-
-    print(f"[pending-assumptions] Found {len(waiting_operations)} operations waiting for input")
-
-    pending_assumptions = []
-
-    for operation in waiting_operations:
-        # Check if execution is registered and has pending assumption
-        state = EXECUTION_REGISTRY.get_state(operation.id)
-
-        if state and state.signal == ExecutionSignal.WAITING_FOR_INPUT and state.pending_assumption:
-            assumption_data = state.pending_assumption
-
-            # Get agent info
-            agent_name = assumption_data.get("agent_name", "Agent")
-            agent_photo = assumption_data.get("agent_photo")
-
-            # Calculate waiting duration
-            # The operation's updated_at should be when it entered waiting_for_input status
-            waiting_since = operation.updated_at or operation.created_at
-            waiting_duration = (datetime.now(timezone.utc) - waiting_since.replace(tzinfo=timezone.utc)).total_seconds()
-
-            pending_assumptions.append(PendingAssumptionResponse(
-                operation_id=operation.id,
-                operation_title=operation.title,
-                operation_description=operation.description,
-                node_id=assumption_data.get("node_id", ""),
-                node_name=assumption_data.get("node_name", ""),
-                agent_name=agent_name,
-                agent_photo=agent_photo,
-                question=assumption_data.get("question", ""),
-                context=assumption_data.get("context"),
-                options=assumption_data.get("options", []),
-                priority=assumption_data.get("priority", "normal"),
-                assumption_index=assumption_data.get("assumption_index", 0),
-                waiting_since=waiting_since,
-                waiting_duration_seconds=int(waiting_duration)
-            ))
-
-    # Sort by waiting time (oldest first = most urgent)
-    pending_assumptions.sort(key=lambda x: x.waiting_since)
-
-    print(f"[pending-assumptions] Returning {len(pending_assumptions)} pending assumptions")
-
-    return PendingAssumptionsResponse(
-        pending_assumptions=pending_assumptions,
-        total_count=len(pending_assumptions),
-        team_id=team_id
-    )
-
-
-@router.get("/agent-messages", response_model=AgentMessagesResponse)
-async def get_agent_messages(
-    team_id: int,
-    agent_name: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Get all execution messages for a specific agent across all operations.
-
-    Returns messages grouped by operation, showing the agent's questions,
-    outputs, and user interactions. Used by the Inbox specialist chat.
-    """
-    print(f"\n[agent-messages] Getting messages for agent '{agent_name}' in team {team_id}")
-
-    # Verify team belongs to user
-    team = db.query(Team).filter(
-        Team.id == team_id,
-        Team.user_id == current_user.id
-    ).first()
-
-    if not team:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
-
-    # Get all operations for this team
-    operations = db.query(Operation).filter(
-        Operation.team_id == team_id
-    ).order_by(Operation.created_at.desc()).all()
-
-    message_groups = []
-    total_messages = 0
-
-    for operation in operations:
-        # Get messages for this operation where:
-        # - Agent sent them (sender_name matches)
-        # - OR user sent them (to provide context)
-        messages = db.query(ExecutionMessage).filter(
-            ExecutionMessage.operation_id == operation.id
-        ).filter(
-            (ExecutionMessage.sender_name == agent_name) |
-            (ExecutionMessage.sender_type == "user")
-        ).order_by(ExecutionMessage.created_at).all()
-
-        if messages:
-            message_groups.append(AgentMessageGroup(
-                operation_id=operation.id,
-                operation_title=operation.title,
-                operation_status=operation.status,
-                messages=messages,
-                created_at=operation.created_at
-            ))
-            total_messages += len(messages)
-
-    print(f"[agent-messages] Found {len(message_groups)} operations with {total_messages} messages")
-
-    return AgentMessagesResponse(
-        message_groups=message_groups,
-        total_messages=total_messages,
-        agent_name=agent_name,
-        team_id=team_id
-    )
-
-
 @router.post("/{operation_id}/resume")
 async def resume_operation(
     operation_id: int,
@@ -2792,10 +2788,15 @@ async def rate_operation(
     ).order_by(WorkflowExecution.created_at.desc()).first()
 
     if not workflow_exec:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No workflow execution found for this operation"
+        # Hierarchy-mode operations don't create a WorkflowExecution row.
+        # Create a minimal one so the user rating can still be persisted.
+        workflow_exec = WorkflowExecution(
+            operation_id=operation_id,
+            status="completed",
+            proxy_score=0.5,
         )
+        db.add(workflow_exec)
+        db.flush()  # get an id without committing yet
 
     # Store the user rating
     workflow_exec.user_rating = rating_data.rating

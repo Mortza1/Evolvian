@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Tool, InstalledTool, saveInstalledTool, getCategoryColor, getInstalledTools } from '@/lib/tools';
-import { getAgents, Agent } from '@/lib/agents';
+import { useTeamAgents } from '@/lib/services/agents';
+import { getActiveTeam } from '@/lib/teams';
 
 interface ToolInstallModalProps {
   tool: Tool;
@@ -18,7 +19,9 @@ export default function ToolInstallModal({ tool, isOpen, onClose }: ToolInstallM
   const [requireApproval, setRequireApproval] = useState(false);
   const [dailyBudget, setDailyBudget] = useState<string>('');
 
-  const agents = getAgents();
+  const activeTeam = getActiveTeam();
+  const teamId = activeTeam?.id ?? 0;
+  const { agents } = useTeamAgents({ teamId, autoFetch: isOpen });
   const installedTools = getInstalledTools();
   const isInstalled = installedTools.some((t) => t.toolId === tool.id);
 
@@ -79,85 +82,122 @@ export default function ToolInstallModal({ tool, isOpen, onClose }: ToolInstallM
     return true;
   };
 
+  const catColor = getCategoryColor(tool.category);
+  const STEPS = ['overview', 'config', 'assign'] as const;
+  const stepIdx = STEPS.indexOf(step);
+
+  const inputCls = "w-full rounded-md border bg-[#111A1D] px-3 py-2.5 text-[12px] text-[#D8D4CC] placeholder-[#2E4248] outline-none transition-all";
+  const inputStyle = { borderColor: '#1E2D30', fontFamily: "'Syne', sans-serif" };
+  const inputFocus = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => { e.currentTarget.style.borderColor = '#5A9E8F50'; };
+  const inputBlur  = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => { e.currentTarget.style.borderColor = '#1E2D30'; };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="glass rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-700/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(7,9,10,0.88)' }}>
+      <div
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-md border shadow-2xl"
+        style={{ background: '#0B1215', borderColor: '#1E2D30', fontFamily: "'Syne', sans-serif" }}
+      >
+        {/* Modal header */}
+        <div className="shrink-0 border-b px-6 py-5" style={{ borderColor: '#162025', background: '#080E11' }}>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <div
-                className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl"
-                style={{ backgroundColor: getCategoryColor(tool.category) + '30' }}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border text-[20px]"
+                style={{ background: `${catColor}12`, borderColor: `${catColor}30` }}
               >
                 {tool.icon}
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-white">{tool.name}</h2>
-                <p className="text-sm text-slate-400">by {tool.developer}</p>
+                <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700 }} className="text-[16px] text-[#EAE6DF]">
+                  {tool.name}
+                </h2>
+                <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[10px] text-[#2E4248]">
+                  by {tool.developer}
+                </p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-lg bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white transition-all"
+              className="rounded border p-1.5 transition-all"
+              style={{ borderColor: '#1E2D30', color: '#2E4248' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = '#9E5A5A'; e.currentTarget.style.borderColor = '#9E5A5A30'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = '#2E4248'; e.currentTarget.style.borderColor = '#1E2D30'; }}
             >
-              ✕
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
 
-          {/* Progress Steps */}
-          <div className="flex items-center gap-2 mt-6">
-            <div
-              className={`flex-1 h-1 rounded-full ${
-                step === 'overview' || step === 'config' || step === 'assign'
-                  ? 'bg-[#6366F1]'
-                  : 'bg-slate-700'
-              }`}
-            />
-            <div
-              className={`flex-1 h-1 rounded-full ${
-                step === 'config' || step === 'assign' ? 'bg-[#6366F1]' : 'bg-slate-700'
-              }`}
-            />
-            <div className={`flex-1 h-1 rounded-full ${step === 'assign' ? 'bg-[#6366F1]' : 'bg-slate-700'}`} />
+          {/* Step progress */}
+          <div className="mt-5 flex items-center gap-1.5">
+            {STEPS.map((s, idx) => (
+              <div
+                key={s}
+                className="h-[2px] flex-1 rounded-full transition-all"
+                style={{ background: idx <= stepIdx ? '#5A9E8F' : '#1E2D30' }}
+              />
+            ))}
+          </div>
+          <div className="mt-2 flex justify-between">
+            {(['Overview', 'Config', 'Assign'] as const).map((label, idx) => (
+              <span
+                key={label}
+                style={{ fontFamily: "'IBM Plex Mono', monospace", color: idx <= stepIdx ? '#5A9E8F' : '#2E4248' }}
+                className="text-[10px]"
+              >
+                {label}
+              </span>
+            ))}
           </div>
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-240px)]">
-          {step === 'overview' && (
-            <div>
-              <p className="text-slate-300 mb-6">{tool.description}</p>
+        {/* Modal body */}
+        <div className="scrollbar-hide flex-1 overflow-y-auto px-6 py-5">
 
-              <div className="mb-6">
-                <h3 className="text-sm font-semibold text-white mb-3">Capabilities</h3>
-                <div className="grid grid-cols-2 gap-2">
+          {/* ─ Overview ─ */}
+          {step === 'overview' && (
+            <div className="space-y-5">
+              <p className="text-[13px] leading-relaxed text-[#8A8480]">{tool.description}</p>
+
+              <div>
+                <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="mb-2.5 text-[10px] uppercase tracking-widest text-[#2E4248]">
+                  Capabilities
+                </p>
+                <div className="grid grid-cols-2 gap-1.5">
                   {tool.capabilities.map((cap, idx) => (
-                    <div key={idx} className="flex items-center gap-2 text-sm text-slate-300">
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#6366F1]" />
+                    <div key={idx} className="flex items-center gap-2 text-[12px] text-[#B8B2AA]">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#5A9E8F]" />
                       {cap}
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="p-4 bg-[#6366F1]/10 border border-[#6366F1]/30 rounded-lg">
+              <div className="rounded-md border p-4" style={{ background: '#111A1D', borderColor: '#1E2D30' }}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-sm font-semibold text-white mb-1">Pricing</div>
+                    <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="mb-1 text-[10px] uppercase tracking-widest text-[#2E4248]">
+                      Pricing
+                    </p>
                     {tool.pricingModel === 'free' ? (
-                      <div className="text-lg font-bold text-[#10B981]">Free</div>
+                      <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[16px] font-semibold text-[#5A9E8F]">Free</span>
                     ) : (
-                      <div>
-                        <span className="text-2xl font-bold text-[#FDE047]">
+                      <div className="flex items-baseline gap-1.5">
+                        <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#BF8A52' }} className="text-[18px] font-semibold">
                           ${tool.pricing.amount}
                         </span>
-                        <span className="text-sm text-slate-400 ml-2">{tool.pricing.unit}</span>
+                        <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] text-[#3A5056]">
+                          {tool.pricing.unit}
+                        </span>
                       </div>
                     )}
                   </div>
                   {tool.status && tool.status !== 'available' && (
-                    <span className="px-3 py-1.5 bg-[#FDE047]/20 text-[#FDE047] text-xs font-semibold uppercase rounded-md">
+                    <span
+                      style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#BF8A52', borderColor: '#BF8A5230' }}
+                      className="rounded border px-2 py-0.5 text-[9px] uppercase"
+                    >
                       {tool.status}
                     </span>
                   )}
@@ -166,150 +206,166 @@ export default function ToolInstallModal({ tool, isOpen, onClose }: ToolInstallM
             </div>
           )}
 
+          {/* ─ Config ─ */}
           {step === 'config' && (
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-4">Configuration</h3>
+            <div className="space-y-4">
+              <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }} className="text-[14px] text-[#D8D4CC]">
+                Configuration
+              </p>
 
               {!tool.requiresConfig ? (
-                <div className="p-6 bg-[#10B981]/10 border border-[#10B981]/30 rounded-lg text-center">
-                  <svg
-                    className="w-12 h-12 mx-auto mb-3 text-[#10B981]"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
+                <div className="flex flex-col items-center gap-3 rounded-md border py-8 text-center" style={{ background: '#0F1E1B', borderColor: '#5A9E8F20' }}>
+                  <svg className="h-8 w-8 text-[#5A9E8F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <p className="text-white font-semibold mb-1">No configuration required</p>
-                  <p className="text-sm text-slate-400">This tool is ready to use immediately</p>
+                  <div>
+                    <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }} className="text-[13px] text-[#D8D4CC]">No configuration required</p>
+                    <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="mt-1 text-[11px] text-[#3A5056]">This tool is ready to use immediately</p>
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {tool.configFields?.map((field) => (
-                    <div key={field.name}>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">
-                        {field.label}
-                        {field.required && <span className="text-red-400 ml-1">*</span>}
-                      </label>
-
-                      {field.type === 'oauth' ? (
-                        <button className="w-full px-4 py-3 bg-[#6366F1] text-white rounded-lg hover:bg-[#5558E3] transition-colors font-medium">
-                          Connect with OAuth
-                        </button>
-                      ) : field.type === 'select' ? (
-                        <select
-                          value={configuration[field.name] || ''}
-                          onChange={(e) => handleConfigChange(field.name, e.target.value)}
-                          className="w-full px-4 py-3 bg-[#020617]/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1] focus:border-transparent transition-all"
-                        >
-                          <option value="">Select...</option>
-                          {field.options?.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type={field.type === 'password' ? 'password' : 'text'}
-                          value={configuration[field.name] || ''}
-                          onChange={(e) => handleConfigChange(field.name, e.target.value)}
-                          placeholder={field.placeholder}
-                          className="w-full px-4 py-3 bg-[#020617]/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#6366F1] focus:border-transparent transition-all"
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
+                tool.configFields?.map((field) => (
+                  <div key={field.name}>
+                    <label
+                      style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                      className="mb-1.5 block text-[11px] text-[#5A9E8F]"
+                    >
+                      {field.label}{field.required && <span className="ml-1 text-[#9E5A5A]">*</span>}
+                    </label>
+                    {field.type === 'oauth' ? (
+                      <button
+                        className="w-full rounded-md border px-4 py-2.5 text-[12px] transition-all"
+                        style={{ fontFamily: "'IBM Plex Mono', monospace", background: '#5A9E8F12', borderColor: '#5A9E8F40', color: '#5A9E8F' }}
+                      >
+                        Connect with OAuth →
+                      </button>
+                    ) : field.type === 'select' ? (
+                      <select
+                        value={configuration[field.name] || ''}
+                        onChange={(e) => handleConfigChange(field.name, e.target.value)}
+                        className={inputCls}
+                        style={inputStyle}
+                        onFocus={inputFocus}
+                        onBlur={inputBlur}
+                      >
+                        <option value="">Select…</option>
+                        {field.options?.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        type={field.type === 'password' ? 'password' : 'text'}
+                        value={configuration[field.name] || ''}
+                        onChange={(e) => handleConfigChange(field.name, e.target.value)}
+                        placeholder={field.placeholder}
+                        className={inputCls}
+                        style={inputStyle}
+                        onFocus={inputFocus}
+                        onBlur={inputBlur}
+                      />
+                    )}
+                  </div>
+                ))
               )}
             </div>
           )}
 
+          {/* ─ Assign ─ */}
           {step === 'assign' && (
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-4">Assign to Agents</h3>
+            <div className="space-y-5">
+              <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }} className="text-[14px] text-[#D8D4CC]">
+                Assign to Agents
+              </p>
 
-              {/* Usage Policy */}
-              <div className="mb-6 p-4 bg-[#020617]/50 rounded-lg space-y-4">
+              {/* Usage policy */}
+              <div className="space-y-3 rounded-md border p-4" style={{ background: '#111A1D', borderColor: '#1E2D30' }}>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="mb-1.5 block text-[11px] text-[#5A9E8F]">
                     Permissions
                   </label>
                   <select
                     value={permissions}
                     onChange={(e) => setPermissions(e.target.value as 'read' | 'write' | 'full')}
-                    className="w-full px-4 py-2 bg-[#020617]/50 border border-slate-700/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#6366F1]"
+                    className={inputCls}
+                    style={inputStyle}
+                    onFocus={inputFocus}
+                    onBlur={inputBlur}
                   >
                     <option value="read">Read Only</option>
-                    <option value="write">Read & Write</option>
+                    <option value="write">Read &amp; Write</option>
                     <option value="full">Full Access</option>
                   </select>
                 </div>
 
                 {tool.pricingModel !== 'free' && (
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
-                      Daily Budget (Optional)
+                    <label style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="mb-1.5 block text-[11px] text-[#5A9E8F]">
+                      Daily Budget (optional)
                     </label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+                      <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-[#2E4248]">$</span>
                       <input
                         type="number"
                         value={dailyBudget}
                         onChange={(e) => setDailyBudget(e.target.value)}
                         placeholder="Unlimited"
-                        className="w-full pl-8 pr-4 py-2 bg-[#020617]/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#6366F1]"
+                        className={inputCls + " pl-7"}
+                        style={inputStyle}
+                        onFocus={inputFocus}
+                        onBlur={inputBlur}
                       />
                     </div>
                   </div>
                 )}
 
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={requireApproval}
-                    onChange={(e) => setRequireApproval(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-700 bg-[#020617]/50 text-[#6366F1] focus:ring-[#6366F1] focus:ring-offset-0"
-                  />
-                  <span className="text-sm text-slate-300">Require approval for each use</span>
+                <label className="flex cursor-pointer items-center gap-2.5">
+                  <div
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all"
+                    style={{ background: requireApproval ? '#5A9E8F' : '#0B1215', borderColor: requireApproval ? '#5A9E8F' : '#2E4248' }}
+                    onClick={() => setRequireApproval(!requireApproval)}
+                  >
+                    {requireApproval && (
+                      <svg className="h-2.5 w-2.5 text-[#080E11]" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                  <span style={{ fontFamily: "'Syne', sans-serif" }} className="text-[12px] text-[#B8B2AA]">
+                    Require approval for each use
+                  </span>
                 </label>
               </div>
 
-              {/* Agent Selection */}
+              {/* Agent selection */}
               <div>
-                <div className="text-sm font-medium text-slate-300 mb-3">
-                  Select Agents ({selectedAgents.length} selected)
-                </div>
-                <div className="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto p-1">
-                  {agents.slice(0, 12).map((agent) => {
-                    const isSelected = selectedAgents.includes(agent.id);
+                <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="mb-2.5 text-[10px] uppercase tracking-widest text-[#2E4248]">
+                  Select Agents <span style={{ color: '#3A5056' }}>({selectedAgents.length} selected)</span>
+                </p>
+                <div className="scrollbar-hide grid max-h-56 grid-cols-2 gap-2 overflow-y-auto">
+                  {agents.length === 0 && (
+                    <div className="col-span-2 py-6 text-center" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px', color: '#2E4248' }}>
+                      No agents hired for this team yet
+                    </div>
+                  )}
+                  {agents.map((agent) => {
+                    const sel = selectedAgents.includes(agent.id);
                     return (
                       <div
                         key={agent.id}
                         onClick={() => handleAgentToggle(agent.id)}
-                        className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                          isSelected
-                            ? 'border-[#6366F1] bg-[#6366F1]/10'
-                            : 'border-slate-700/50 bg-[#020617]/50 hover:border-slate-600'
-                        }`}
+                        className="flex cursor-pointer items-center gap-2.5 rounded-md border p-2.5 transition-all"
+                        style={{
+                          background: sel ? '#0F1E1B' : '#111A1D',
+                          borderColor: sel ? '#5A9E8F40' : '#1E2D30',
+                        }}
                       >
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={agent.photo_url}
-                            alt={agent.name}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-semibold text-white truncate">
-                              {agent.name}
-                            </div>
-                            <div className="text-xs text-slate-400 truncate">{agent.role}</div>
-                          </div>
+                        <img src={agent.photo_url} alt={agent.name} className="h-8 w-8 rounded-sm object-cover" />
+                        <div className="min-w-0 flex-1">
+                          <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }} className="truncate text-[12px] text-[#D8D4CC]">
+                            {agent.name}
+                          </p>
+                          <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="truncate text-[10px] text-[#2E4248]">
+                            {agent.role}
+                          </p>
                         </div>
                       </div>
                     );
@@ -321,49 +377,39 @@ export default function ToolInstallModal({ tool, isOpen, onClose }: ToolInstallM
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-slate-700/50 flex items-center justify-between">
+        <div className="shrink-0 flex items-center justify-between border-t px-6 py-4" style={{ borderColor: '#162025', background: '#080E11' }}>
           <button
             onClick={onClose}
-            className="px-6 py-2.5 text-slate-400 hover:text-white transition-colors"
+            style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+            className="text-[11px] text-[#3A5056] transition-colors hover:text-[#B8B2AA]"
           >
             Cancel
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {step !== 'overview' && (
               <button
-                onClick={() =>
-                  setStep(step === 'assign' ? 'config' : step === 'config' ? 'overview' : 'overview')
-                }
-                className="px-6 py-2.5 text-slate-400 hover:text-white transition-colors"
+                onClick={() => setStep(step === 'assign' ? 'config' : 'overview')}
+                style={{ fontFamily: "'IBM Plex Mono', monospace", borderColor: '#1E2D30', color: '#3A5056' }}
+                className="rounded border px-4 py-1.5 text-[11px] transition-all hover:text-[#B8B2AA]"
               >
                 ← Back
               </button>
             )}
 
-            {step === 'overview' && (
+            {step !== 'assign' ? (
               <button
-                onClick={() => setStep(tool.requiresConfig ? 'config' : 'assign')}
-                className="px-6 py-2.5 bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white font-medium rounded-lg shadow-lg shadow-[#6366F1]/30 hover:shadow-[#6366F1]/50 transform hover:scale-[1.02] transition-all duration-200"
+                onClick={() => setStep(step === 'overview' ? (tool.requiresConfig ? 'config' : 'assign') : 'assign')}
+                style={{ fontFamily: "'IBM Plex Mono', monospace", background: '#5A9E8F12', borderColor: '#5A9E8F40', color: '#5A9E8F' }}
+                className="rounded border px-4 py-1.5 text-[11px] transition-all hover:bg-[#5A9E8F20]"
               >
-                {isInstalled ? 'Reconfigure' : 'Next'} →
+                {isInstalled && step === 'overview' ? 'Reconfigure' : 'Next'} →
               </button>
-            )}
-
-            {step === 'config' && (
-              <button
-                onClick={() => setStep('assign')}
-                disabled={!canProceed()}
-                className="px-6 py-2.5 bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white font-medium rounded-lg shadow-lg shadow-[#6366F1]/30 hover:shadow-[#6366F1]/50 transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-              >
-                Next →
-              </button>
-            )}
-
-            {step === 'assign' && (
+            ) : (
               <button
                 onClick={handleInstall}
-                className="px-6 py-2.5 bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white font-medium rounded-lg shadow-lg shadow-[#6366F1]/30 hover:shadow-[#6366F1]/50 transform hover:scale-[1.02] transition-all duration-200"
+                style={{ fontFamily: "'IBM Plex Mono', monospace", background: '#5A9E8F20', borderColor: '#5A9E8F60', color: '#5A9E8F' }}
+                className="rounded border px-5 py-1.5 text-[11px] font-semibold transition-all hover:bg-[#5A9E8F30]"
               >
                 {isInstalled ? 'Update' : 'Install'} Tool
               </button>

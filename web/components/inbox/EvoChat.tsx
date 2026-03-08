@@ -21,6 +21,40 @@ interface EvoChatProps {
   onAriaHired?: () => void;
 }
 
+// Shared markdown components styled to design system
+const mdComponents = {
+  p: ({ children }: any) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+  ul: ({ children }: any) => <ul className="mb-2 list-disc space-y-1 pl-4">{children}</ul>,
+  ol: ({ children }: any) => <ol className="mb-2 list-decimal space-y-1 pl-4">{children}</ol>,
+  li: ({ children }: any) => <li>{children}</li>,
+  strong: ({ children }: any) => <strong className="font-semibold" style={{ color: '#EAE6DF' }}>{children}</strong>,
+  em: ({ children }: any) => <em className="italic opacity-80">{children}</em>,
+  h1: ({ children }: any) => <h1 style={{ fontFamily: "'Syne', sans-serif", color: '#EAE6DF' }} className="mb-2 text-base font-bold">{children}</h1>,
+  h2: ({ children }: any) => <h2 style={{ fontFamily: "'Syne', sans-serif", color: '#EAE6DF' }} className="mb-2 text-sm font-bold">{children}</h2>,
+  h3: ({ children }: any) => <h3 style={{ fontFamily: "'Syne', sans-serif", color: '#EAE6DF' }} className="mb-1 text-sm font-semibold">{children}</h3>,
+  code: ({ children, className }: any) => {
+    const isInline = !className;
+    return isInline ? (
+      <code style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#7BBDAE' }} className="rounded border border-[#1E2D30] bg-[#0B1215] px-1.5 py-0.5 text-[12px]">{children}</code>
+    ) : (
+      <code style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#7BBDAE' }} className="block overflow-x-auto rounded-md border border-[#1E2D30] bg-[#0B1215] p-3 text-[12px]">{children}</code>
+    );
+  },
+  a: ({ children, href }: any) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: '#5A9E8F' }} className="underline underline-offset-2 opacity-80 hover:opacity-100">{children}</a>
+  ),
+};
+
+function TypingDots() {
+  return (
+    <div className="flex items-center gap-1.5 py-0.5">
+      {[0, 1, 2].map((i) => (
+        <span key={i} className="block h-1.5 w-1.5 rounded-full bg-[#5A9E8F] animate-typing-dot" style={{ animationDelay: `${i * 0.18}s` }} />
+      ))}
+    </div>
+  );
+}
+
 export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -29,20 +63,17 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
   const [error, setError] = useState<string | null>(null);
   const [showManagerMarketplace, setShowManagerMarketplace] = useState(false);
   const [userObjective, setUserObjective] = useState<string>('');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Convert teamId to number for API calls
   const teamIdNum = parseInt(teamId, 10);
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Type out a message with animation
   const typeMessage = useCallback((text: string, messageId: number, onComplete?: () => void) => {
     let charIndex = 0;
     const typingSpeed = 20;
@@ -53,10 +84,7 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
           const updated = [...prev];
           const msgIndex = updated.findIndex(m => m.id === messageId);
           if (msgIndex !== -1) {
-            updated[msgIndex] = {
-              ...updated[msgIndex],
-              displayText: text.substring(0, charIndex + 1),
-            };
+            updated[msgIndex] = { ...updated[msgIndex], displayText: text.substring(0, charIndex + 1) };
           }
           return updated;
         });
@@ -78,7 +106,6 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
     return () => clearInterval(typeInterval);
   }, []);
 
-  // Load chat history when component mounts or teamId changes
   useEffect(() => {
     const loadChatHistory = async () => {
       if (!teamId || teamId === 'undefined' || teamId === 'null' || isNaN(teamIdNum)) {
@@ -91,9 +118,10 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
         const history = await chatAPI.getChatHistory(teamId);
 
         if (history.messages && history.messages.length > 0) {
-          // Filter for Evo's messages only (exclude Aria's messages)
           const loadedMessages: Message[] = history.messages
-            .filter((msg: { context?: { ariaChat?: boolean } }) => !msg.context?.ariaChat)
+            .filter((msg: { context?: { ariaChat?: boolean; agentChat?: boolean } }) =>
+              !msg.context?.ariaChat && !msg.context?.agentChat
+            )
             .map((msg: { id: number; role: string; content: string; created_at: string }) => ({
               id: msg.id,
               from: msg.role === 'user' ? 'user' : 'evo',
@@ -154,7 +182,6 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
     setMessage('');
     setError(null);
 
-    // Add user message
     const userMsg: Message = {
       id: Date.now(),
       from: 'user',
@@ -166,7 +193,6 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
 
     setMessages(prev => [...prev, userMsg]);
 
-    // Add loading message
     const loadingId = Date.now() + 1;
     const loadingMsg: Message = {
       id: loadingId,
@@ -182,16 +208,13 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
     setIsLoading(true);
 
     try {
-      // Check conversation stage for onboarding flow
       const isFirstResponse = messages.length === 1;
       const isSecondResponse = messages.length === 3;
 
-      // For first response, store objective
       if (isFirstResponse) {
         setUserObjective(userMessage);
       }
 
-      // For second response, check if choosing Lead Manager
       if (isSecondResponse) {
         const lowerMessage = userMessage.toLowerCase();
         const choosingLeadManager =
@@ -212,7 +235,6 @@ export default function EvoChat({ teamId, onAriaHired }: EvoChatProps) {
         }
       }
 
-      // Build context for Evo
       let context: Record<string, unknown> = { source: 'evo_onboarding' };
 
       if (isFirstResponse) {
@@ -231,13 +253,11 @@ Parse keywords from their objective and acknowledge them. Then present these two
         };
       }
 
-      // Call Evo service
       const response = await evoService.chat(teamIdNum, userMessage, context);
 
-      // Remove loading message and add response
+      const responseId = Date.now() + 2;
       setMessages(prev => {
         const filtered = prev.filter(m => !m.isLoading);
-        const responseId = Date.now() + 2;
         return [
           ...filtered,
           {
@@ -251,9 +271,7 @@ Parse keywords from their objective and acknowledge them. Then present these two
         ];
       });
 
-      // Type out the response
       setTimeout(() => {
-        const responseId = Date.now() + 2;
         typeMessage(response.response, responseId);
       }, 50);
 
@@ -311,126 +329,136 @@ Parse keywords from their objective and acknowledge them. Then present these two
         onHireAria={handleAriaHired}
         teamId={teamId}
       />
-      <div className="h-[calc(100vh-48px)] flex flex-col bg-slate-950">
+
+      <div className="flex h-full flex-col" style={{ background: '#0B1215' }}>
+
         {/* Header */}
-        <div className="flex-shrink-0 px-6 py-4 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                <span className="text-white font-bold text-sm">EVO</span>
-              </div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-950"></div>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white">Evo</h3>
-              <p className="text-xs text-slate-400">AI Chief Operating Officer</p>
-            </div>
+        <header
+          className="flex shrink-0 items-center gap-4 border-b px-8 py-5"
+          style={{ borderColor: '#162025', background: '#080E11' }}
+        >
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm text-[11px] font-bold"
+            style={{ background: '#5A9E8F', color: '#080E11', fontFamily: "'Syne', sans-serif" }}
+          >
+            EVO
           </div>
-        </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-3">
+              <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, letterSpacing: '-0.01em' }} className="text-[17px] text-[#D8D4CC] leading-none">
+                Evo
+              </h2>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] text-[#5A9E8F]">online</span>
+            </div>
+            <p className="mt-1 text-[12px] text-[#3A5056]">AI Chief Operating Officer</p>
+          </div>
+        </header>
 
         {/* Messages */}
-        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto scrollbar-hide px-8 py-8 min-h-0">
           {isLoadingHistory ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="w-8 h-8 border-2 border-slate-700 border-t-indigo-500 rounded-full animate-spin mx-auto mb-2"></div>
-                <p className="text-sm text-slate-500">Loading conversation...</p>
+            <div className="flex h-full items-center justify-center">
+              <div className="flex items-center gap-2">
+                {[0, 1, 2].map(i => (
+                  <span key={i} className="block h-1.5 w-1.5 rounded-full bg-[#5A9E8F] animate-typing-dot" style={{ animationDelay: `${i * 0.18}s` }} />
+                ))}
               </div>
             </div>
           ) : (
-            messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[75%] rounded-2xl px-4 py-3 ${
-                    msg.from === 'user'
-                      ? 'bg-indigo-600 text-white rounded-br-md'
-                      : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-bl-md'
-                  }`}
-                >
-                  {msg.isLoading ? (
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                      <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                      <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                    </div>
-                  ) : (
-                    <div className="text-sm prose prose-invert prose-sm max-w-none">
-                      <ReactMarkdown
-                        components={{
-                          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                          ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>,
-                          ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,
-                          li: ({ children }) => <li className="text-sm">{children}</li>,
-                          strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-                          em: ({ children }) => <em className="italic text-slate-300">{children}</em>,
-                          h1: ({ children }) => <h1 className="text-lg font-bold mb-2 text-white">{children}</h1>,
-                          h2: ({ children }) => <h2 className="text-base font-bold mb-2 text-white">{children}</h2>,
-                          h3: ({ children }) => <h3 className="text-sm font-bold mb-1 text-white">{children}</h3>,
-                          code: ({ children, className }) => {
-                            const isInline = !className;
-                            return isInline ? (
-                              <code className="bg-slate-700/50 px-1.5 py-0.5 rounded text-xs">{children}</code>
-                            ) : (
-                              <code className="block bg-slate-900/50 p-2 rounded text-xs overflow-x-auto">{children}</code>
-                            );
-                          },
-                          a: ({ children, href }) => (
-                            <a href={href} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">
-                              {children}
-                            </a>
-                          ),
+            <div className="space-y-4 max-w-3xl mx-auto">
+              {messages.map((msg) => {
+                const isUser = msg.from === 'user';
+                return (
+                  <div key={msg.id} className={`flex ${isUser ? 'justify-end animate-msg-right' : 'items-end gap-3 animate-msg-left'}`}>
+                    {!isUser && (
+                      <div
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-[10px] font-bold self-end"
+                        style={{ background: '#5A9E8F', color: '#080E11', fontFamily: "'Syne', sans-serif" }}
+                      >
+                        EVO
+                      </div>
+                    )}
+                    <div className={`max-w-[75%]`}>
+                      <div
+                        className={`rounded-md px-4 py-3 text-[13px] border ${isUser ? 'rounded-br-none' : 'rounded-bl-none'}`}
+                        style={{
+                          background: isUser ? '#182E2B' : '#111A1D',
+                          borderColor: isUser ? '#5A9E8F28' : '#1E2D30',
+                          color: isUser ? '#D8D4CC' : '#C8C4BC',
                         }}
                       >
-                        {msg.displayText}
-                      </ReactMarkdown>
-                      {msg.isTyping && (
-                        <span className="inline-block w-0.5 h-4 bg-indigo-400 ml-0.5 animate-pulse"></span>
-                      )}
+                        {msg.isLoading ? (
+                          <TypingDots />
+                        ) : (
+                          <div className="prose prose-sm max-w-none" style={{ color: isUser ? '#D8D4CC' : '#C8C4BC' }}>
+                            <ReactMarkdown components={mdComponents}>{msg.displayText}</ReactMarkdown>
+                            {msg.isTyping && (
+                              <span
+                                className="inline-block ml-0.5 align-middle"
+                                style={{ width: '1px', height: '14px', background: '#5A9E8F', animation: 'blink 0.8s step-end infinite' }}
+                              />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div
+                        style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                        className={`mt-1 text-[10px] text-[#2E4248] ${isUser ? 'text-right' : ''}`}
+                      >
+                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
                     </div>
-                  )}
-                  <div className={`text-xs mt-2 ${msg.from === 'user' ? 'text-indigo-200' : 'text-slate-500'}`}>
-                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
-                </div>
-              </div>
-            ))
+                );
+              })}
+            </div>
           )}
-          <div ref={messagesEndRef} />
         </div>
 
         {/* Input */}
-        <form onSubmit={handleSend} className="flex-shrink-0 p-4 border-t border-slate-800 bg-slate-900/50">
+        <form
+          onSubmit={handleSend}
+          className="shrink-0 border-t px-8 py-5"
+          style={{ borderColor: '#162025', background: '#080E11' }}
+        >
           {error && (
-            <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-400 flex items-center justify-between">
+            <div
+              className="mb-3 flex items-center justify-between rounded-md border px-4 py-2 text-[12px]"
+              style={{ background: '#9E5A5A10', borderColor: '#9E5A5A30', color: '#9E5A5A', fontFamily: "'IBM Plex Mono', monospace" }}
+            >
               <span>{error}</span>
-              <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <button onClick={() => setError(null)} style={{ color: '#9E5A5A' }}>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
           )}
-          <div className="flex gap-3">
+          <div className="mx-auto flex max-w-3xl items-center gap-3">
             <input
+              ref={inputRef}
               type="text"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder={isLoading ? "Evo is thinking..." : "Message Evo..."}
+              placeholder={isLoading ? 'Evo is thinking…' : 'Message Evo…'}
               disabled={isLoading}
-              className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 rounded-md border bg-[#111A1D] px-4 py-3 text-[13px] text-[#D8D4CC] placeholder-[#2E4248] outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ borderColor: '#1E2D30', fontFamily: "'Syne', sans-serif" }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#5A9E8F50'; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = '#1E2D30'; }}
             />
             <button
               type="submit"
               disabled={isLoading || !message.trim()}
-              className="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[48px]"
+              className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-md border border-[#5A9E8F]/40 bg-[#5A9E8F]/10 text-[#5A9E8F] transition-all hover:border-[#5A9E8F]/70 hover:bg-[#5A9E8F]/18 disabled:cursor-not-allowed disabled:opacity-30"
             >
               {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
               ) : (
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               )}
@@ -438,6 +466,10 @@ Parse keywords from their objective and acknowledge them. Then present these two
           </div>
         </form>
       </div>
+
+      <style>{`
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+      `}</style>
     </>
   );
 }

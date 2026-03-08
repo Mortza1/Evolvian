@@ -5,9 +5,8 @@ import Sidebar from './Sidebar';
 import Breadcrumb from './Breadcrumb';
 import CorporateStatusBar from './CorporateStatusBar';
 import ManagerChat from './ManagerChat';
-import ActiveOperations from './ActiveOperations';
-import TeamOverview from './TeamOverview';
 import NewOperationModal, { OperationConfig } from './NewOperationModal';
+import HQView from './views/HQView';
 import OfficeView from './views/OfficeView';
 import TalentHubView from './views/TalentHubView';
 import BoardView from './views/BoardView';
@@ -159,6 +158,13 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
             </div>
           )}
 
+          {/* Home gets full height without padding */}
+          {activeView === 'home' && (
+            <div className="flex-1 overflow-hidden">
+              <HomeView onSelectTeam={handleSelectTeam} />
+            </div>
+          )}
+
           {/* Inbox gets full height without padding */}
           {activeView === 'inbox' && currentTeam && (
             <div className="flex-1 overflow-hidden">
@@ -183,54 +189,21 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
             </div>
           )}
 
-          {/* Other views get padding wrapper */}
-          {activeView !== 'inbox' && activeView !== 'billing' && activeView !== 'vault' && (
-            <div className="p-6">
-              {activeView === 'home' && <HomeView onSelectTeam={handleSelectTeam} />}
-
-            {activeView === 'hq' && currentTeam && (
-            <div className="max-w-7xl mx-auto space-y-6">
-              {/* Quick Stats Overview */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="glass rounded-xl p-5 border border-[#2D3748]/50 hover:border-[#A3FF12]/30 transition-all group">
-                  <div className="text-xs text-slate-600 uppercase tracking-[0.1em] mb-2">Total Agents</div>
-                  <div className="text-3xl font-bold text-[#E2E8F0] mb-1 group-hover:text-[#A3FF12] transition-colors">{currentTeam.stats.totalAgents}</div>
-                  <div className="text-xs text-[#A3FF12]">{currentTeam.stats.activeAgents} active</div>
-                </div>
-
-                <div className="glass rounded-xl p-5 border border-[#2D3748]/50 hover:border-[#00F5FF]/30 transition-all group">
-                  <div className="text-xs text-slate-600 uppercase tracking-[0.1em] mb-2">This Week</div>
-                  <div className="text-3xl font-bold text-[#E2E8F0] mb-1 group-hover:text-[#00F5FF] transition-colors">{currentTeam.stats.operationsThisWeek}</div>
-                  <div className="text-xs text-slate-600">operations</div>
-                </div>
-
-                <div className="glass rounded-xl p-5 border border-[#2D3748]/50 hover:border-[#FFB800]/30 transition-all group">
-                  <div className="text-xs text-slate-600 uppercase tracking-[0.1em] mb-2">This Month</div>
-                  <div className="text-3xl font-bold text-[#FFB800] mb-1 group-hover:scale-105 transition-transform">${currentTeam.stats.spendThisMonth.toFixed(0)}</div>
-                  <div className="text-xs text-slate-600">total spend</div>
-                </div>
-
-                <div className="glass rounded-xl p-5 border border-[#2D3748]/50 hover:border-[#00F5FF]/30 transition-all group">
-                  <div className="text-xs text-slate-600 uppercase tracking-[0.1em] mb-2">Avg Cost</div>
-                  <div className="text-3xl font-bold text-[#E2E8F0] mb-1 group-hover:text-[#00F5FF] transition-colors">${currentTeam.stats.avgOperationCost.toFixed(0)}</div>
-                  <div className="text-xs text-slate-600">per operation</div>
-                </div>
-              </div>
-
-              {/* Main Content - Two Columns */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Left: Team Overview */}
-                <TeamOverview
-                  teamId={currentTeam.id.toString()}
-                  onViewOffice={() => handleViewChange('office')}
-                  onViewStore={() => handleViewChange('store')}
-                />
-
-                {/* Right: Active Operations */}
-                <ActiveOperations teamId={currentTeam.id.toString()} />
-              </div>
+          {/* HQ gets full height without padding */}
+          {activeView === 'hq' && currentTeam && (
+            <div className="flex-1 overflow-hidden">
+              <HQView
+                team={currentTeam}
+                onViewOffice={() => handleViewChange('office')}
+                onViewStore={() => handleViewChange('store')}
+              />
             </div>
           )}
+
+          {/* Other views get padding wrapper */}
+          {activeView !== 'home' && activeView !== 'hq' && activeView !== 'inbox' && activeView !== 'billing' && activeView !== 'vault' && (
+            <div className="p-6">
+              {/* home/hq rendered above at full height */}
 
               {activeView === 'board' && currentTeam && <BoardView teamId={currentTeam.id.toString()} />}
               {activeView === 'office' && currentTeam && <OfficeView teamId={currentTeam.id.toString()} />}
@@ -243,8 +216,7 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
 
         {/* Right Sidebar - Contextual - Only show when in a team and not in inbox, billing, or vault */}
         {currentTeam && activeView !== 'home' && activeView !== 'inbox' && activeView !== 'billing' && activeView !== 'vault' && (
-          <aside className="w-80 border-l border-[#161B22] bg-[#0B0E14]">
-            {/* Manager Chat - Full screen height */}
+          <aside className="flex flex-col w-80 h-full border-l border-[#161B22] bg-[#0B0E14] overflow-hidden">
             <ManagerChat teamId={currentTeam.id.toString()} />
           </aside>
         )}

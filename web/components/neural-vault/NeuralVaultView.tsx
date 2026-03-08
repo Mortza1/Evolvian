@@ -12,36 +12,35 @@ export default function NeuralVaultView({ teamId }: NeuralVaultViewProps) {
   const [activeTab, setActiveTab] = useState<'files' | 'knowledge'>('files');
 
   return (
-    <div className="h-full flex flex-col bg-[#0B0E14]">
-      {/* Tab Navigation - Compact */}
-      <div className="flex-shrink-0 border-b border-[#161B22] bg-[#0B0E14]">
-        <div className="px-6 pt-2">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setActiveTab('files')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-t-lg transition-all ${
-                activeTab === 'files'
-                  ? 'bg-[#161B22] text-[#E2E8F0] border-t border-l border-r border-[#2D3748]'
-                  : 'text-slate-600 hover:text-[#E2E8F0] hover:bg-[#161B22]/50'
-              }`}
-            >
-              File Storage
-            </button>
-            <button
-              onClick={() => setActiveTab('knowledge')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-t-lg transition-all ${
-                activeTab === 'knowledge'
-                  ? 'bg-[#161B22] text-[#E2E8F0] border-t border-l border-r border-[#2D3748]'
-                  : 'text-slate-600 hover:text-[#E2E8F0] hover:bg-[#161B22]/50'
-              }`}
-            >
-              Knowledge Graph
-            </button>
-          </div>
+    <div className="h-full flex flex-col" style={{ background: '#080E11', fontFamily: "'Syne', sans-serif" }}>
+      {/* Tab bar */}
+      <div className="shrink-0 border-b px-8 pt-5" style={{ borderColor: '#162025' }}>
+        <div className="mb-0 flex items-center gap-1">
+          {([
+            { id: 'files', label: 'File Storage' },
+            { id: 'knowledge', label: 'Knowledge Graph' },
+          ] as const).map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className="relative px-4 py-2 text-[12px] transition-colors"
+                style={{
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  color: isActive ? '#5A9E8F' : '#3A5056',
+                  borderBottom: isActive ? '2px solid #5A9E8F' : '2px solid transparent',
+                  marginBottom: '-1px',
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Tab Content */}
+      {/* Content */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'files' ? (
           <FileVaultView teamId={teamId} />

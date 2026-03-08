@@ -2,20 +2,20 @@
 
 import type { AssumptionData } from '../types';
 
-const optionClass = (option: string) => {
+function optionStyle(option: string): { color: string; border: string; bg: string } {
   const lower = option.toLowerCase();
   if (['yes', 'y', 'proceed', 'continue', 'approve'].includes(lower))
-    return 'px-4 py-2 bg-green-900/30 hover:bg-green-600/40 border border-green-600/50 hover:border-green-500 rounded text-sm text-green-100 transition-all disabled:opacity-50 font-medium';
+    return { color: '#5A9E8F', border: '#5A9E8F40', bg: '#5A9E8F10' };
   if (['no', 'n', 'cancel', 'decline'].includes(lower))
-    return 'px-4 py-2 bg-red-900/30 hover:bg-red-600/40 border border-red-600/50 hover:border-red-500 rounded text-sm text-red-100 transition-all disabled:opacity-50 font-medium';
+    return { color: '#9E5A5A', border: '#9E5A5A40', bg: '#9E5A5A10' };
   if (['skip', 'maybe later', 'not sure'].includes(lower))
-    return 'px-4 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 hover:border-slate-500 rounded text-sm text-slate-300 transition-all disabled:opacity-50';
+    return { color: '#3A5056', border: '#1E2D30', bg: 'transparent' };
   if (lower.includes('critical') || lower.includes('urgent'))
-    return 'px-4 py-2 bg-red-900/30 hover:bg-red-500/30 border border-red-500/50 hover:border-red-400 rounded text-sm text-red-200 transition-all disabled:opacity-50 font-semibold';
+    return { color: '#9E5A5A', border: '#9E5A5A40', bg: '#9E5A5A10' };
   if (lower.includes('minor') || lower.includes('low'))
-    return 'px-4 py-2 bg-blue-900/30 hover:bg-blue-500/30 border border-blue-500/50 hover:border-blue-400 rounded text-sm text-blue-200 transition-all disabled:opacity-50';
-  return 'px-4 py-2 bg-slate-800 hover:bg-amber-500/20 border border-slate-700 hover:border-amber-500/50 rounded text-sm text-white transition-all disabled:opacity-50';
-};
+    return { color: '#7A8FA0', border: '#7A8FA030', bg: '#7A8FA010' };
+  return { color: '#BF8A52', border: '#BF8A5240', bg: '#BF8A5210' };
+}
 
 interface AssumptionPanelProps {
   assumption: AssumptionData;
@@ -26,68 +26,111 @@ interface AssumptionPanelProps {
 }
 
 export function AssumptionPanel({ assumption, answer, isSubmitting, onAnswerChange, onSubmit }: AssumptionPanelProps) {
+  const isHigh = ['high', 'critical'].includes(assumption.priority);
+
   return (
-    <div data-assumption-panel className="flex-shrink-0 border-t border-slate-800 bg-gradient-to-br from-amber-500/10 to-orange-500/10 animate-in slide-in-from-bottom">
-      <div className="p-4">
-        <div className="flex items-start gap-4 mb-4">
+    <div
+      data-assumption-panel
+      className="flex-shrink-0 border-t"
+      style={{ borderColor: '#BF8A5240', background: '#0D1A14' }}
+    >
+      {/* Amber top accent */}
+      <div className="h-[2px]" style={{ background: 'linear-gradient(90deg, #BF8A5260, #BF8A52, #BF8A5260)' }} />
+
+      <div className="px-8 py-5">
+        <div className="flex items-start gap-5">
+          {/* Agent photo */}
           {assumption.agentPhoto && (
             <img
               src={assumption.agentPhoto}
               alt={assumption.agentName}
-              className="w-12 h-12 rounded-full object-cover border-2 border-amber-500 ring-2 ring-amber-500/50 flex-shrink-0"
+              className="h-12 w-12 shrink-0 rounded-sm object-cover border-2"
+              style={{ borderColor: '#BF8A5250' }}
             />
           )}
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="px-2 py-1 bg-amber-500/20 border border-amber-500/30 rounded text-xs font-semibold text-amber-400">
-                {assumption.agentName === 'Evo (Manager)' ? '🎯 MANAGER QUESTION' : '❓ AGENT QUESTION'}
+
+          <div className="flex-1 min-w-0">
+            {/* Tags */}
+            <div className="flex items-center gap-2 mb-3">
+              <span
+                className="rounded border px-2 py-0.5 text-[10px] uppercase"
+                style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#BF8A52', borderColor: '#BF8A5240', background: '#BF8A5210', letterSpacing: '0.08em' }}
+              >
+                {assumption.agentName === 'Evo (Manager)' ? '◈ Manager' : '? Agent'}
               </span>
-              <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                ['high', 'critical'].includes(assumption.priority)
-                  ? 'bg-red-500/20 border border-red-500/30 text-red-400'
-                  : 'bg-slate-700 text-slate-400'
-              }`}>
-                {assumption.priority.toUpperCase()}
+              <span
+                className="rounded border px-2 py-0.5 text-[10px] uppercase"
+                style={{
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  color: isHigh ? '#9E5A5A' : '#3A5056',
+                  borderColor: isHigh ? '#9E5A5A30' : '#1E2D30',
+                  background: isHigh ? '#9E5A5A10' : 'transparent',
+                  letterSpacing: '0.08em',
+                }}
+              >
+                {assumption.priority}
               </span>
             </div>
 
-            <h4 className="text-white font-semibold text-lg mb-1">{assumption.agentName} needs your input</h4>
-            <p className="text-amber-100 text-base mb-2">{assumption.question}</p>
-            {assumption.context && <p className="text-slate-400 text-sm mb-3">{assumption.context}</p>}
+            {/* Question */}
+            <h4 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: '15px', color: '#EAE6DF' }} className="mb-1">
+              {assumption.agentName} needs your input
+            </h4>
+            <p style={{ fontFamily: "'Syne', sans-serif", fontSize: '14px', color: '#C8C4BC', lineHeight: '1.6' }} className="mb-1">
+              {assumption.question}
+            </p>
+            {assumption.context && (
+              <p style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', color: '#4A6A72' }} className="mb-3">
+                {assumption.context}
+              </p>
+            )}
 
+            {/* Quick replies */}
             {assumption.options.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
-                {assumption.options.map((option, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => { onAnswerChange(option); onSubmit(option); }}
-                    disabled={isSubmitting}
-                    className={optionClass(option)}
-                    title={`Quick reply: ${option} (${idx + 1})`}
-                  >
-                    {option}
-                    {idx < 9 && <span className="ml-2 text-xs opacity-60">{idx + 1}</span>}
-                  </button>
-                ))}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {assumption.options.map((option, idx) => {
+                  const s = optionStyle(option);
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => { onAnswerChange(option); onSubmit(option); }}
+                      disabled={isSubmitting}
+                      className="rounded border px-3 py-1.5 text-[12px] transition-all disabled:opacity-50"
+                      style={{ fontFamily: "'IBM Plex Mono', monospace", color: s.color, borderColor: s.border, background: s.bg }}
+                      onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.85'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
+                    >
+                      {option}
+                      {idx < 9 && <span className="ml-2 opacity-40 text-[10px]">{idx + 1}</span>}
+                    </button>
+                  );
+                })}
               </div>
             )}
 
-            <div className="flex gap-2">
+            {/* Free text */}
+            <div className="flex gap-3">
               <input
                 type="text"
                 value={answer}
                 onChange={(e) => onAnswerChange(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && answer.trim()) onSubmit(answer); }}
-                placeholder={assumption.options.length > 0 ? 'Or type your own answer...' : 'Type your answer...'}
+                placeholder={assumption.options.length > 0 ? 'Or type your own answer…' : 'Type your answer…'}
                 disabled={isSubmitting}
-                className="flex-1 px-4 py-2 bg-slate-900 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/50 disabled:opacity-50"
+                className="flex-1 rounded-md border bg-[#111A1D] px-4 py-2.5 text-[13px] text-[#D8D4CC] placeholder-[#2A3E44] outline-none transition-all disabled:opacity-50"
+                style={{ borderColor: '#1E2D30', fontFamily: "'Syne', sans-serif" }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#BF8A5250'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#1E2D30'; }}
               />
               <button
                 onClick={() => answer.trim() && onSubmit(answer)}
                 disabled={!answer.trim() || isSubmitting}
-                className="px-6 py-2 bg-amber-500 hover:bg-amber-400 text-white font-medium rounded transition-all disabled:opacity-50"
+                className="rounded border px-5 py-2.5 text-[11px] font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-40"
+                style={{ fontFamily: "'IBM Plex Mono', monospace", background: '#BF8A5212', borderColor: '#BF8A5250', color: '#BF8A52' }}
+                onMouseEnter={(e) => { if (!isSubmitting) e.currentTarget.style.background = '#BF8A5222'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#BF8A5212'; }}
               >
-                {isSubmitting ? 'Submitting...' : 'Submit'}
+                {isSubmitting ? 'Submitting…' : 'Submit →'}
               </button>
             </div>
           </div>

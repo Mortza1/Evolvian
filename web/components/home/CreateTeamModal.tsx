@@ -9,20 +9,42 @@ interface CreateTeamModalProps {
   onCreated: (team: Team, isPersonalBranding?: boolean) => void;
 }
 
-const TEAM_ICONS = ['⚖️', '📢', '🔬', '💰', '🏥', '🎓', '🏭', '🚀', '🎨', '📊', '🔒', '🌍'];
+// SVG icon for Personal Branding — radiant signal / broadcast
+function PersonalBrandingIcon({ color }: { color: string }) {
+  return (
+    <svg viewBox="0 0 32 32" fill="none" width="26" height="26" xmlns="http://www.w3.org/2000/svg">
+      {/* Person silhouette */}
+      <circle cx="16" cy="10" r="4" stroke={color} strokeWidth="1.5" />
+      <path d="M8 26c0-4.418 3.582-8 8-8s8 3.582 8 8" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+      {/* Signal arcs */}
+      <path d="M22 6a8 8 0 010 8" stroke={color} strokeWidth="1.5" strokeLinecap="round" opacity="0.6" />
+      <path d="M25 3a13 13 0 010 14" stroke={color} strokeWidth="1.5" strokeLinecap="round" opacity="0.3" />
+      <path d="M10 6a8 8 0 000 8" stroke={color} strokeWidth="1.5" strokeLinecap="round" opacity="0.6" />
+      <path d="M7 3a13 13 0 000 14" stroke={color} strokeWidth="1.5" strokeLinecap="round" opacity="0.3" />
+    </svg>
+  );
+}
+
+// SVG icon for Custom Team — modular grid / building blocks
+function CustomTeamIcon({ color }: { color: string }) {
+  return (
+    <svg viewBox="0 0 32 32" fill="none" width="26" height="26" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="3" width="10" height="10" rx="1" stroke={color} strokeWidth="1.5" />
+      <rect x="19" y="3" width="10" height="10" rx="1" stroke={color} strokeWidth="1.5" opacity="0.6" />
+      <rect x="3" y="19" width="10" height="10" rx="1" stroke={color} strokeWidth="1.5" opacity="0.6" />
+      <rect x="19" y="19" width="10" height="10" rx="1" stroke={color} strokeWidth="1.5" opacity="0.35" />
+      {/* Plus connector */}
+      <line x1="16" y1="8" x2="16" y2="24" stroke={color} strokeWidth="1" opacity="0.3" />
+      <line x1="8" y1="16" x2="24" y2="16" stroke={color} strokeWidth="1" opacity="0.3" />
+    </svg>
+  );
+}
+
+const TEAM_ICON_KEYS = ['◈', '▲', '◉', '◆', '⬡', '▣', '◐', '▽', '◑', '◧', '◫', '◻'];
 const TEAM_COLORS = [
-  '#F59E0B', // Amber
-  '#EC4899', // Pink
-  '#8B5CF6', // Purple
-  '#10B981', // Green
-  '#3B82F6', // Blue
-  '#EF4444', // Red
-  '#06B6D4', // Cyan
-  '#F97316', // Orange
-  '#6366F1', // Indigo
-  '#14B8A6', // Teal
-  '#A855F7', // Violet
-  '#84CC16', // Lime
+  '#BF8A52', '#5A9E8F', '#7BBDAE', '#7A8FA0',
+  '#9E7A5A', '#5A7A9E', '#8F9E5A', '#9E5A5A',
+  '#5A8F9E', '#9E5A8F', '#6A9E7A', '#8A7A9E',
 ];
 
 type ModalStep = 'blueprint' | 'details';
@@ -32,7 +54,7 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
   const [selectedBlueprint, setSelectedBlueprint] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedIcon, setSelectedIcon] = useState(TEAM_ICONS[0]);
+  const [selectedIcon, setSelectedIcon] = useState(TEAM_ICON_KEYS[0]);
   const [selectedColor, setSelectedColor] = useState(TEAM_COLORS[0]);
   const [dailyBudgetCap, setDailyBudgetCap] = useState('');
   const [requireApprovalThreshold, setRequireApprovalThreshold] = useState('');
@@ -45,16 +67,16 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
     {
       id: 'personal-branding',
       name: 'Personal Branding',
-      icon: '✨',
-      color: '#EC4899',
+      Icon: PersonalBrandingIcon,
+      accent: '#BF8A52',
       description: 'Build an elite personal brand with AI specialists',
       features: ['Lead Manager', 'Color Psychology', 'Viral Content', 'Typography'],
     },
     {
       id: 'custom',
       name: 'Custom Team',
-      icon: '🎯',
-      color: '#6366F1',
+      Icon: CustomTeamIcon,
+      accent: '#5A9E8F',
       description: 'Build your own team from scratch',
       features: ['Full Control', 'Choose Specialists', 'Custom Workflow', 'Flexible Budget'],
     },
@@ -62,27 +84,19 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
 
   const handleBlueprintSelect = (blueprintId: string) => {
     setSelectedBlueprint(blueprintId);
-
-    // Auto-fill based on blueprint
     if (blueprintId === 'personal-branding') {
       setName('Personal Branding');
       setDescription('Elite personal branding with AI specialists');
-      setSelectedIcon('✨');
-      setSelectedColor('#EC4899');
+      setSelectedIcon('◈');
+      setSelectedColor('#BF8A52');
     }
-
     setStep('details');
   };
 
   const handleCreate = async () => {
-    if (!name.trim()) {
-      setError('Please enter a team name');
-      return;
-    }
-
+    if (!name.trim()) { setError('Please enter a team name'); return; }
     setIsCreating(true);
     setError(null);
-
     try {
       const newTeam = await createTeam({
         name: name.trim(),
@@ -98,25 +112,18 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
       });
 
       if (newTeam) {
-        const isPersonalBranding = selectedBlueprint === 'personal-branding';
-        onCreated(newTeam, isPersonalBranding);
-
-        // Reset form
+        onCreated(newTeam, selectedBlueprint === 'personal-branding');
         setStep('blueprint');
         setSelectedBlueprint(null);
-        setName('');
-        setDescription('');
-        setSelectedIcon(TEAM_ICONS[0]);
+        setName(''); setDescription('');
+        setSelectedIcon(TEAM_ICON_KEYS[0]);
         setSelectedColor(TEAM_COLORS[0]);
-        setDailyBudgetCap('');
-        setRequireApprovalThreshold('');
-
+        setDailyBudgetCap(''); setRequireApprovalThreshold('');
         onClose();
       } else {
         setError('Failed to create team. Please try again.');
       }
     } catch (err: any) {
-      console.error('Error creating team:', err);
       setError(err.message || 'Failed to create team. Please try again.');
     } finally {
       setIsCreating(false);
@@ -124,231 +131,267 @@ export default function CreateTeamModal({ isOpen, onClose, onCreated }: CreateTe
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0B0E14]/90 backdrop-blur-sm">
-      <div className="glass rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden border border-[#2D3748]/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(4,9,12,0.88)' }}>
+      <div
+        className="relative w-full max-w-xl max-h-[90vh] overflow-hidden rounded-md border"
+        style={{ background: '#0B1215', borderColor: '#1E2D30' }}
+      >
+        {/* Teal top accent */}
+        <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: '#5A9E8F60' }} />
+
         {/* Header */}
-        <div className="p-6 border-b border-[#2D3748]/50">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-[#E2E8F0]">
-                {step === 'blueprint' ? 'Choose a Blueprint' : 'Create New Team'}
-              </h2>
-              <p className="text-sm text-slate-600 mt-1">
-                {step === 'blueprint'
-                  ? 'Start with a pre-built team or build custom'
-                  : 'Set up your AI workforce'}
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-lg bg-[#161B22] hover:bg-[#2D3748] text-slate-600 hover:text-[#E2E8F0] transition-all"
-            >
-              ✕
-            </button>
+        <div className="flex items-center justify-between px-6 py-5 border-b" style={{ borderColor: '#162025' }}>
+          <div>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#3A5056', textTransform: 'uppercase', letterSpacing: '0.1em' }} className="mb-1">
+              {step === 'blueprint' ? 'new workforce' : 'configure team'}
+            </p>
+            <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: '18px', color: '#EAE6DF' }}>
+              {step === 'blueprint' ? 'Choose a Blueprint' : 'Create New Team'}
+            </h2>
           </div>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded border transition-all"
+            style={{ background: '#111A1D', borderColor: '#1E2D30', color: '#3A5056' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#EAE6DF'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#3A5056'; }}
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
-          {step === 'blueprint' ? (
-            <div className="space-y-4">
-              {blueprints.map((blueprint) => (
-                <button
-                  key={blueprint.id}
-                  onClick={() => handleBlueprintSelect(blueprint.id)}
-                  className="w-full p-6 glass rounded-xl border border-[#2D3748]/50 hover:border-[#00F5FF]/30 text-left transition-all group"
-                >
-                  <div className="flex items-start gap-4">
-                    <div
-                      className="w-16 h-16 rounded-xl flex items-center justify-center text-3xl flex-shrink-0"
-                      style={{ backgroundColor: blueprint.color + '30' }}
-                    >
-                      {blueprint.icon}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-[#E2E8F0] mb-2 group-hover:text-[#00F5FF] transition-colors">
-                        {blueprint.name}
-                      </h3>
-                      <p className="text-sm text-slate-600 mb-3">{blueprint.description}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {blueprint.features.map((feature) => (
-                          <span
-                            key={feature}
-                            className="px-2 py-1 bg-[#00F5FF]/10 border border-[#00F5FF]/20 text-[#00F5FF] text-xs rounded-md"
-                          >
-                            {feature}
-                          </span>
-                        ))}
+        <div className="overflow-y-auto scrollbar-hide" style={{ maxHeight: 'calc(90vh - 180px)' }}>
+          <div className="p-6">
+            {step === 'blueprint' ? (
+              <div className="space-y-3">
+                {blueprints.map(({ id, name: bName, Icon, accent, description: bDesc, features }) => (
+                  <button
+                    key={id}
+                    onClick={() => handleBlueprintSelect(id)}
+                    className="group w-full rounded-md border p-5 text-left transition-all"
+                    style={{ background: '#111A1D', borderColor: '#1E2D30' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = `${accent}40`; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#1E2D30'; }}
+                  >
+                    <div className="flex items-start gap-4">
+                      {/* Icon box */}
+                      <div
+                        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-sm border-2"
+                        style={{ background: `${accent}12`, borderColor: accent }}
+                      >
+                        <Icon color={accent} />
                       </div>
-                    </div>
-                    <div className="text-slate-600 group-hover:text-[#00F5FF] transition-colors">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+
+                      <div className="flex-1 min-w-0">
+                        <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: '15px', color: '#EAE6DF' }} className="mb-1">
+                          {bName}
+                        </h3>
+                        <p style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', color: '#4A6A72' }} className="mb-3">
+                          {bDesc}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {features.map(f => (
+                            <span
+                              key={f}
+                              className="rounded border px-2 py-0.5"
+                              style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', color: accent, borderColor: `${accent}30`, background: `${accent}0A` }}
+                            >
+                              {f}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <svg className="h-4 w-4 shrink-0 mt-1 transition-colors" style={{ color: '#2A3E44' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-6">
-            {/* Team Name */}
-            <div>
-              <label className="block text-sm font-medium text-[#E2E8F0] mb-2">
-                Team Name <span className="text-[#FFB800]">*</span>
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Legal Department"
-                className="w-full px-4 py-3 bg-[#0B0E14]/50 border border-[#2D3748]/50 rounded-lg text-[#E2E8F0] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-[#00F5FF] focus:border-transparent transition-all"
-              />
-            </div>
-
-            {/* Description */}
-            <div>
-              <label className="block text-sm font-medium text-[#E2E8F0] mb-2">Description</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="What will this team focus on?"
-                rows={3}
-                className="w-full px-4 py-3 bg-[#0B0E14]/50 border border-[#2D3748]/50 rounded-lg text-[#E2E8F0] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-[#00F5FF] focus:border-transparent transition-all resize-none"
-              />
-            </div>
-
-            {/* Icon Selection */}
-            <div>
-              <label className="block text-sm font-medium text-[#E2E8F0] mb-2">Team Icon</label>
-              <div className="grid grid-cols-6 gap-2">
-                {TEAM_ICONS.map((icon) => (
-                  <button
-                    key={icon}
-                    onClick={() => setSelectedIcon(icon)}
-                    className={`p-3 rounded-lg text-2xl transition-all ${
-                      selectedIcon === icon
-                        ? 'bg-[#00F5FF]/20 border-2 border-[#00F5FF]'
-                        : 'bg-[#0B0E14]/50 border border-[#2D3748]/50 hover:border-[#00F5FF]/30'
-                    }`}
-                  >
-                    {icon}
                   </button>
                 ))}
               </div>
-            </div>
-
-            {/* Color Selection */}
-            <div>
-              <label className="block text-sm font-medium text-[#E2E8F0] mb-2">Team Color</label>
-              <div className="grid grid-cols-6 gap-2">
-                {TEAM_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    onClick={() => setSelectedColor(color)}
-                    className={`w-full h-10 rounded-lg transition-all border-2 ${
-                      selectedColor === color
-                        ? 'border-[#00F5FF] ring-2 ring-[#00F5FF]/30'
-                        : 'border-[#2D3748]/50 hover:border-[#2D3748]'
-                    }`}
-                    style={{ backgroundColor: color }}
+            ) : (
+              <div className="space-y-5">
+                {/* Team name */}
+                <div>
+                  <label style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#3A5056', textTransform: 'uppercase', letterSpacing: '0.08em' }} className="block mb-2">
+                    Team Name <span style={{ color: '#BF8A52' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="e.g., Legal Department"
+                    className="w-full rounded-md border bg-[#0B1215] px-4 py-2.5 text-[13px] text-[#D8D4CC] placeholder-[#2A3E44] outline-none transition-all"
+                    style={{ borderColor: '#1E2D30', fontFamily: "'Syne', sans-serif" }}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#5A9E8F50'; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = '#1E2D30'; }}
                   />
-                ))}
-              </div>
-            </div>
-
-            {/* Preview */}
-            <div className="p-4 bg-[#0B0E14]/50 rounded-lg border border-[#2D3748]/50">
-              <div className="text-xs text-slate-600 uppercase tracking-wide mb-2">Preview</div>
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
-                  style={{ backgroundColor: selectedColor + '30' }}
-                >
-                  {selectedIcon}
                 </div>
-                <div>
-                  <div className="text-lg font-semibold text-[#E2E8F0]">{name || 'Team Name'}</div>
-                  <div className="text-xs text-slate-600">{description || 'Team description'}</div>
-                </div>
-              </div>
-            </div>
 
-            {/* Budget Settings */}
-            <div className="pt-4 border-t border-[#2D3748]/50">
-              <h3 className="text-sm font-semibold text-[#E2E8F0] mb-3">Budget Settings</h3>
-              <div className="grid grid-cols-2 gap-4">
+                {/* Description */}
                 <div>
-                  <label className="block text-sm font-medium text-[#E2E8F0] mb-2">
-                    Daily Budget Cap
+                  <label style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#3A5056', textTransform: 'uppercase', letterSpacing: '0.08em' }} className="block mb-2">
+                    Description
                   </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600">$</span>
-                    <input
-                      type="number"
-                      value={dailyBudgetCap}
-                      onChange={(e) => setDailyBudgetCap(e.target.value)}
-                      placeholder="Unlimited"
-                      className="w-full pl-8 pr-4 py-2 bg-[#0B0E14]/50 border border-[#2D3748]/50 rounded-lg text-[#E2E8F0] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-[#00F5FF]"
-                    />
-                  </div>
-                  <p className="text-xs text-slate-600 mt-1">Max spend per day</p>
+                  <textarea
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    placeholder="What will this team focus on?"
+                    rows={2}
+                    className="w-full rounded-md border bg-[#0B1215] px-4 py-2.5 text-[13px] text-[#D8D4CC] placeholder-[#2A3E44] outline-none transition-all resize-none"
+                    style={{ borderColor: '#1E2D30', fontFamily: "'Syne', sans-serif" }}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#5A9E8F50'; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = '#1E2D30'; }}
+                  />
                 </div>
 
+                {/* Icon picker */}
                 <div>
-                  <label className="block text-sm font-medium text-[#E2E8F0] mb-2">
-                    Approval Threshold
+                  <label style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#3A5056', textTransform: 'uppercase', letterSpacing: '0.08em' }} className="block mb-2">
+                    Team Symbol
                   </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600">$</span>
-                    <input
-                      type="number"
-                      value={requireApprovalThreshold}
-                      onChange={(e) => setRequireApprovalThreshold(e.target.value)}
-                      placeholder="None"
-                      className="w-full pl-8 pr-4 py-2 bg-[#0B0E14]/50 border border-[#2D3748]/50 rounded-lg text-[#E2E8F0] placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-[#00F5FF]"
-                    />
+                  <div className="grid grid-cols-6 gap-2">
+                    {TEAM_ICON_KEYS.map(icon => (
+                      <button
+                        key={icon}
+                        onClick={() => setSelectedIcon(icon)}
+                        className="flex h-10 items-center justify-center rounded border text-[16px] transition-all"
+                        style={{
+                          background: selectedIcon === icon ? `${selectedColor}14` : '#111A1D',
+                          borderColor: selectedIcon === icon ? selectedColor : '#1E2D30',
+                          color: selectedIcon === icon ? selectedColor : '#3A5056',
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        {icon}
+                      </button>
+                    ))}
                   </div>
-                  <p className="text-xs text-slate-600 mt-1">Require approval if exceeded</p>
+                </div>
+
+                {/* Color picker */}
+                <div>
+                  <label style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#3A5056', textTransform: 'uppercase', letterSpacing: '0.08em' }} className="block mb-2">
+                    Team Color
+                  </label>
+                  <div className="grid grid-cols-6 gap-2">
+                    {TEAM_COLORS.map(color => (
+                      <button
+                        key={color}
+                        onClick={() => setSelectedColor(color)}
+                        className="h-9 w-full rounded border-2 transition-all"
+                        style={{
+                          background: color,
+                          borderColor: selectedColor === color ? '#EAE6DF' : 'transparent',
+                          opacity: selectedColor === color ? 1 : 0.55,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Preview */}
+                <div className="rounded-md border p-4" style={{ background: '#111A1D', borderColor: '#162025' }}>
+                  <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', color: '#2E4248', textTransform: 'uppercase', letterSpacing: '0.1em' }} className="mb-3">
+                    Preview
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="flex h-11 w-11 items-center justify-center rounded-sm border-2 text-[18px]"
+                      style={{ background: `${selectedColor}14`, borderColor: selectedColor, color: selectedColor, fontFamily: 'monospace' }}
+                    >
+                      {selectedIcon}
+                    </div>
+                    <div>
+                      <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: '14px', color: '#EAE6DF' }}>
+                        {name || 'Team Name'}
+                      </p>
+                      <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#3A5056' }}>
+                        {description || 'Team description'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Budget */}
+                <div className="border-t pt-5" style={{ borderColor: '#162025' }}>
+                  <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#3A5056', textTransform: 'uppercase', letterSpacing: '0.08em' }} className="mb-4">
+                    Budget Settings
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    {[
+                      { label: 'Daily Budget Cap', value: dailyBudgetCap, setter: setDailyBudgetCap, placeholder: 'Unlimited', hint: 'Max spend per day' },
+                      { label: 'Approval Threshold', value: requireApprovalThreshold, setter: setRequireApprovalThreshold, placeholder: 'None', hint: 'Require approval if exceeded' },
+                    ].map(({ label, value, setter, placeholder, hint }) => (
+                      <div key={label}>
+                        <label style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#3A5056', textTransform: 'uppercase', letterSpacing: '0.08em' }} className="block mb-2">
+                          {label}
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px', color: '#2E4248' }}>$</span>
+                          <input
+                            type="number"
+                            value={value}
+                            onChange={e => setter(e.target.value)}
+                            placeholder={placeholder}
+                            className="w-full rounded-md border bg-[#0B1215] pl-7 pr-3 py-2 text-[12px] text-[#D8D4CC] placeholder-[#2A3E44] outline-none transition-all"
+                            style={{ borderColor: '#1E2D30', fontFamily: "'IBM Plex Mono', monospace" }}
+                            onFocus={e => { e.currentTarget.style.borderColor = '#5A9E8F50'; }}
+                            onBlur={e => { e.currentTarget.style.borderColor = '#1E2D30'; }}
+                          />
+                        </div>
+                        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', color: '#2A3E44' }} className="mt-1">
+                          {hint}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
-          )}
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-[#2D3748]/50">
-          {/* Error Message */}
+        <div className="border-t px-6 py-4" style={{ borderColor: '#162025' }}>
           {error && (
-            <div className="mb-4 p-3 bg-[#FFB800]/10 border border-[#FFB800]/30 rounded-lg text-[#FFB800] text-sm">
+            <div className="mb-4 rounded border px-3 py-2 text-[12px]" style={{ background: '#9E5A5A10', borderColor: '#9E5A5A40', color: '#9E7A7A', fontFamily: "'IBM Plex Mono', monospace" }}>
               {error}
             </div>
           )}
-
           <div className="flex items-center justify-between">
             <button
-              onClick={() => {
-                if (step === 'details') {
-                  setStep('blueprint');
-                  setError(null);
-                } else {
-                  onClose();
-                }
-              }}
+              onClick={() => { if (step === 'details') { setStep('blueprint'); setError(null); } else { onClose(); } }}
               disabled={isCreating}
-              className="px-6 py-2.5 text-slate-600 hover:text-[#E2E8F0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px', color: '#3A5056' }}
+              className="transition-colors disabled:opacity-50"
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#EAE6DF'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#3A5056'; }}
             >
-              {step === 'details' ? 'Back' : 'Cancel'}
+              {step === 'details' ? '← Back' : 'Cancel'}
             </button>
 
             {step === 'details' && (
               <button
                 onClick={handleCreate}
                 disabled={isCreating}
-                className="px-6 py-2.5 bg-gradient-to-r from-[#00F5FF] to-[#A3FF12] text-[#0B0E14] font-semibold rounded-lg shadow-lg shadow-[#00F5FF]/30 hover:shadow-[#00F5FF]/50 transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                className="flex items-center gap-2 rounded border px-5 py-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px', background: '#5A9E8F14', borderColor: '#5A9E8F50', color: '#5A9E8F' }}
+                onMouseEnter={e => { if (!isCreating) (e.currentTarget as HTMLButtonElement).style.background = '#5A9E8F22'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#5A9E8F14'; }}
               >
-                {isCreating ? 'Creating...' : 'Create Team'}
+                {isCreating ? (
+                  <>
+                    <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Creating…
+                  </>
+                ) : 'Create Team →'}
               </button>
             )}
           </div>

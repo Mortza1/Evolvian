@@ -11,22 +11,22 @@ export default function ActiveOperations({ teamId }: ActiveOperationsProps) {
   const [operations, setOperations] = useState<StoredOperation[]>([]);
 
   useEffect(() => {
-    // Get only in-progress operations for this team
     const teamOps = getOperationsByTeam(teamId);
-    const activeOps = teamOps.filter(op => op.status === 'in_progress');
-    setOperations(activeOps);
+    setOperations(teamOps.filter(op => op.status === 'in_progress'));
   }, [teamId]);
 
   if (operations.length === 0) {
     return (
-      <div className="glass rounded-xl p-8 text-center border border-[#2D3748]/50">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#161B22] flex items-center justify-center">
-          <svg className="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      <div className="rounded-md border border-dashed border-[#1E2D30] bg-[#0F1719]/40 flex flex-col items-center justify-center py-16 text-center px-6">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-md border border-[#1E2D30] bg-[#111A1D]">
+          <svg className="h-5 w-5 text-[#3A5056]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
         </div>
-        <h3 className="text-lg font-semibold text-[#E2E8F0] mb-2">No Active Operations</h3>
-        <p className="text-slate-600 text-sm">
+        <p style={{ fontFamily: "'Syne', sans-serif" }} className="text-[14px] font-semibold text-[#4A6A72] mb-1">
+          No active operations
+        </p>
+        <p className="text-[12px] text-[#2E4248]">
           Start a new operation to see live progress here
         </p>
       </div>
@@ -34,81 +34,122 @@ export default function ActiveOperations({ teamId }: ActiveOperationsProps) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-[#E2E8F0]">Mission Control</h2>
-        <span className="text-sm text-slate-600">{operations.length} active</span>
-      </div>
-
+    <div className="space-y-3">
       {operations.map((operation) => {
-        // Calculate progress (simulate based on time)
         const elapsed = Date.now() - new Date(operation.timestamp).getTime();
-        const estimatedDuration = operation.timeTaken * 60 * 1000; // convert minutes to ms
+        const estimatedDuration = operation.timeTaken * 60 * 1000;
         const progress = Math.min(Math.floor((elapsed / estimatedDuration) * 100), 95);
 
         return (
-          <div
-            key={operation.id}
-            className="glass rounded-xl p-5 border border-[#00F5FF]/30 transition-all duration-300 animate-topo-wave"
-          >
-            {/* Header */}
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-[#E2E8F0] mb-1">{operation.config.title}</h3>
-                <p className="text-sm text-slate-600">Processing operation...</p>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-[#FFB800]">${operation.cost.toFixed(2)}</div>
-                <div className="text-xs text-slate-600">current cost</div>
-              </div>
-            </div>
+          <OperationCard key={operation.id} operation={operation} progress={progress} />
+        );
+      })}
+    </div>
+  );
+}
 
-            {/* Progress Bar */}
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-slate-600">Progress</span>
-                <span className="text-xs text-[#00F5FF]">{progress}%</span>
-              </div>
-              <div className="h-2 bg-[#161B22] rounded-full overflow-hidden">
+function OperationCard({ operation, progress }: { operation: StoredOperation; progress: number }) {
+  return (
+    <div className="rounded-md border border-[#1E2D30] bg-[#111A1D] overflow-hidden">
+      {/* Top accent line — shows liveness */}
+      <div className="h-[2px] w-full bg-[#172025] relative overflow-hidden">
+        <div
+          className="absolute inset-y-0 left-0 bg-[#5A9E8F] transition-all duration-500"
+          style={{ width: `${progress}%` }}
+        />
+        {/* Shimmer on the progress bar */}
+        <div
+          className="absolute inset-y-0 w-8 bg-gradient-to-r from-transparent via-[#7BBDAE]/60 to-transparent animate-shimmer"
+          style={{ left: `${progress}%` }}
+        />
+      </div>
+
+      <div className="px-5 py-5">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1 pr-4">
+            <h3
+              style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }}
+              className="text-[15px] text-[#D8D4CC] mb-1 leading-snug"
+            >
+              {operation.config.title}
+            </h3>
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#5A9E8F] opacity-50" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#5A9E8F]" />
+              </span>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] text-[#4A6A72]">
+                processing
+              </span>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <span
+              style={{ fontFamily: "'IBM Plex Mono', monospace", letterSpacing: '-0.02em' }}
+              className="text-[1.4rem] font-medium text-[#BF8A52] leading-none"
+            >
+              ${operation.cost.toFixed(2)}
+            </span>
+            <p className="text-[10px] text-[#2E4248] mt-1">current cost</p>
+          </div>
+        </div>
+
+        {/* Progress */}
+        <div className="mb-4">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-[11px] uppercase tracking-[0.12em] text-[#3A5056]">Progress</span>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] text-[#5A9E8F]">
+              {progress}%
+            </span>
+          </div>
+          <div className="h-1 rounded-full bg-[#172025] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[#5A9E8F] transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Team agents */}
+        {operation.team && operation.team.length > 0 && (
+          <div className="mb-4 flex items-center gap-2">
+            <span className="text-[11px] text-[#2E4248] mr-1">Team</span>
+            <div className="flex items-center">
+              {operation.team.map((agent, idx) => (
                 <div
-                  className="h-full bg-gradient-to-r from-[#00F5FF] to-[#A3FF12] transition-all duration-500"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Team Mini-Graph */}
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-xs text-slate-600">Team:</span>
-              {operation.team.map((agent, index) => (
-                <div key={agent.id} className="flex items-center">
-                  <div className="relative w-8 h-8 rounded-full border-2 border-[#00F5FF] ring-2 ring-[#00F5FF]/30">
-                    <img
-                      src={agent.photo_url}
-                      alt={agent.name}
-                      className="w-full h-full rounded-full object-cover"
-                    />
-                    <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#00F5FF] rounded-full border-2 border-[#0B0E14] animate-pulse" />
-                  </div>
-                  {index < operation.team.length - 1 && (
-                    <div className="w-4 h-0.5 bg-[#2D3748] mx-1 animate-particle-stream" />
-                  )}
+                  key={agent.id}
+                  className="relative"
+                  style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                >
+                  <img
+                    src={agent.photo_url}
+                    alt={agent.name}
+                    className="h-7 w-7 rounded-md object-cover border-2 border-[#111A1D]"
+                    title={agent.name}
+                  />
                 </div>
               ))}
             </div>
-
-            {/* Actions */}
-            <div className="mt-4 flex items-center gap-2">
-              <button className="flex-1 px-3 py-2 text-sm bg-[#0B0E14]/50 border border-[#2D3748]/50 rounded-lg text-[#E2E8F0] hover:bg-[#161B22]/70 hover:border-[#00F5FF]/30 hover:text-[#00F5FF] transition-all">
-                View Details
-              </button>
-              <button className="px-3 py-2 text-sm text-slate-600 hover:text-[#FFB800] transition-colors">
-                Pause
-              </button>
-            </div>
           </div>
-        );
-      })}
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center gap-2">
+          <button
+            className="flex-1 rounded-md border border-[#1E2D30] bg-[#0F1719] px-3 py-2 text-[12px] text-[#7A9EA6] transition-all hover:border-[#5A9E8F]/40 hover:text-[#5A9E8F]"
+            style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+          >
+            View details
+          </button>
+          <button
+            className="rounded-md border border-[#1E2D30] px-3 py-2 text-[12px] text-[#2E4248] transition-all hover:border-red-800/40 hover:text-red-400/70"
+            style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+          >
+            Pause
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

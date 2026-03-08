@@ -313,17 +313,18 @@ export default function GraphVisualizer({
                   strokeWidth={isSelected ? 3 : 1}
                 />
 
-                {/* Node icon */}
+                {/* Node icon — geometric symbols, no emoji */}
                 <text
                   x={node.x}
                   y={node.y + 10}
                   textAnchor="middle"
                   fill="#020617"
-                  fontSize="30"
+                  fontSize="22"
                   fontWeight="bold"
                   className="pointer-events-none select-none"
+                  fontFamily="monospace"
                 >
-                  {node.type === 'agent' ? '👤' : node.type === 'risk' ? '⚠️' : node.type === 'policy' ? '📋' : node.type === 'document' ? '📄' : node.type === 'decision' ? '✓' : node.type === 'preference' ? '💡' : node.type === 'concept' ? '🎯' : '📍'}
+                  {node.type === 'agent' ? '◈' : node.type === 'risk' ? '◬' : node.type === 'policy' ? '▣' : node.type === 'document' ? '◧' : node.type === 'decision' ? '◉' : node.type === 'preference' ? '◎' : node.type === 'concept' ? '◆' : '◍'}
                 </text>
 
                 {/* Node label */}
@@ -347,13 +348,25 @@ export default function GraphVisualizer({
       </svg>
 
       {/* Help Instructions */}
-      <div className="absolute top-4 right-4 glass rounded-lg p-3 max-w-xs">
-        <h4 className="text-xs font-semibold text-white mb-2">Navigation Controls</h4>
-        <div className="space-y-1 text-xs text-slate-400">
-          <div>🖱️ <span className="text-slate-300">Scroll</span> to zoom in/out</div>
-          <div>⌨️ <span className="text-slate-300">Cmd/Ctrl + Drag</span> to pan</div>
-          <div>👆 <span className="text-slate-300">Click node</span> for details</div>
-          <div>🎯 <span className="text-slate-300">Hover</span> to highlight connections</div>
+      <div
+        className="absolute top-4 right-4 rounded-md border p-3 max-w-[200px]"
+        style={{ background: '#0B1215', borderColor: '#1E2D30' }}
+      >
+        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', color: '#3A5056', textTransform: 'uppercase', letterSpacing: '0.1em' }} className="mb-2">
+          Navigation
+        </p>
+        <div className="space-y-1.5">
+          {[
+            ['Scroll', 'zoom in / out'],
+            ['Drag', 'pan canvas'],
+            ['Click', 'node details'],
+            ['Hover', 'highlight links'],
+          ].map(([key, desc]) => (
+            <div key={key} className="flex items-center gap-2">
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#5A9E8F' }}>{key}</span>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#2E4248' }}>{desc}</span>
+            </div>
+          ))}
         </div>
       </div>
 

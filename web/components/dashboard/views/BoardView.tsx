@@ -10,108 +10,244 @@ interface BoardViewProps {
   teamId: string;
 }
 
+// ─── Column definitions ───────────────────────────────────────────────────────
+const COLUMNS = [
+  {
+    id: 'pending',
+    title: 'To Do',
+    accent: '#4A6A72',
+    badge: '#1E2D30',
+    badgeText: '#4A6A72',
+  },
+  {
+    id: 'active',
+    title: 'In Progress',
+    accent: '#5A9E8F',
+    badge: '#5A9E8F18',
+    badgeText: '#5A9E8F',
+  },
+  {
+    id: 'completed',
+    title: 'Completed',
+    accent: '#7A9A6A',
+    badge: '#7A9A6A18',
+    badgeText: '#7A9A6A',
+  },
+];
+
+// ─── Status pill ──────────────────────────────────────────────────────────────
+function StatusPill({ status }: { status: string }) {
+  const cfg =
+    status === 'active'    ? { label: 'In Progress', color: '#5A9E8F', bg: '#5A9E8F12', border: '#5A9E8F30' } :
+    status === 'completed' ? { label: 'Completed',   color: '#7A9A6A', bg: '#7A9A6A12', border: '#7A9A6A30' } :
+                             { label: 'Pending',     color: '#4A6A72', bg: '#4A6A7212', border: '#4A6A7230' };
+  return (
+    <span
+      className="inline-flex items-center rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em]"
+      style={{ color: cfg.color, background: cfg.bg, borderColor: cfg.border, fontFamily: "'IBM Plex Mono', monospace" }}
+    >
+      {cfg.label}
+    </span>
+  );
+}
+
+// ─── Agent avatars ─────────────────────────────────────────────────────────────
+function AgentAvatars({ agents }: { agents: { name: string; photo?: string }[] }) {
+  const visible = agents.slice(0, 4);
+  const overflow = agents.length - 4;
+  return (
+    <div className="flex items-center">
+      {visible.map((agent, idx) => (
+        <div
+          key={idx}
+          className="relative"
+          style={{ marginLeft: idx > 0 ? '-6px' : '0' }}
+          title={agent.name}
+        >
+          {agent.photo ? (
+            <img
+              src={agent.photo}
+              alt={agent.name}
+              className="h-6 w-6 rounded-md object-cover border-2"
+              style={{ borderColor: '#111A1D' }}
+            />
+          ) : (
+            <div
+              className="flex h-6 w-6 items-center justify-center rounded-md border-2 text-[9px] font-bold text-[#7BBDAE]"
+              style={{ background: '#1A2E2B', borderColor: '#111A1D' }}
+            >
+              {agent.name.substring(0, 2).toUpperCase()}
+            </div>
+          )}
+        </div>
+      ))}
+      {overflow > 0 && (
+        <span
+          style={{ fontFamily: "'IBM Plex Mono', monospace", marginLeft: '-6px' }}
+          className="flex h-6 w-6 items-center justify-center rounded-md border-2 bg-[#1E2D30] text-[9px] text-[#4A6A72]"
+          style={{ borderColor: '#111A1D', marginLeft: '-6px', fontFamily: "'IBM Plex Mono', monospace" }}
+        >
+          +{overflow}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── Task card ────────────────────────────────────────────────────────────────
+function TaskCard({
+  task,
+  agents,
+  onClick,
+  index,
+}: {
+  task: StoredTask;
+  agents: { name: string; photo?: string }[];
+  onClick: () => void;
+  index: number;
+}) {
+  const isActive = task.status === 'active';
+  const isDone = task.status === 'completed';
+
+  return (
+    <div
+      onClick={onClick}
+      className="group relative cursor-pointer rounded-md border border-[#1E2D30] bg-[#111A1D] p-5 transition-all duration-150 hover:border-[#5A9E8F]/40 hover:bg-[#141E22] animate-evolve-in"
+      style={{ animationDelay: `${index * 60}ms` }}
+    >
+      {/* Left bar for active */}
+      {isActive && (
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-full bg-[#5A9E8F]" />
+      )}
+      {isDone && (
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-full bg-[#7A9A6A]" />
+      )}
+
+      {/* Header row */}
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <StatusPill status={task.status} />
+        <span
+          style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+          className="shrink-0 text-[10px] text-[#2E4248]"
+        >
+          {task.status === 'pending' ? 'click to run' : task.status === 'active' ? 'click to view' : ''}
+        </span>
+      </div>
+
+      {/* Title */}
+      <h4
+        style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600, letterSpacing: '-0.01em' }}
+        className="mb-2 text-[14px] leading-snug text-[#C8C4BC] line-clamp-2 group-hover:text-[#EAE6DF] transition-colors"
+      >
+        {task.title}
+      </h4>
+
+      {/* Description */}
+      {task.description && (
+        <p className="mb-4 text-[12px] leading-relaxed text-[#3A5056] line-clamp-2">
+          {task.description}
+        </p>
+      )}
+
+      {/* Progress bar — only for active/completed */}
+      {(isActive || isDone) && (
+        <div className="mb-4">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-[#2E4248]">Progress</span>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className={`text-[10px] ${isDone ? 'text-[#7A9A6A]' : 'text-[#5A9E8F]'}`}>
+              {task.progress || 0}%
+            </span>
+          </div>
+          <div className="h-[3px] overflow-hidden rounded-full bg-[#172025]">
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: `${task.progress || 0}%`,
+                background: isDone ? '#7A9A6A' : '#5A9E8F',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Footer — agents + cost */}
+      <div className="flex items-center justify-between border-t border-[#172025] pt-3">
+        <AgentAvatars agents={agents} />
+        <span
+          style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+          className="text-[13px] font-medium text-[#BF8A52]"
+        >
+          ${(task.cost || 0).toFixed(2)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Column empty state ───────────────────────────────────────────────────────
+function EmptyColumn({ label }: { label: string }) {
+  return (
+    <div className="flex h-28 items-center justify-center rounded-md border border-dashed border-[#1A2A2D]">
+      <span className="text-[12px] text-[#2A3E44]">No {label.toLowerCase()} tasks</span>
+    </div>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function BoardView({ teamId }: BoardViewProps) {
   const [tasks, setTasks] = useState<StoredTask[]>([]);
   const [isTaskCreationOpen, setIsTaskCreationOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
   const [activeTask, setActiveTask] = useState<StoredTask | null>(null);
 
-  // Load hired agents from API
-  const { agents: hiredAgents } = useTeamAgents({
-    teamId: parseInt(teamId, 10),
-    autoFetch: true,
-  });
+  const { agents: hiredAgents } = useTeamAgents({ teamId: parseInt(teamId, 10), autoFetch: true });
 
-  // Load tasks on mount and when teamId changes
-  useEffect(() => {
-    loadTasks();
-  }, [teamId]);
+  useEffect(() => { loadTasks(); }, [teamId]);
 
   const loadTasks = async () => {
-    const teamTasks = await getTasks(parseInt(teamId));
-    setTasks(teamTasks);
+    setTasks(await getTasks(parseInt(teamId)));
   };
 
-  // Load task details when activeTaskId changes
   useEffect(() => {
-    if (activeTaskId) {
-      loadActiveTask(activeTaskId);
-    } else {
-      setActiveTask(null);
-    }
+    if (activeTaskId) loadActiveTask(activeTaskId);
+    else setActiveTask(null);
   }, [activeTaskId]);
 
-  const loadActiveTask = async (taskId: number) => {
-    const task = await getTask(taskId);
-    setActiveTask(task);
+  const loadActiveTask = async (id: number) => {
+    setActiveTask(await getTask(id));
   };
 
-  const columns = [
-    { id: 'pending', title: 'To Do', color: '#6366F1' },
-    { id: 'active', title: 'In Progress', color: '#F59E0B' },
-    { id: 'completed', title: 'Completed', color: '#10B981' },
-  ];
-
-  const getTasksByStatus = (status: string) => {
-    return tasks.filter(task => task.status === status);
-  };
-
-  const handleTaskClick = (taskId: number) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (task) {
-      // Open for any status (pending will start execution, active will show progress)
-      setActiveTaskId(taskId);
-    }
-  };
-
-  const handleCloseWarRoom = () => {
-    setActiveTaskId(null);
-    setActiveTask(null);
-    loadTasks(); // Reload tasks when closing execution theatre
-  };
-
-  // Find best matching agent for a role
-  const findAgentForRole = useCallback((agentRole: string, agentName?: string) => {
+  const findAgentForRole = useCallback((role: string, name?: string) => {
     if (!hiredAgents.length) return undefined;
-
-    // Try exact name match first
-    if (agentName) {
-      const nameMatch = hiredAgents.find(a => a.name.toLowerCase() === agentName.toLowerCase());
-      if (nameMatch) return nameMatch;
+    if (name) {
+      const m = hiredAgents.find(a => a.name.toLowerCase() === name.toLowerCase());
+      if (m) return m;
     }
-
-    const roleLower = agentRole.toLowerCase();
-
-    // Try role match
-    let match = hiredAgents.find(a =>
-      a.role.toLowerCase().includes(roleLower) ||
-      roleLower.includes(a.role.toLowerCase())
+    const r = role.toLowerCase();
+    return (
+      hiredAgents.find(a => a.role.toLowerCase().includes(r) || r.includes(a.role.toLowerCase())) ||
+      hiredAgents.find(a => a.specialty.toLowerCase().includes(r) || r.includes(a.specialty.toLowerCase())) ||
+      hiredAgents[0]
     );
-    if (match) return match;
-
-    // Try specialty match
-    match = hiredAgents.find(a =>
-      a.specialty.toLowerCase().includes(roleLower) ||
-      roleLower.includes(a.specialty.toLowerCase())
-    );
-    if (match) return match;
-
-    // Fallback to first agent
-    return hiredAgents[0];
   }, [hiredAgents]);
 
-  // Execution Theatre Modal
+  const handleClose = () => {
+    setActiveTaskId(null);
+    setActiveTask(null);
+    loadTasks();
+  };
+
+  // ── Execution Theatre overlay ───────────────────────────────────────────
   if (activeTaskId && activeTask) {
-    // Map workflow nodes with agent data from API
     const workflowNodes = activeTask.workflowNodes.map((node, idx) => {
-      const matchedAgent = findAgentForRole(node.agentRole, node.agentName);
+      const matched = findAgentForRole(node.agentRole, node.agentName);
       return {
         id: node.id,
         name: node.name,
         description: node.description,
-        agentId: matchedAgent?.id?.toString(),
-        agentName: matchedAgent?.name || node.agentName || node.agentRole,
-        agentPhoto: matchedAgent?.photo_url || node.agentPhoto,
+        agentId: matched?.id?.toString(),
+        agentName: matched?.name || node.agentName || node.agentRole,
+        agentPhoto: matched?.photo_url || node.agentPhoto,
         agentRole: node.agentRole,
         action: node.action,
         order: node.order || idx + 1,
@@ -119,16 +255,38 @@ export default function BoardView({ teamId }: BoardViewProps) {
     });
 
     return (
-      <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm">
-        <div className="h-full flex flex-col">
-          <div className="flex-shrink-0 px-6 py-4 border-b border-slate-800 flex items-center gap-4 bg-[#020617]">
+      <div className="fixed inset-0 z-50" style={{ background: '#07090A' }}>
+        <div className="flex h-full flex-col">
+          {/* Theatre header */}
+          <div
+            className="flex shrink-0 items-center gap-5 border-b px-8 py-4"
+            style={{ borderColor: '#162025', background: '#080E11' }}
+          >
             <button
-              onClick={handleCloseWarRoom}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded transition-all"
+              onClick={handleClose}
+              className="flex items-center gap-2 rounded-md border border-[#1E2D30] bg-[#111A1D] px-4 py-2 text-[13px] text-[#7A9EA6] transition-all hover:border-[#5A9E8F]/40 hover:text-[#5A9E8F]"
+              style={{ fontFamily: "'IBM Plex Mono', monospace" }}
             >
-              ← Back to Board
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+              </svg>
+              Board
             </button>
-            <div className="text-sm text-slate-400">Execution Theatre</div>
+            <div className="h-4 w-px bg-[#1E2D30]" />
+            <div>
+              <span
+                style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }}
+                className="text-[15px] text-[#D8D4CC]"
+              >
+                {activeTask.title}
+              </span>
+              <span
+                style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                className="ml-3 text-[11px] text-[#3A5056]"
+              >
+                Execution Theatre
+              </span>
+            </div>
           </div>
           <div className="flex-1 overflow-hidden">
             <WarRoomLive
@@ -138,7 +296,7 @@ export default function BoardView({ teamId }: BoardViewProps) {
               taskDescription={activeTask.description}
               initialStatus={activeTask.status}
               hierarchical={activeTask.hierarchical}
-              onClose={handleCloseWarRoom}
+              onClose={handleClose}
             />
           </div>
         </div>
@@ -146,160 +304,133 @@ export default function BoardView({ teamId }: BoardViewProps) {
     );
   }
 
+  const totalCost = tasks.reduce((s, t) => s + t.cost, 0);
+
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
+    <div
+      className="flex h-full flex-col"
+      style={{ background: '#0B1215', fontFamily: "'Syne', sans-serif" }}
+    >
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="mb-8 animate-evolve-in" style={{ animationDelay: '0ms' }}>
+        <div className="flex items-start justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-white">The Board</h1>
-            <p className="text-slate-400 text-sm">Track all tasks and projects in one place</p>
+            <h1
+              style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, letterSpacing: '-0.02em' }}
+              className="text-[2rem] text-[#EAE6DF] leading-none mb-2"
+            >
+              The Board
+            </h1>
+            <p className="text-[13px] text-[#4A6A72]">Track all tasks and operations in one place</p>
           </div>
+
           <button
             onClick={() => setIsTaskCreationOpen(true)}
-            className="px-4 py-2 bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white font-medium rounded-lg shadow-lg shadow-[#6366F1]/30 hover:shadow-[#6366F1]/50 transform hover:scale-[1.02] transition-all"
+            className="group flex items-center gap-2.5 rounded-md border border-[#5A9E8F]/40 bg-[#5A9E8F]/8 px-5 py-2.5 text-[13px] font-medium text-[#5A9E8F] transition-all hover:border-[#5A9E8F]/70 hover:bg-[#5A9E8F]/14 hover:text-[#7BBDAE]"
           >
-            + New Task
+            <svg className="h-4 w-4 transition-transform duration-150 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Task
           </button>
         </div>
 
-        {/* Stats */}
-        <div className="flex gap-4 mt-4">
-          <div className="px-4 py-2 glass rounded-lg border border-slate-700/50">
-            <span className="text-sm text-slate-400">Total Tasks:</span>
-            <span className="ml-2 text-lg font-bold text-white">{tasks.length}</span>
-          </div>
-          <div className="px-4 py-2 glass rounded-lg border border-slate-700/50">
-            <span className="text-sm text-slate-400">Total Cost:</span>
-            <span className="ml-2 text-lg font-bold text-[#FDE047]">
-              ${tasks.reduce((sum, t) => sum + t.cost, 0).toFixed(2)}
+        {/* Summary stats */}
+        <div className="flex items-center gap-6">
+          <div className="flex items-baseline gap-2">
+            <span
+              style={{ fontFamily: "'IBM Plex Mono', monospace", letterSpacing: '-0.02em' }}
+              className="text-[1.5rem] font-medium text-[#EAE6DF]"
+            >
+              {tasks.length}
             </span>
+            <span className="text-[11px] uppercase tracking-[0.14em] text-[#4A6A72]">Total Tasks</span>
+          </div>
+          <div className="h-6 w-px bg-[#1A2A2D]" />
+          <div className="flex items-baseline gap-2">
+            <span
+              style={{ fontFamily: "'IBM Plex Mono', monospace", letterSpacing: '-0.02em' }}
+              className="text-[1.5rem] font-medium text-[#BF8A52]"
+            >
+              ${totalCost.toFixed(2)}
+            </span>
+            <span className="text-[11px] uppercase tracking-[0.14em] text-[#4A6A72]">Total Cost</span>
+          </div>
+          <div className="h-6 w-px bg-[#1A2A2D]" />
+          <div className="flex items-center gap-4">
+            {COLUMNS.map((col) => (
+              <div key={col.id} className="flex items-center gap-1.5">
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ background: col.accent }}
+                />
+                <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] text-[#3A5056]">
+                  {tasks.filter(t => t.status === col.id).length} {col.title.toLowerCase()}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Kanban Board */}
-      <div className="flex-1 overflow-x-auto">
-        <div className="flex gap-4 h-full min-w-max pb-4">
-          {columns.map((column) => {
-            const columnTasks = getTasksByStatus(column.id);
+      {/* ── Kanban board ────────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-x-auto scrollbar-hide">
+        <div className="flex h-full gap-5 pb-4" style={{ minWidth: `${COLUMNS.length * 320 + (COLUMNS.length - 1) * 20}px` }}>
+          {COLUMNS.map((col, colIdx) => {
+            const colTasks = tasks.filter(t => t.status === col.id);
+
             return (
-              <div key={column.id} className="flex-1 min-w-[320px] flex flex-col">
-                {/* Column Header */}
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: column.color }}
-                    />
-                    <h3 className="font-semibold text-white">{column.title}</h3>
-                    <span className="px-2 py-0.5 bg-slate-800 text-slate-400 text-xs rounded-full">
-                      {columnTasks.length}
+              <div
+                key={col.id}
+                className="flex min-w-[300px] flex-1 flex-col animate-evolve-in"
+                style={{ animationDelay: `${colIdx * 80}ms` }}
+              >
+                {/* Column header */}
+                <div
+                  className="mb-4 border-t-2 pt-4"
+                  style={{ borderColor: col.accent }}
+                >
+                  <div className="flex items-center justify-between">
+                    <h3
+                      style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }}
+                      className="text-[13px] text-[#B8B2AA]"
+                    >
+                      {col.title}
+                    </h3>
+                    <span
+                      className="flex h-5 min-w-[20px] items-center justify-center rounded border px-1.5 text-[10px] font-semibold"
+                      style={{
+                        background: col.badge,
+                        color: col.badgeText,
+                        borderColor: col.accent + '30',
+                        fontFamily: "'IBM Plex Mono', monospace",
+                      }}
+                    >
+                      {colTasks.length}
                     </span>
                   </div>
                 </div>
 
-                {/* Tasks */}
-                <div className="flex-1 space-y-3 overflow-y-auto">
-                  {columnTasks.map((task) => {
-                    // Get agent photos for this task
-                    const taskAgentPhotos = task.workflowNodes.map(node => {
-                      const matchedAgent = findAgentForRole(node.agentRole, node.agentName);
-                      return {
-                        name: matchedAgent?.name || node.agentName || node.agentRole,
-                        photo: matchedAgent?.photo_url || node.agentPhoto,
-                      };
-                    });
-
-                    return (
-                    <div
-                      key={task.id}
-                      onClick={() => handleTaskClick(task.id)}
-                      className="glass rounded-xl p-4 border border-slate-700/50 hover:border-slate-600 transition-all group cursor-pointer"
-                    >
-                      {/* Status Badge */}
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`px-2 py-1 text-xs font-medium rounded border ${
-                          task.status === 'active'
-                            ? 'text-[#6366F1] bg-[#6366F1]/10 border-[#6366F1]/30'
-                            : task.status === 'completed'
-                            ? 'text-green-400 bg-green-400/10 border-green-400/30'
-                            : 'text-slate-400 bg-slate-400/10 border-slate-400/30'
-                        }`}>
-                          {task.status === 'active' ? 'IN PROGRESS' : task.status === 'completed' ? 'COMPLETED' : 'PENDING'}
-                        </span>
-                        <div className="text-xs text-[#6366F1]">
-                          {task.status === 'pending' ? 'Click to start' : task.status === 'active' ? 'Click to view' : ''}
-                        </div>
-                      </div>
-
-                      {/* Task Title */}
-                      <h4 className="font-semibold text-white mb-2 line-clamp-2">
-                        {task.title}
-                      </h4>
-
-                      {/* Description */}
-                      <p className="text-sm text-slate-400 mb-3 line-clamp-2">
-                        {task.description}
-                      </p>
-
-                      {/* Progress Bar */}
-                      {(task.status === 'active' || task.status === 'completed') && (
-                        <div className="mb-3">
-                          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                            <span>Progress</span>
-                            <span>{task.progress || 0}%</span>
-                          </div>
-                          <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full transition-all duration-500 ${
-                                task.status === 'completed' ? 'bg-green-500' : 'bg-[#6366F1]'
-                              }`}
-                              style={{ width: `${task.progress || 0}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Agents */}
-                      <div className="flex items-center justify-between pt-3 border-t border-slate-700/50">
-                        <div className="flex items-center gap-2">
-                          {taskAgentPhotos.slice(0, 3).map((agent, idx) => (
-                            agent.photo ? (
-                              <img
-                                key={idx}
-                                src={agent.photo}
-                                alt={agent.name}
-                                className="w-6 h-6 rounded-full object-cover border border-slate-700"
-                                title={agent.name}
-                              />
-                            ) : (
-                              <div
-                                key={idx}
-                                className="w-6 h-6 rounded-full bg-gradient-to-br from-[#6366F1] to-[#818CF8] flex items-center justify-center text-white text-[10px] font-bold border border-slate-700"
-                                title={agent.name}
-                              >
-                                {agent.name.substring(0, 2).toUpperCase()}
-                              </div>
-                            )
-                          ))}
-                          {taskAgentPhotos.length > 3 && (
-                            <span className="text-xs text-slate-500">+{taskAgentPhotos.length - 3}</span>
-                          )}
-                        </div>
-                        <div className="text-xs font-semibold text-[#FDE047]">
-                          ${(task.cost || 0).toFixed(2)}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                  })}
-
-                  {/* Empty State */}
-                  {columnTasks.length === 0 && (
-                    <div className="flex items-center justify-center h-32 glass rounded-xl border-2 border-dashed border-slate-700/50">
-                      <p className="text-sm text-slate-500">No tasks</p>
-                    </div>
+                {/* Cards */}
+                <div className="flex-1 space-y-3 overflow-y-auto scrollbar-hide pr-1">
+                  {colTasks.length === 0 ? (
+                    <EmptyColumn label={col.title} />
+                  ) : (
+                    colTasks.map((task, taskIdx) => {
+                      const agents = task.workflowNodes.map(node => {
+                        const m = findAgentForRole(node.agentRole, node.agentName);
+                        return { name: m?.name || node.agentName || node.agentRole, photo: m?.photo_url || node.agentPhoto };
+                      });
+                      return (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          agents={agents}
+                          onClick={() => handleTaskClick(task.id)}
+                          index={taskIdx}
+                        />
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -308,19 +439,22 @@ export default function BoardView({ teamId }: BoardViewProps) {
         </div>
       </div>
 
-      {/* Task Creation Flow Modal */}
+      {/* Task creation modal */}
       <TaskCreationFlow
         isOpen={isTaskCreationOpen}
         onClose={() => setIsTaskCreationOpen(false)}
         teamId={teamId}
-        userObjective={localStorage.getItem('userObjective') || 'Create a complete Brand Identity Pack'}
+        userObjective={typeof window !== 'undefined' ? localStorage.getItem('userObjective') || 'Create a complete Brand Identity Pack' : 'Create a complete Brand Identity Pack'}
         onTaskCreated={(taskId) => {
-          // Reload tasks to show the new one
           loadTasks();
-          // Open the Execution Theatre for the new task
           setActiveTaskId(taskId);
         }}
       />
     </div>
   );
+
+  function handleTaskClick(taskId: number) {
+    const task = tasks.find(t => t.id === taskId);
+    if (task) setActiveTaskId(taskId);
+  }
 }

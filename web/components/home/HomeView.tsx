@@ -6,11 +6,224 @@ import { teamAPI } from '@/lib/api';
 import CreateTeamModal from './CreateTeamModal';
 import PersonalBrandingFlow from '../personal-branding/PersonalBrandingFlow';
 import DeleteTeamModal from './DeleteTeamModal';
+import { TeamIcon } from '@/components/ui/TeamIcon';
 
 interface HomeViewProps {
   onSelectTeam: (teamId: number) => void;
 }
 
+// ─── Background: warm radial + ultra-faint phylogenetic tree ─────────────────
+function EvolutionBackground() {
+  return (
+    <>
+      {/* Warm dark radial — gives depth without being a void */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 80% 60% at 50% -10%, #18272B 0%, #0F1A1D 40%, #0B1215 100%)',
+        }}
+      />
+
+      {/* Subtle noise grain */}
+      <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.025]" xmlns="http://www.w3.org/2000/svg">
+        <filter id="noise">
+          <feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="4" stitchTiles="stitch" />
+          <feColorMatrix type="saturate" values="0" />
+        </filter>
+        <rect width="100%" height="100%" filter="url(#noise)" />
+      </svg>
+
+      {/* Phylogenetic tree — muted sage, barely visible */}
+      <svg
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 h-full w-full"
+        viewBox="0 0 1440 900"
+        fill="none"
+        preserveAspectRatio="xMidYMid slice"
+      >
+        <line x1="720" y1="900" x2="720" y2="680" stroke="#5A9E8F" strokeOpacity="0.08" strokeWidth="1.5" />
+        <line x1="720" y1="680" x2="480" y2="500" stroke="#5A9E8F" strokeOpacity="0.07" strokeWidth="1.2" />
+        <line x1="720" y1="680" x2="960" y2="500" stroke="#5A9E8F" strokeOpacity="0.07" strokeWidth="1.2" />
+        <line x1="480" y1="500" x2="340" y2="350" stroke="#5A9E8F" strokeOpacity="0.055" strokeWidth="0.9" />
+        <line x1="480" y1="500" x2="580" y2="350" stroke="#5A9E8F" strokeOpacity="0.055" strokeWidth="0.9" />
+        <line x1="960" y1="500" x2="860" y2="350" stroke="#5A9E8F" strokeOpacity="0.055" strokeWidth="0.9" />
+        <line x1="960" y1="500" x2="1100" y2="350" stroke="#5A9E8F" strokeOpacity="0.055" strokeWidth="0.9" />
+        <line x1="340" y1="350" x2="270" y2="230" stroke="#5A9E8F" strokeOpacity="0.04" strokeWidth="0.7" />
+        <line x1="340" y1="350" x2="390" y2="220" stroke="#5A9E8F" strokeOpacity="0.04" strokeWidth="0.7" />
+        <line x1="580" y1="350" x2="530" y2="220" stroke="#5A9E8F" strokeOpacity="0.04" strokeWidth="0.7" />
+        <line x1="580" y1="350" x2="625" y2="215" stroke="#5A9E8F" strokeOpacity="0.04" strokeWidth="0.7" />
+        <line x1="860" y1="350" x2="815" y2="215" stroke="#5A9E8F" strokeOpacity="0.04" strokeWidth="0.7" />
+        <line x1="860" y1="350" x2="905" y2="220" stroke="#5A9E8F" strokeOpacity="0.04" strokeWidth="0.7" />
+        <line x1="1100" y1="350" x2="1055" y2="220" stroke="#5A9E8F" strokeOpacity="0.04" strokeWidth="0.7" />
+        <line x1="1100" y1="350" x2="1148" y2="215" stroke="#5A9E8F" strokeOpacity="0.04" strokeWidth="0.7" />
+        <circle cx="720" cy="680" r="3.5" fill="#5A9E8F" fillOpacity="0.1" className="animate-node-pulse" />
+        <circle cx="480" cy="500" r="2.5" fill="#5A9E8F" fillOpacity="0.08" className="animate-node-pulse" style={{ animationDelay: '0.8s' }} />
+        <circle cx="960" cy="500" r="2.5" fill="#5A9E8F" fillOpacity="0.08" className="animate-node-pulse" style={{ animationDelay: '1.6s' }} />
+        <circle cx="340" cy="350" r="2" fill="#5A9E8F" fillOpacity="0.06" className="animate-node-pulse" style={{ animationDelay: '0.4s' }} />
+        <circle cx="580" cy="350" r="2" fill="#5A9E8F" fillOpacity="0.06" className="animate-node-pulse" style={{ animationDelay: '1.2s' }} />
+        <circle cx="860" cy="350" r="2" fill="#5A9E8F" fillOpacity="0.06" className="animate-node-pulse" style={{ animationDelay: '2.0s' }} />
+        <circle cx="1100" cy="350" r="2" fill="#5A9E8F" fillOpacity="0.06" className="animate-node-pulse" style={{ animationDelay: '0.6s' }} />
+      </svg>
+    </>
+  );
+}
+
+// ─── Global stat column ───────────────────────────────────────────────────────
+function StatColumn({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span
+        style={{ fontFamily: "'IBM Plex Mono', monospace", letterSpacing: '-0.02em' }}
+        className="text-[2rem] font-medium text-[#EAE6DF] leading-none"
+      >
+        {value}
+      </span>
+      {sub && (
+        <span
+          style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+          className="text-[11px] text-[#4A6A72]"
+        >
+          {sub}
+        </span>
+      )}
+      <span className="text-[11px] uppercase tracking-[0.16em] text-[#4A6A72] font-medium mt-0.5">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ─── Team Card ────────────────────────────────────────────────────────────────
+function TeamCard({
+  team,
+  onSelect,
+  onDelete,
+  index,
+}: {
+  team: Team;
+  onSelect: () => void;
+  onDelete: () => void;
+  index: number;
+}) {
+  const hasActiveOps = team.stats.operationsThisWeek > 0;
+
+  return (
+    <div
+      onClick={onSelect}
+      className="group relative flex cursor-pointer flex-col gap-6 rounded-md border border-[#1E2D30] bg-[#111A1D] p-7 transition-all duration-200
+                 hover:border-[#5A9E8F]/40 hover:bg-[#141E22]
+                 animate-evolve-in"
+      style={{ animationDelay: `${index * 80}ms` }}
+    >
+      {/* Left accent bar on hover */}
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-[3px] rounded-full bg-[#5A9E8F] opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+
+      {/* Live indicator */}
+      {hasActiveOps && (
+        <div className="absolute right-6 top-6 flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#5A9E8F] opacity-50" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-[#5A9E8F]" />
+          </span>
+          <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] text-[#5A9E8F]">
+            live
+          </span>
+        </div>
+      )}
+
+      {/* Team identity */}
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-4">
+          <TeamIcon icon={team.icon} name={team.name} color={team.color} size={52} />
+          <div>
+            <h3
+              style={{ fontFamily: "'Syne', sans-serif", letterSpacing: '-0.01em' }}
+              className="text-[17px] font-semibold text-[#D8D4CC] transition-colors duration-200 group-hover:text-[#EAE6DF]"
+            >
+              {team.name}
+            </h3>
+            <p className="mt-1 text-[13px] leading-relaxed text-[#4A6A72] max-w-[280px]">
+              {team.description}
+            </p>
+          </div>
+        </div>
+
+        {/* Delete */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="ml-4 rounded p-1.5 text-[#2A3E44] opacity-0 transition-all duration-150 hover:bg-red-900/20 hover:text-red-400/70 group-hover:opacity-100"
+          title="Delete team"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Separator */}
+      <div className="h-px w-full bg-[#172025]" />
+
+      {/* Stats + enter */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-8">
+          <div className="flex flex-col gap-1">
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[15px] font-medium text-[#A8A29C]">
+              {team.stats.activeAgents}
+              <span className="text-[#2E4248]">/{team.stats.totalAgents}</span>
+            </span>
+            <span className="text-[11px] uppercase tracking-[0.14em] text-[#3A5056]">Agents</span>
+          </div>
+          <div className="h-7 w-px bg-[#1A2A2E]" />
+          <div className="flex flex-col gap-1">
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[15px] font-medium text-[#A8A29C]">
+              {team.stats.operationsThisWeek}
+            </span>
+            <span className="text-[11px] uppercase tracking-[0.14em] text-[#3A5056]">Ops / wk</span>
+          </div>
+          <div className="h-7 w-px bg-[#1A2A2E]" />
+          <div className="flex flex-col gap-1">
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[15px] font-medium text-[#A8A29C]">
+              ${team.stats.spendThisMonth.toFixed(0)}
+            </span>
+            <span className="text-[11px] uppercase tracking-[0.14em] text-[#3A5056]">Spend</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 text-[#5A9E8F] opacity-0 transition-all duration-200 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0">
+          <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[12px]">enter</span>
+          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Empty state ──────────────────────────────────────────────────────────────
+function EmptyState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div
+      className="col-span-2 flex flex-col items-center justify-center rounded-md border border-dashed border-[#1E2D30] py-24 text-center
+                 hover:border-[#5A9E8F]/30 transition-colors duration-300 cursor-pointer animate-evolve-in bg-[#0F1719]/40"
+      style={{ animationDelay: '80ms' }}
+      onClick={onCreate}
+    >
+      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-md border border-[#1E2D30] bg-[#111A1D]">
+        <svg className="h-6 w-6 text-[#3A5056]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+        </svg>
+      </div>
+      <p style={{ fontFamily: "'Syne', sans-serif" }} className="text-base font-semibold text-[#4A6A72]">
+        Create your first team
+      </p>
+      <p className="mt-2 text-sm text-[#2E4248]">Build and deploy your AI workforce</p>
+    </div>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function HomeView({ onSelectTeam }: HomeViewProps) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [metrics, setMetrics] = useState({
@@ -27,9 +240,7 @@ export default function HomeView({ onSelectTeam }: HomeViewProps) {
   const [showPersonalBrandingFlow, setShowPersonalBrandingFlow] = useState(false);
   const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
 
-  useEffect(() => {
-    loadTeams();
-  }, []);
+  useEffect(() => { loadTeams(); }, []);
 
   const loadTeams = async () => {
     await syncTeamsFromBackend();
@@ -43,12 +254,8 @@ export default function HomeView({ onSelectTeam }: HomeViewProps) {
   };
 
   const handleTeamCreated = (team: Team, isPersonalBranding?: boolean) => {
-    // Team list is already synced in createTeam function
-    // Just reload from cache
     setTeams(getTeams());
     setMetrics(getGlobalMetrics());
-
-    // If personal branding, trigger the special flow
     if (isPersonalBranding) {
       setPersonalBrandingTeam(team);
       setShowPersonalBrandingFlow(true);
@@ -57,386 +264,167 @@ export default function HomeView({ onSelectTeam }: HomeViewProps) {
 
   const handlePersonalBrandingComplete = async () => {
     setShowPersonalBrandingFlow(false);
-
-    // Reload teams to get updated stats
     await loadTeams();
-
-    if (personalBrandingTeam) {
-      handleSelectTeam(personalBrandingTeam.id);
-    }
+    if (personalBrandingTeam) handleSelectTeam(personalBrandingTeam.id);
   };
 
   const handleDeleteTeam = async (team: Team) => {
     try {
-      console.log('Attempting to delete team with ID:', team.id);
-
-      // Try to delete from backend
-      try {
-        await teamAPI.deleteTeam(team.id);
-      } catch (backendError) {
-        console.warn('Backend delete failed, team may only exist locally:', backendError);
-        // Continue anyway to clean up localStorage
+      try { await teamAPI.deleteTeam(team.id); } catch (e) {
+        console.warn('Backend delete failed:', e);
       }
-
-      // Clean up localStorage - remove hired agents for this team
-      const hiredAgentsKey = `hired_agents_${team.id}`;
-      localStorage.removeItem(hiredAgentsKey);
-
-      // Also remove from teams cache manually if backend delete failed
-      const teamsCache = localStorage.getItem('teams_cache');
-      if (teamsCache) {
+      localStorage.removeItem(`hired_agents_${team.id}`);
+      const cache = localStorage.getItem('teams_cache');
+      if (cache) {
         try {
-          const teams = JSON.parse(teamsCache);
-          const filtered = teams.filter((t: Team) => t.id !== team.id);
-          localStorage.setItem('teams_cache', JSON.stringify(filtered));
-        } catch (e) {
-          console.error('Error cleaning teams cache:', e);
-        }
+          localStorage.setItem('teams_cache', JSON.stringify(JSON.parse(cache).filter((t: Team) => t.id !== team.id)));
+        } catch (e) { console.error(e); }
       }
-
-      // Reload teams
       await loadTeams();
-
-      // Close modal
       setTeamToDelete(null);
     } catch (error) {
-      console.error('Failed to delete team:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert(`Failed to delete team: ${errorMessage}`);
+      alert(`Failed to delete team: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setTeamToDelete(null);
     }
   };
 
-  // Show Personal Branding flow if active
   if (showPersonalBrandingFlow && personalBrandingTeam) {
-    return (
-      <PersonalBrandingFlow
-        team={personalBrandingTeam}
-        onComplete={handlePersonalBrandingComplete}
-      />
-    );
+    return <PersonalBrandingFlow team={personalBrandingTeam} onComplete={handlePersonalBrandingComplete} />;
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-gradient-to-br from-[#0B0E14] via-[#1a1f2e] to-[#0B0E14] relative">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#00F5FF]/5 rounded-full blur-3xl animate-breathe-glow" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#A3FF12]/5 rounded-full blur-3xl animate-breathe-glow" style={{ animationDelay: '1s' }} />
-      </div>
-
-      {/* Header */}
-      <div className="border-b border-[#161B22]/50 px-8 py-16 relative">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-12">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#00F5FF] to-[#A3FF12] flex items-center justify-center">
-                <svg className="w-6 h-6 text-[#0B0E14]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-              </div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-[#E2E8F0] via-[#00F5FF] to-[#A3FF12] bg-clip-text text-transparent">
-                Command Center
-              </h1>
-            </div>
-            <p className="text-slate-500 text-sm">Monitor and manage your AI workforce</p>
-          </div>
-
-          {/* Aggregated Metrics */}
-          <div className="grid grid-cols-4 gap-6">
-            {/* Burn Rate Card */}
-            <div className="relative p-6 rounded-2xl border border-[#00F5FF]/20 bg-gradient-to-br from-[#161B22]/80 to-[#0B0E14]/60 backdrop-blur-sm group cursor-default hover:border-[#00F5FF]/50 transition-all hover:scale-[1.02]">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#00F5FF]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
-              <div className="relative">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#00F5FF]/10 flex items-center justify-center">
-                    <svg className="w-4 h-4 text-[#00F5FF]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                    </svg>
-                  </div>
-                  <div className="text-xs text-slate-500 uppercase tracking-[0.15em] font-semibold">Burn Rate</div>
-                </div>
-                <div className="text-3xl font-bold text-[#E2E8F0] mb-2 group-hover:text-[#00F5FF] transition-colors">
-                  ${metrics.totalBurnRate.toFixed(2)}<span className="text-base text-slate-600 font-normal">/hr</span>
-                </div>
-                <div className="text-xs text-slate-600">
-                  ${metrics.totalSpendThisMonth.toFixed(2)} this month
-                </div>
-              </div>
-            </div>
-
-            {/* Workforce Card */}
-            <div className="relative p-6 rounded-2xl border border-[#A3FF12]/20 bg-gradient-to-br from-[#161B22]/80 to-[#0B0E14]/60 backdrop-blur-sm group cursor-default hover:border-[#A3FF12]/50 transition-all hover:scale-[1.02]">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#A3FF12]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
-              <div className="relative">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#A3FF12]/10 flex items-center justify-center">
-                    <svg className="w-4 h-4 text-[#A3FF12]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                  </div>
-                  <div className="text-xs text-slate-500 uppercase tracking-[0.15em] font-semibold">Workforce</div>
-                </div>
-                <div className="text-3xl font-bold text-[#E2E8F0] mb-2 group-hover:text-[#A3FF12] transition-colors">
-                  {metrics.totalActiveAgents}<span className="text-base text-slate-600 font-normal">/{metrics.totalAgents}</span>
-                </div>
-                <div className="text-xs text-slate-600">
-                  {Math.round((metrics.totalActiveAgents / (metrics.totalAgents || 1)) * 100)}% active
-                </div>
-              </div>
-            </div>
-
-            {/* Operations Card */}
-            <div className="relative p-6 rounded-2xl border border-[#6366F1]/20 bg-gradient-to-br from-[#161B22]/80 to-[#0B0E14]/60 backdrop-blur-sm group cursor-default hover:border-[#6366F1]/50 transition-all hover:scale-[1.02]">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#6366F1]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
-              <div className="relative">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#6366F1]/10 flex items-center justify-center">
-                    <svg className="w-4 h-4 text-[#6366F1]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  </div>
-                  <div className="text-xs text-slate-500 uppercase tracking-[0.15em] font-semibold">Operations</div>
-                </div>
-                <div className="text-3xl font-bold text-[#E2E8F0] mb-2 group-hover:text-[#6366F1] transition-colors">
-                  {metrics.totalOperationsRunning}
-                </div>
-                <div className="text-xs text-slate-600">running now</div>
-              </div>
-            </div>
-
-            {/* Teams Card */}
-            <div className="relative p-6 rounded-2xl border border-[#FFB800]/20 bg-gradient-to-br from-[#161B22]/80 to-[#0B0E14]/60 backdrop-blur-sm group cursor-default hover:border-[#FFB800]/50 transition-all hover:scale-[1.02]">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#FFB800]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
-              <div className="relative">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#FFB800]/10 flex items-center justify-center">
-                    <svg className="w-4 h-4 text-[#FFB800]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                  </div>
-                  <div className="text-xs text-slate-500 uppercase tracking-[0.15em] font-semibold">Teams</div>
-                </div>
-                <div className="text-3xl font-bold text-[#E2E8F0] mb-2 group-hover:text-[#FFB800] transition-colors">
-                  {metrics.activeTeams}
-                </div>
-                <div className="text-xs text-slate-600">active</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Team Grid */}
-      <div className="max-w-7xl mx-auto px-8 py-12 relative">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-2xl font-bold text-[#E2E8F0] mb-1">Your Teams</h2>
-            <p className="text-sm text-slate-500">Select a team to manage your AI workforce</p>
-          </div>
-          <button
-            onClick={() => setIsCreateTeamOpen(true)}
-            className="group relative px-6 py-3 bg-gradient-to-r from-[#00F5FF] to-[#A3FF12] text-[#0B0E14] text-sm font-bold rounded-xl hover:shadow-2xl hover:shadow-[#00F5FF]/40 transition-all hover:scale-[1.05] active:scale-[0.98] overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-[#A3FF12] to-[#FFB800] opacity-0 group-hover:opacity-100 transition-opacity" />
-            <span className="relative flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-              </svg>
-              Create New Team
-            </span>
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {teams.map((team) => (
-            <TeamCard
-              key={team.id}
-              team={team}
-              onSelect={() => handleSelectTeam(team.id)}
-              onDelete={() => setTeamToDelete(team)}
-            />
-          ))}
-        </div>
-
-        {/* Global Inbox */}
-        <div className="mt-16 pt-12 border-t border-[#161B22]/50">
-          <h2 className="text-2xl font-bold text-[#E2E8F0] mb-6">Recent Activity</h2>
-          <div className="relative p-12 border-2 border-[#A3FF12]/30 rounded-2xl text-center hover:border-[#A3FF12]/60 transition-all bg-gradient-to-br from-[#161B22]/60 to-[#0B0E14]/40 backdrop-blur-sm group overflow-hidden">
-            {/* Animated background */}
-            <div className="absolute inset-0 bg-gradient-to-br from-[#A3FF12]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-            {/* Checkmark icon with animation */}
-            <div className="relative mb-6 inline-flex items-center justify-center">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#A3FF12]/20 to-[#A3FF12]/5 border-2 border-[#A3FF12]/40 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-[#A3FF12]/20">
-                <svg className="w-10 h-10 text-[#A3FF12]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              {/* Pulse ring */}
-              <div className="absolute inset-0 rounded-2xl border-2 border-[#A3FF12]/30 animate-pulse-ripple" />
-            </div>
-
-            <div className="relative">
-              <div className="text-lg font-bold text-[#A3FF12] mb-2">All Systems Operational</div>
-              <p className="text-sm text-slate-500">No pending notifications or actions required</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Create Team Modal */}
-      <CreateTeamModal
-        isOpen={isCreateTeamOpen}
-        onClose={() => setIsCreateTeamOpen(false)}
-        onCreated={handleTeamCreated}
-      />
-
-      {/* Delete Team Modal */}
-      <DeleteTeamModal
-        isOpen={!!teamToDelete}
-        team={teamToDelete}
-        onClose={() => setTeamToDelete(null)}
-        onConfirm={() => teamToDelete && handleDeleteTeam(teamToDelete)}
-      />
-    </div>
-  );
-}
-
-// Team Card Component (Mission Card)
-function TeamCard({ team, onSelect, onDelete }: { team: Team; onSelect: () => void; onDelete: () => void }) {
-  const hasActiveOperations = team.stats.operationsThisWeek > 0;
-
-  return (
     <div
-      onClick={onSelect}
-      className={`
-        relative p-6 border-2 rounded-2xl cursor-pointer group overflow-hidden
-        transition-all hover:scale-[1.02]
-        ${hasActiveOperations
-          ? 'border-[#00F5FF]/50 hover:border-[#00F5FF] bg-gradient-to-br from-[#161B22]/90 to-[#0B0E14]/70 hover:shadow-2xl hover:shadow-[#00F5FF]/30'
-          : 'border-[#2D3748]/50 hover:border-[#2D3748] bg-gradient-to-br from-[#161B22]/80 to-[#0B0E14]/60 hover:shadow-xl hover:shadow-[#2D3748]/20'
-        }
-      `}
+      className="relative h-full overflow-y-auto scrollbar-hide"
+      style={{ background: '#0B1215', fontFamily: "'Syne', sans-serif" }}
     >
-      {/* Topographical wave animation for active operations */}
-      {hasActiveOperations && (
-        <div className="absolute inset-0 animate-topo-wave opacity-40" />
-      )}
+      <EvolutionBackground />
 
-      {/* Animated gradient background on hover */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#00F5FF]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <header className="relative border-b border-[#1A2A2D] px-14 pt-14 pb-12">
+        <div className="mx-auto max-w-5xl">
 
-      {/* Particle stream animation for active teams */}
-      {hasActiveOperations && (
-        <>
-          <div className="absolute top-4 right-4 w-1.5 h-1.5 bg-[#00F5FF] rounded-full animate-particle-stream" />
-          <div className="absolute top-6 right-8 w-1 h-1 bg-[#A3FF12] rounded-full animate-particle-stream" style={{ animationDelay: '0.5s' }} />
-        </>
-      )}
-
-      <div className="relative">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <div
-              className="relative w-14 h-14 rounded-xl flex items-center justify-center text-2xl transition-all group-hover:scale-110 shadow-lg"
-              style={{
-                backgroundColor: team.color + '30',
-                boxShadow: `0 4px 14px ${team.color}20`
-              }}
-            >
-              {team.icon}
-              {/* Pulse ripple for active teams */}
-              {hasActiveOperations && (
-                <div className="absolute inset-0 rounded-xl">
-                  <div
-                    className="absolute inset-0 rounded-xl animate-pulse-ripple"
-                    style={{
-                      border: `2px solid ${team.color}40`
-                    }}
-                  />
-                </div>
-              )}
-            </div>
+          {/* Wordmark row */}
+          <div className="mb-10 flex items-end justify-between animate-evolve-in" style={{ animationDelay: '0ms' }}>
             <div>
-              <h3 className="text-lg font-semibold text-[#E2E8F0] group-hover:text-[#00F5FF] transition-colors">
-                {team.name}
-              </h3>
-              <p className="text-sm text-slate-600">{team.description}</p>
+              <div className="flex items-baseline gap-4 mb-2">
+                <h1
+                  style={{ fontFamily: "'Syne', sans-serif", letterSpacing: '-0.03em', fontWeight: 800 }}
+                  className="text-[2.6rem] text-[#EAE6DF] leading-none"
+                >
+                  Evolvian
+                </h1>
+                <span
+                  style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                  className="text-sm text-[#3A5056] mb-1"
+                >
+                  Command Center
+                </span>
+              </div>
+              <p className="text-[14px] text-[#4A6A72] leading-relaxed max-w-md">
+                Monitor and manage your AI teams from a single place.
+              </p>
             </div>
+
+            <button
+              onClick={() => setIsCreateTeamOpen(true)}
+              className="group flex items-center gap-2.5 rounded-md border border-[#5A9E8F]/40 bg-[#5A9E8F]/8 px-5 py-3 text-[13px] text-[#5A9E8F] font-medium
+                         transition-all duration-150 hover:border-[#5A9E8F]/70 hover:bg-[#5A9E8F]/14 hover:text-[#7BBDAE]"
+              style={{ animationDelay: '40ms' }}
+            >
+              <svg className="h-4 w-4 transition-transform duration-150 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              New Team
+            </button>
           </div>
 
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            className="p-2 rounded-lg hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-all opacity-0 group-hover:opacity-100 hover:scale-110"
-            title="Delete team"
+          {/* Global metrics */}
+          <div
+            className="flex items-start gap-14 animate-evolve-in"
+            style={{ animationDelay: '60ms' }}
           >
-            <svg className="w-4 h-4 text-slate-600 hover:text-red-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Stats Grid with Neural Midnight colors */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="relative p-3 rounded-xl bg-gradient-to-br from-[#A3FF12]/10 to-transparent border border-[#A3FF12]/30 hover:border-[#A3FF12]/60 transition-all overflow-hidden group/stat">
-            <div className="absolute inset-0 bg-gradient-to-br from-[#A3FF12]/5 to-transparent opacity-0 group-hover/stat:opacity-100 transition-opacity" />
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-6 h-6 rounded-lg bg-[#A3FF12]/20 flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5 text-[#A3FF12]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                </div>
-                <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Agents</span>
-              </div>
-              <span className="text-lg font-bold text-[#E2E8F0]">{team.stats.activeAgents}<span className="text-slate-600">/{team.stats.totalAgents}</span></span>
-            </div>
-          </div>
-
-          <div className="relative p-3 rounded-xl bg-gradient-to-br from-[#00F5FF]/10 to-transparent border border-[#00F5FF]/30 hover:border-[#00F5FF]/60 transition-all overflow-hidden group/stat">
-            <div className="absolute inset-0 bg-gradient-to-br from-[#00F5FF]/5 to-transparent opacity-0 group-hover/stat:opacity-100 transition-opacity" />
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-6 h-6 rounded-lg bg-[#00F5FF]/20 flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5 text-[#00F5FF]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                </div>
-                <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Ops</span>
-              </div>
-              <span className="text-lg font-bold text-[#E2E8F0]">{team.stats.operationsThisWeek}</span>
-            </div>
-          </div>
-
-          <div className="relative p-3 rounded-xl bg-gradient-to-br from-[#FFB800]/10 to-transparent border border-[#FFB800]/30 hover:border-[#FFB800]/60 transition-all overflow-hidden group/stat">
-            <div className="absolute inset-0 bg-gradient-to-br from-[#FFB800]/5 to-transparent opacity-0 group-hover/stat:opacity-100 transition-opacity" />
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-6 h-6 rounded-lg bg-[#FFB800]/20 flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5 text-[#FFB800]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Spend</span>
-              </div>
-              <span className="text-lg font-bold text-[#FFB800]">${team.stats.spendThisMonth.toFixed(0)}</span>
-            </div>
+            <StatColumn
+              label="Burn Rate"
+              value={`$${metrics.totalBurnRate.toFixed(2)}/hr`}
+              sub={`$${metrics.totalSpendThisMonth.toFixed(2)} this month`}
+            />
+            <div className="mt-1 h-10 w-px bg-[#1A2A2D]" />
+            <StatColumn
+              label="Workforce"
+              value={`${metrics.totalActiveAgents} / ${metrics.totalAgents}`}
+              sub={`${Math.round((metrics.totalActiveAgents / (metrics.totalAgents || 1)) * 100)}% active`}
+            />
+            <div className="mt-1 h-10 w-px bg-[#1A2A2D]" />
+            <StatColumn
+              label="Operations"
+              value={`${metrics.totalOperationsRunning}`}
+              sub="running now"
+            />
+            <div className="mt-1 h-10 w-px bg-[#1A2A2D]" />
+            <StatColumn
+              label="Teams"
+              value={`${metrics.activeTeams}`}
+              sub="active"
+            />
           </div>
         </div>
+      </header>
 
-        {/* Arrow indicator on hover */}
-        <div className="mt-4 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-10px] group-hover:translate-x-0">
-          <span className="text-xs text-[#00F5FF] font-medium mr-2">Enter</span>
-          <svg className="w-4 h-4 text-[#00F5FF]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-          </svg>
+      {/* ── Teams ──────────────────────────────────────────────────────────── */}
+      <main className="relative mx-auto max-w-5xl px-14 py-12">
+        <div
+          className="mb-6 flex items-center gap-3 animate-evolve-in"
+          style={{ animationDelay: '120ms' }}
+        >
+          <h2
+            style={{ fontFamily: "'Syne', sans-serif" }}
+            className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[#3A5056]"
+          >
+            Your Teams
+          </h2>
+          <div className="flex-1 h-px bg-[#141E22]" />
+          <span
+            style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+            className="text-[11px] text-[#2E4248]"
+          >
+            {teams.length} total
+          </span>
         </div>
-      </div>
+
+        {/* Team grid */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {teams.length === 0 ? (
+            <EmptyState onCreate={() => setIsCreateTeamOpen(true)} />
+          ) : (
+            teams.map((team, i) => (
+              <TeamCard
+                key={team.id}
+                team={team}
+                onSelect={() => handleSelectTeam(team.id)}
+                onDelete={() => setTeamToDelete(team)}
+                index={i}
+              />
+            ))
+          )}
+        </div>
+
+        {/* Status footer */}
+        <div
+          className="mt-16 flex items-center gap-3 animate-evolve-in"
+          style={{ animationDelay: `${120 + teams.length * 80 + 80}ms` }}
+        >
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#5A9E8F] opacity-40" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-[#5A9E8F]" />
+          </span>
+          <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[12px] text-[#2E4248]">
+            All systems operational
+          </span>
+        </div>
+      </main>
+
+      <CreateTeamModal isOpen={isCreateTeamOpen} onClose={() => setIsCreateTeamOpen(false)} onCreated={handleTeamCreated} />
+      <DeleteTeamModal isOpen={!!teamToDelete} team={teamToDelete} onClose={() => setTeamToDelete(null)} onConfirm={() => teamToDelete && handleDeleteTeam(teamToDelete)} />
     </div>
   );
 }

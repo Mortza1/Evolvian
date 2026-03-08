@@ -186,10 +186,17 @@ If there are pending questions, proactively mention them and encourage the user 
 Be helpful, professional, and concise. Focus on actionable insights."""
 
     try:
-        response = llm_service.simple_chat(
-            user_message=request.message,
-            system_prompt=system_prompt
-        )
+        # For agent chats, fold the system prompt into the user message to
+        # avoid 400s from models that reject system-role messages (e.g. Gemma).
+        is_agent_chat = request.context and request.context.get("agentChat", False)
+        if is_agent_chat:
+            augmented_message = f"[Context: {system_prompt}]\n\nUser message: {request.message}"
+            response = llm_service.simple_chat(user_message=augmented_message)
+        else:
+            response = llm_service.simple_chat(
+                user_message=request.message,
+                system_prompt=system_prompt
+            )
 
         # Save assistant response to database with context
         assistant_message = ChatMessage(

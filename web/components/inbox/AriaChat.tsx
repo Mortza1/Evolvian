@@ -21,44 +21,55 @@ interface AriaChatProps {
   userObjective: string;
 }
 
+const mdComponents = {
+  p: ({ children }: any) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+  ul: ({ children }: any) => <ul className="mb-2 list-disc space-y-1 pl-4">{children}</ul>,
+  ol: ({ children }: any) => <ol className="mb-2 list-decimal space-y-1 pl-4">{children}</ol>,
+  li: ({ children }: any) => <li>{children}</li>,
+  strong: ({ children }: any) => <strong className="font-semibold" style={{ color: '#EAE6DF' }}>{children}</strong>,
+  em: ({ children }: any) => <em className="italic opacity-80">{children}</em>,
+  code: ({ children, className }: any) => {
+    const isInline = !className;
+    return isInline ? (
+      <code style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#7BBDAE' }} className="rounded border border-[#1E2D30] bg-[#0B1215] px-1.5 py-0.5 text-[12px]">{children}</code>
+    ) : (
+      <code style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#7BBDAE' }} className="block overflow-x-auto rounded-md border border-[#1E2D30] bg-[#0B1215] p-3 text-[12px]">{children}</code>
+    );
+  },
+  a: ({ children, href }: any) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: '#5A9E8F' }} className="underline underline-offset-2 opacity-80 hover:opacity-100">{children}</a>
+  ),
+};
+
+function TypingDots() {
+  return (
+    <div className="flex items-center gap-1.5 py-0.5">
+      {[0, 1, 2].map((i) => (
+        <span key={i} className="block h-1.5 w-1.5 rounded-full bg-[#5A9E8F] animate-typing-dot" style={{ animationDelay: `${i * 0.18}s` }} />
+      ))}
+    </div>
+  );
+}
+
 export default function AriaChat({ teamId, userObjective }: AriaChatProps) {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Helper function to parse agent suggestions from response
   const parseAgentSuggestions = (text: string): { cleanText: string; agents: Agent[] } => {
-    // Look for ```agents ... ``` block
     const agentBlockRegex = /```agents\s*([\s\S]*?)\s*```/;
     const match = text.match(agentBlockRegex);
-
-    if (!match) {
-      return { cleanText: text, agents: [] };
-    }
-
-    // Extract agent IDs
-    const agentIdsText = match[1];
-    const agentIds = agentIdsText
-      .split(',')
-      .map(id => id.trim())
-      .filter(id => id.length > 0);
-
-    // Look up agents
+    if (!match) return { cleanText: text, agents: [] };
+    const agentIds = match[1].split(',').map(id => id.trim()).filter(id => id.length > 0);
     const allAgents = getAgents();
-    const suggestedAgents = agentIds
-      .map(id => allAgents.find(a => a.id === id))
-      .filter((a): a is Agent => a !== undefined);
-
-    // Remove the agents block from text
+    const suggestedAgents = agentIds.map(id => allAgents.find(a => a.id === id)).filter((a): a is Agent => a !== undefined);
     const cleanText = text.replace(agentBlockRegex, '').trim();
-
     return { cleanText, agents: suggestedAgents };
   };
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
@@ -69,13 +80,10 @@ export default function AriaChat({ teamId, userObjective }: AriaChatProps) {
     const loadChatHistory = async () => {
       setIsLoadingHistory(true);
       try {
-        // Try to load chat history
         const history = await chatAPI.getChatHistory(teamId);
-
         if (history.messages && history.messages.length > 0) {
-          // Load existing messages
           const loadedMessages: Message[] = history.messages
-            .filter((msg: any) => msg.context?.ariaChat) // Only Aria's messages
+            .filter((msg: any) => msg.context?.ariaChat)
             .map((msg: any) => ({
               id: msg.id,
               from: msg.role === 'user' ? 'user' : 'aria',
@@ -84,33 +92,26 @@ export default function AriaChat({ teamId, userObjective }: AriaChatProps) {
               isTyping: false,
               timestamp: new Date(msg.created_at),
             }));
-
-          // Check if we have any Aria messages after filtering
           if (loadedMessages.length > 0) {
             setMessages(loadedMessages);
           } else {
-            // No Aria messages found, send initial message
             await sendInitialMessage();
           }
         } else {
-          // Send initial welcome message through backend
           await sendInitialMessage();
         }
       } catch (err: any) {
         console.error('Failed to load Aria chat history:', err);
-        // On error, send initial message
         await sendInitialMessage();
       } finally {
         setIsLoadingHistory(false);
       }
     };
-
     loadChatHistory();
   }, [teamId]);
 
   const sendInitialMessage = async () => {
     try {
-      // Show typing indicator immediately
       const typingMessage: Message = {
         id: Date.now(),
         from: 'aria',
@@ -121,7 +122,6 @@ export default function AriaChat({ teamId, userObjective }: AriaChatProps) {
       };
       setMessages([typingMessage]);
 
-      // Build system prompt for Aria's initial message
       const systemPrompt = `You are Aria Martinez, Senior Brand Lead. You've just been hired to help the user build their team.
 
 User's objective: "${userObjective}"
@@ -153,45 +153,25 @@ Available branding agents:
 
 Remember to mention that these are the most compatible agents for their needs, but they can explore the marketplace for similar agents at different price points if they prefer.`;
 
-      // Send a simple "start" message - the LLM will generate the greeting based on system prompt
       const response = await chatAPI.sendManagerMessage(teamId, "Start conversation", {
         ariaChat: true,
         isInitial: true,
         systemPrompt: systemPrompt,
       });
 
-      // Parse agent suggestions from response
       const { cleanText, agents } = parseAgentSuggestions(response.response);
 
-      // Update the typing message with actual content
       setMessages(prev => {
         const updated = [...prev];
-        updated[0] = {
-          ...updated[0],
-          text: cleanText,
-          displayText: '',
-          isTyping: true,
-          suggestedAgents: agents.length > 0 ? agents : undefined,
-        };
+        updated[0] = { ...updated[0], text: cleanText, displayText: '', isTyping: true, suggestedAgents: agents.length > 0 ? agents : undefined };
         return updated;
       });
 
-      // Type out the message
       typeOutMessage(cleanText, 0);
     } catch (err) {
       console.error('Failed to send initial message:', err);
-      // Fallback to hardcoded message
       const fallbackText = "Hi CEO, I'm Aria. I've reviewed your objective. To help you build the perfect team, I need to understand a few things: 1) Who is your target audience? 2) What's your desired brand tone (professional, casual, bold)? 3) Do you have any existing brand assets (logo, colors, content)?";
-
-      const welcomeMessage: Message = {
-        id: 1,
-        from: 'aria',
-        text: fallbackText,
-        displayText: '',
-        isTyping: true,
-        timestamp: new Date(),
-      };
-
+      const welcomeMessage: Message = { id: 1, from: 'aria', text: fallbackText, displayText: '', isTyping: true, timestamp: new Date() };
       setMessages([welcomeMessage]);
       typeOutMessage(fallbackText, 0);
     }
@@ -200,15 +180,11 @@ Remember to mention that these are the most compatible agents for their needs, b
   const typeOutMessage = (text: string, messageIndex: number) => {
     let charIndex = 0;
     const typingSpeed = 25;
-
     const typeInterval = setInterval(() => {
       if (charIndex < text.length) {
         setMessages(prev => {
           const updated = [...prev];
-          updated[messageIndex] = {
-            ...updated[messageIndex],
-            displayText: text.substring(0, charIndex + 1),
-          };
+          updated[messageIndex] = { ...updated[messageIndex], displayText: text.substring(0, charIndex + 1) };
           return updated;
         });
         charIndex++;
@@ -230,7 +206,6 @@ Remember to mention that these are the most compatible agents for their needs, b
     const userMessage = message.trim();
     setMessage('');
 
-    // Add user message
     const userMsg: Message = {
       id: Date.now(),
       from: 'user',
@@ -243,19 +218,10 @@ Remember to mention that these are the most compatible agents for their needs, b
     setMessages(prev => [...prev, userMsg]);
     setIsLoading(true);
 
-    // Add typing indicator for Aria's response
-    const typingMsg: Message = {
-      id: Date.now() + 1,
-      from: 'aria',
-      text: '',
-      displayText: '',
-      isTyping: true,
-      timestamp: new Date(),
-    };
+    const typingMsg: Message = { id: Date.now() + 1, from: 'aria', text: '', displayText: '', isTyping: true, timestamp: new Date() };
     setMessages(prev => [...prev, typingMsg]);
 
     try {
-      // Build system prompt for Aria
       const systemPrompt = `You are Aria Martinez, the Senior Brand Lead helping the user build their team.
 
 User's objective: "${userObjective}"
@@ -285,166 +251,171 @@ Available branding agents:
 - agent-031: Aurora (Color Oracle) - Color Psychology & Palettes
 - agent-032: Atlas (Brand Strategist) - Market Positioning
 - agent-033: Lexis (Naming Expert) - Linguistic Strategy
-- agent-034: Sage (Content Architect) - Messaging Framework
+- agent-034: Sage (Content Architect) - Messaging Framework`;
 
-When suggesting agents, emphasize that:
-1. These are the most compatible agents based on their specific needs
-2. They can explore the marketplace to find similar agents at different price points
-3. All agents will adapt their workflows to fit the team's requirements
-4. After hiring, they should go to the Board to create tasks for the team`;
-
-      const response = await chatAPI.sendManagerMessage(teamId, userMessage, {
-        ariaChat: true,
-        systemPrompt: systemPrompt,
-      });
-
-      // Parse agent suggestions from response
+      const response = await chatAPI.sendManagerMessage(teamId, userMessage, { ariaChat: true, systemPrompt: systemPrompt });
       const { cleanText, agents } = parseAgentSuggestions(response.response);
 
-      // Update the typing indicator with actual content
       setMessages(prev => {
         const updated = [...prev];
         const lastIndex = updated.length - 1;
-        updated[lastIndex] = {
-          ...updated[lastIndex],
-          text: cleanText,
-          displayText: '',
-          isTyping: true,
-          suggestedAgents: agents.length > 0 ? agents : undefined,
-        };
+        updated[lastIndex] = { ...updated[lastIndex], text: cleanText, displayText: '', isTyping: true, suggestedAgents: agents.length > 0 ? agents : undefined };
         return updated;
       });
 
-      // Type out Aria's response
-      const messageIndex = messages.length + 1; // +1 for user message that was just added
+      const messageIndex = messages.length + 1;
       typeOutMessage(cleanText, messageIndex);
-
       setIsLoading(false);
     } catch (err: any) {
       console.error('Failed to send message:', err);
       setIsLoading(false);
-
-      // Update typing message with error
       setMessages(prev => {
         const updated = [...prev];
         const lastIndex = updated.length - 1;
-        updated[lastIndex] = {
-          ...updated[lastIndex],
-          text: "Sorry, I'm having trouble connecting right now. Please try again.",
-          displayText: "Sorry, I'm having trouble connecting right now. Please try again.",
-          isTyping: false,
-        };
+        updated[lastIndex] = { ...updated[lastIndex], text: "Sorry, I'm having trouble connecting right now. Please try again.", displayText: "Sorry, I'm having trouble connecting right now. Please try again.", isTyping: false };
         return updated;
       });
     }
   };
 
   return (
-    <div className="h-[calc(100vh-48px)] flex flex-col bg-[#020617]">
+    <div className="flex h-full flex-col" style={{ background: '#0B1215' }}>
+
       {/* Header */}
-      <div className="flex-shrink-0 px-6 py-4 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center text-lg border border-slate-700">
-              👩‍💼
-            </div>
-            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#020617]"></div>
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-white">Aria Martinez</h3>
-            <p className="text-xs text-slate-500">Senior Brand Lead</p>
-          </div>
+      <header
+        className="flex shrink-0 items-center gap-4 border-b px-8 py-5"
+        style={{ borderColor: '#162025', background: '#080E11' }}
+      >
+        <div
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-xl"
+          style={{ background: '#BF8A5214', borderColor: '#BF8A5230' }}
+        >
+          👩‍💼
         </div>
-      </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-3">
+            <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, letterSpacing: '-0.01em' }} className="text-[17px] text-[#D8D4CC] leading-none">
+              Aria Martinez
+            </h2>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] text-[#5A9E8F]">online</span>
+          </div>
+          <p className="mt-1 text-[12px] text-[#3A5056]">Senior Brand Lead · Personal Branding & Executive Positioning</p>
+        </div>
+      </header>
 
       {/* Messages */}
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-3 bg-[#020617] min-h-0">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[70%] rounded-lg p-3 ${
-                msg.from === 'user'
-                  ? 'bg-[#6366F1] text-white'
-                  : 'bg-slate-800 text-slate-100 border border-slate-700'
-              }`}
-            >
-              <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                {msg.text === '' && msg.isTyping ? (
-                  // Show typing dots indicator when loading
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                  </div>
-                ) : (
-                  <>
-                    <ReactMarkdown
-                      components={{
-                        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                        strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-                      }}
-                    >
-                      {msg.displayText}
-                    </ReactMarkdown>
-                    {msg.isTyping && msg.text !== '' && (
-                      <span className="inline-block w-0.5 h-4 bg-[#6366F1] ml-0.5 animate-blink"></span>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* Show agent suggestions if available and typing is complete */}
-              {msg.from === 'aria' && msg.suggestedAgents && msg.suggestedAgents.length > 0 && !msg.isTyping && (
-                <div className="mt-3">
-                  <AgentSuggestionCards
-                    agents={msg.suggestedAgents}
-                    teamId={teamId}
-                    onAgentHired={(agent) => {
-                      // Optionally add a confirmation message
-                      console.log('Agent hired:', agent.name);
-                    }}
-                  />
-                </div>
-              )}
-
-              <div className="text-xs opacity-50 mt-1">
-                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </div>
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto scrollbar-hide px-8 py-8 min-h-0">
+        {isLoadingHistory ? (
+          <div className="flex h-full items-center justify-center">
+            <div className="flex items-center gap-2">
+              {[0, 1, 2].map(i => (
+                <span key={i} className="block h-1.5 w-1.5 rounded-full bg-[#5A9E8F] animate-typing-dot" style={{ animationDelay: `${i * 0.18}s` }} />
+              ))}
             </div>
           </div>
-        ))}
-        <div ref={messagesEndRef} />
+        ) : (
+          <div className="space-y-4 max-w-3xl mx-auto">
+            {messages.map((msg) => {
+              const isUser = msg.from === 'user';
+              return (
+                <div key={msg.id} className={`flex ${isUser ? 'justify-end animate-msg-right' : 'items-end gap-3 animate-msg-left'}`}>
+                  {!isUser && (
+                    <div
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border text-base self-end"
+                      style={{ background: '#111A1D', borderColor: '#1E2D30' }}
+                    >
+                      👩‍💼
+                    </div>
+                  )}
+                  <div className="max-w-[75%]">
+                    <div
+                      className={`rounded-md px-4 py-3 text-[13px] border ${isUser ? 'rounded-br-none' : 'rounded-bl-none'}`}
+                      style={{
+                        background: isUser ? '#182E2B' : '#111A1D',
+                        borderColor: isUser ? '#5A9E8F28' : '#1E2D30',
+                        color: isUser ? '#D8D4CC' : '#C8C4BC',
+                      }}
+                    >
+                      {msg.text === '' && msg.isTyping ? (
+                        <TypingDots />
+                      ) : (
+                        <>
+                          <div className="prose prose-sm max-w-none" style={{ color: isUser ? '#D8D4CC' : '#C8C4BC' }}>
+                            <ReactMarkdown components={mdComponents}>{msg.displayText}</ReactMarkdown>
+                            {msg.isTyping && msg.text !== '' && (
+                              <span
+                                className="inline-block ml-0.5 align-middle"
+                                style={{ width: '1px', height: '14px', background: '#5A9E8F', animation: 'blink 0.8s step-end infinite' }}
+                              />
+                            )}
+                          </div>
+                          {msg.from === 'aria' && msg.suggestedAgents && msg.suggestedAgents.length > 0 && !msg.isTyping && (
+                            <div className="mt-3">
+                              <AgentSuggestionCards
+                                agents={msg.suggestedAgents}
+                                teamId={teamId}
+                                onAgentHired={(agent) => { console.log('Agent hired:', agent.name); }}
+                              />
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div
+                      style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                      className={`mt-1 text-[10px] text-[#2E4248] ${isUser ? 'text-right' : ''}`}
+                    >
+                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Input - Fixed at bottom */}
-      <form onSubmit={handleSend} className="flex-shrink-0 p-4 border-t border-slate-800 bg-[#0A0A0F]">
-        <div className="flex gap-2">
+      {/* Input */}
+      <form
+        onSubmit={handleSend}
+        className="shrink-0 border-t px-8 py-5"
+        style={{ borderColor: '#162025', background: '#080E11' }}
+      >
+        <div className="mx-auto flex max-w-3xl items-center gap-3">
           <input
+            ref={inputRef}
             type="text"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder={isLoading ? "Aria is typing..." : "Type a message..."}
+            placeholder={isLoading ? 'Aria is typing…' : 'Message Aria…'}
             disabled={isLoading}
-            className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-[#6366F1] focus:border-[#6366F1] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 rounded-md border bg-[#111A1D] px-4 py-3 text-[13px] text-[#D8D4CC] placeholder-[#2E4248] outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ borderColor: '#1E2D30', fontFamily: "'Syne', sans-serif" }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = '#5A9E8F50'; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = '#1E2D30'; }}
           />
           <button
             type="submit"
             disabled={isLoading || !message.trim()}
-            className="px-4 py-2.5 bg-[#6366F1] hover:bg-[#5558E3] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#6366F1] flex items-center justify-center"
+            className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-md border border-[#5A9E8F]/40 bg-[#5A9E8F]/10 text-[#5A9E8F] transition-all hover:border-[#5A9E8F]/70 hover:bg-[#5A9E8F]/18 disabled:cursor-not-allowed disabled:opacity-30"
           >
             {isLoading ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
             ) : (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
             )}
           </button>
         </div>
       </form>
+
+      <style>{`
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+      `}</style>
     </div>
   );
 }

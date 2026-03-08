@@ -36,156 +36,198 @@ export default function ToolMarketplace() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* Search & Filters */}
-      <div className="mb-6">
-        <div className="relative mb-4">
+    <div className="px-8 py-6" style={{ fontFamily: "'Syne', sans-serif" }}>
+      {/* Search + category row */}
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        {/* Search */}
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#2E4248]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search tools..."
-            className="w-full px-4 py-3 pl-12 bg-[#020617]/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#6366F1] focus:border-transparent transition-all"
+            placeholder="Search tools…"
+            className="w-[220px] rounded-md border bg-[#111A1D] py-2 pl-8 pr-3 text-[12px] text-[#D8D4CC] placeholder-[#2E4248] outline-none transition-all"
+            style={{ borderColor: '#1E2D30', fontFamily: "'Syne', sans-serif" }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = '#5A9E8F50'; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = '#1E2D30'; }}
           />
-          <svg
-            className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
         </div>
 
-        {/* Category Pills */}
-        <div className="flex flex-wrap gap-2">
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                selectedCategory === cat.id
-                  ? 'bg-[#6366F1] text-white shadow-lg shadow-[#6366F1]/30'
-                  : 'bg-[#020617]/50 text-slate-400 border border-slate-700/50 hover:border-slate-600 hover:text-white'
-              }`}
+        {/* Category pills */}
+        <div className="flex flex-wrap gap-1.5">
+          {categories.map((cat) => {
+            const isActive = selectedCategory === cat.id;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className="rounded px-3 py-1.5 text-[11px] transition-all"
+                style={{
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  background: isActive ? '#0F1E1B' : 'transparent',
+                  color: isActive ? '#5A9E8F' : '#3A5056',
+                  border: `1px solid ${isActive ? '#5A9E8F30' : '#1E2D30'}`,
+                }}
+              >
+                {cat.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Grid */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {filteredTools.map((tool, i) => {
+          const installed = isInstalled(tool.id);
+          const catColor = getCategoryColor(tool.category);
+          return (
+            <div
+              key={tool.id}
+              className="animate-evolve-in group relative flex cursor-pointer flex-col rounded-md border transition-all duration-150"
+              style={{
+                background: installed ? '#0F1E1B' : '#111A1D',
+                borderColor: installed ? '#5A9E8F30' : '#1E2D30',
+                animationDelay: `${i * 35}ms`,
+              }}
+              onClick={() => setSelectedTool(tool)}
+              onMouseEnter={(e) => {
+                if (!installed) {
+                  e.currentTarget.style.borderColor = '#2A4A52';
+                  e.currentTarget.style.background = '#131D20';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!installed) {
+                  e.currentTarget.style.borderColor = '#1E2D30';
+                  e.currentTarget.style.background = '#111A1D';
+                }
+              }}
             >
-              <span className="mr-2">{cat.icon}</span>
-              {cat.label}
-            </button>
-          ))}
-        </div>
-      </div>
+              {/* Category top bar */}
+              <div className="absolute inset-x-0 top-0 h-[2px] rounded-t-md" style={{ background: `${catColor}60` }} />
 
-      {/* Tools Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredTools.map((tool) => (
-          <div
-            key={tool.id}
-            className="glass rounded-xl p-6 hover:bg-[#1E293B]/60 transition-all cursor-pointer group"
-            onClick={() => setSelectedTool(tool)}
-          >
-            {/* Header */}
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
-                  style={{ backgroundColor: getCategoryColor(tool.category) + '30' }}
-                >
-                  {tool.icon}
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white group-hover:text-[#6366F1] transition-colors">
-                    {tool.name}
-                  </h3>
-                  <p className="text-xs text-slate-500">by {tool.developer}</p>
-                </div>
-              </div>
-
-              {tool.status !== 'available' && (
-                <span className="px-2 py-1 text-xs bg-[#FDE047]/20 text-[#FDE047] rounded-md uppercase font-semibold">
-                  {tool.status}
-                </span>
-              )}
-            </div>
-
-            {/* Description */}
-            <p className="text-sm text-slate-400 mb-4 line-clamp-2">{tool.description}</p>
-
-            {/* Capabilities */}
-            <div className="flex flex-wrap gap-1 mb-4">
-              {tool.capabilities.slice(0, 3).map((cap, idx) => (
-                <span
-                  key={idx}
-                  className="px-2 py-1 text-xs bg-[#020617]/50 text-slate-400 rounded-md"
-                >
-                  {cap}
-                </span>
-              ))}
-              {tool.capabilities.length > 3 && (
-                <span className="px-2 py-1 text-xs text-slate-500">
-                  +{tool.capabilities.length - 3}
-                </span>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
-              <div>
-                {tool.pricingModel === 'free' ? (
-                  <span className="text-[#10B981] font-semibold">Free</span>
-                ) : (
-                  <div>
-                    <div className="text-[#FDE047] font-semibold">
-                      ${tool.pricing.amount.toFixed(2)}
+              <div className="flex flex-1 flex-col p-5">
+                {/* Header */}
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-[18px]"
+                      style={{ background: `${catColor}12`, borderColor: `${catColor}30` }}
+                    >
+                      {tool.icon}
                     </div>
-                    <div className="text-xs text-slate-500">{tool.pricing.unit}</div>
+                    <div className="min-w-0">
+                      <h3
+                        style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }}
+                        className="truncate text-[14px] text-[#EAE6DF] transition-colors group-hover:text-[#5A9E8F]"
+                      >
+                        {tool.name}
+                      </h3>
+                      <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[10px] text-[#2E4248]">
+                        by {tool.developer}
+                      </p>
+                    </div>
                   </div>
-                )}
-              </div>
 
-              {isInstalled(tool.id) ? (
-                <span className="px-4 py-2 bg-[#10B981]/20 text-[#10B981] text-sm font-medium rounded-lg">
-                  ✓ Installed
-                </span>
-              ) : (
-                <button className="px-4 py-2 bg-[#6366F1] text-white text-sm font-medium rounded-lg hover:bg-[#5558E3] transition-colors">
-                  Install
-                </button>
-              )}
+                  {tool.status !== 'available' && (
+                    <span
+                      style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#BF8A52', borderColor: '#BF8A5230' }}
+                      className="shrink-0 rounded border px-1.5 py-0.5 text-[9px] uppercase"
+                    >
+                      {tool.status}
+                    </span>
+                  )}
+                </div>
+
+                {/* Description */}
+                <p className="mb-3 line-clamp-2 text-[12px] leading-relaxed text-[#4A6A72]">
+                  {tool.description}
+                </p>
+
+                {/* Capabilities */}
+                <div className="mb-4 flex flex-wrap gap-1">
+                  {tool.capabilities.slice(0, 3).map((cap, idx) => (
+                    <span
+                      key={idx}
+                      style={{ fontFamily: "'IBM Plex Mono', monospace", borderColor: '#1E2D30', color: '#3A5056' }}
+                      className="rounded border bg-[#0B1215] px-2 py-0.5 text-[10px]"
+                    >
+                      {cap}
+                    </span>
+                  ))}
+                  {tool.capabilities.length > 3 && (
+                    <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="px-1 text-[10px] text-[#2E4248]">
+                      +{tool.capabilities.length - 3}
+                    </span>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="mt-auto flex items-center justify-between border-t pt-3" style={{ borderColor: '#162025' }}>
+                  <div>
+                    {tool.pricingModel === 'free' ? (
+                      <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[13px] font-semibold text-[#5A9E8F]">
+                        Free
+                      </span>
+                    ) : (
+                      <div>
+                        <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#BF8A52' }} className="text-[14px] font-semibold">
+                          ${tool.pricing.amount.toFixed(2)}
+                        </span>
+                        <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="ml-1 text-[10px] text-[#3A5056]">
+                          {tool.pricing.unit}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {installed ? (
+                    <div
+                      className="flex items-center gap-1.5 rounded border px-2.5 py-1"
+                      style={{ background: '#0F1E1B', borderColor: '#5A9E8F30', color: '#5A9E8F' }}
+                    >
+                      <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px]">Installed</span>
+                    </div>
+                  ) : (
+                    <button
+                      className="rounded border px-3 py-1 text-[11px] transition-all"
+                      style={{ fontFamily: "'IBM Plex Mono', monospace", background: '#5A9E8F12', borderColor: '#5A9E8F40', color: '#5A9E8F' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = '#5A9E8F20'; e.currentTarget.style.borderColor = '#5A9E8F70'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = '#5A9E8F12'; e.currentTarget.style.borderColor = '#5A9E8F40'; }}
+                    >
+                      Install →
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
+      {/* Empty */}
       {filteredTools.length === 0 && (
-        <div className="text-center py-12">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-800/50 flex items-center justify-center">
-            <svg className="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-md border" style={{ background: '#111A1D', borderColor: '#1E2D30' }}>
+            <svg className="h-5 w-5 text-[#2A3E44]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold text-white mb-2">No tools found</h3>
-          <p className="text-slate-400 text-sm">Try adjusting your search or filters</p>
+          <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }} className="text-[14px] text-[#3A5056]">No tools found</p>
+          <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="mt-1 text-[11px] text-[#2A3E44]">Try adjusting your search or filters</p>
         </div>
       )}
 
       {/* Install Modal */}
       {selectedTool && (
-        <ToolInstallModal
-          tool={selectedTool}
-          isOpen={!!selectedTool}
-          onClose={() => setSelectedTool(null)}
-        />
+        <ToolInstallModal tool={selectedTool} isOpen={!!selectedTool} onClose={() => setSelectedTool(null)} />
       )}
     </div>
   );

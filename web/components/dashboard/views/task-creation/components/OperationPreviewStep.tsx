@@ -15,81 +15,210 @@ interface OperationPreviewStepProps {
   onStart: () => void;
 }
 
-export function OperationPreviewStep({ workflowDesign, workflowNodes, taskDescription, evolutionContext, error, onBack, onClose, onViewDetails, onStart }: OperationPreviewStepProps) {
+function NodeAvatar({ node }: { node: WorkflowNodeWithAgent }) {
+  if (node.assignedAgent?.photo_url) {
+    return <img src={node.assignedAgent.photo_url} alt={node.assignedAgent.name} className="h-8 w-8 rounded-sm object-cover" />;
+  }
+  if (node.assignedAgent) {
+    return (
+      <div
+        className="flex h-8 w-8 items-center justify-center rounded-sm text-[11px] font-bold"
+        style={{ background: '#5A9E8F', color: '#080E11', fontFamily: "'Syne', sans-serif" }}
+      >
+        {node.assignedAgent.name.substring(0, 2).toUpperCase()}
+      </div>
+    );
+  }
   return (
-    <div className="w-full max-w-4xl animate-fade-in">
-      <div className="relative">
-        <div className="absolute -inset-1 bg-gradient-to-r from-[#6366F1] via-[#8B5CF6] to-[#EC4899] rounded-lg blur-2xl opacity-20 animate-pulse" />
-        <div className="relative bg-[#0A0A0F] rounded-lg border border-slate-800 overflow-hidden">
-          <div className="p-6 border-b border-slate-800">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <div className="text-xs text-slate-500 font-medium mb-2">WORKFLOW GENERATED</div>
-                {evolutionContext && (evolutionContext.total_past_executions as number) > 0 && (
-                  <div className="mb-3 px-3 py-2 bg-indigo-950/40 border border-indigo-800/50 rounded flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-                    <div>
-                      <span className="text-xs font-medium text-indigo-300">Evolution-Informed Design</span>
-                      <span className="text-xs text-indigo-400/70 ml-2">
-                        Based on {evolutionContext.total_past_executions as number} past {evolutionContext.task_type as string} executions
-                        {evolutionContext.avg_quality ? ` (avg quality: ${Math.round((evolutionContext.avg_quality as number) * 100)}%)` : ''}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                <h2 className="text-xl font-semibold text-white mb-2">{workflowDesign.title}</h2>
-                <p className="text-slate-400 text-sm max-w-xl">{taskDescription}</p>
-              </div>
-              <button onClick={onClose} className="w-8 h-8 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all">✕</button>
-            </div>
+    <div
+      className="flex h-8 w-8 items-center justify-center rounded-sm border text-[11px]"
+      style={{ background: '#111A1D', borderColor: '#1E2D30', color: '#3A5056' }}
+    >
+      ?
+    </div>
+  );
+}
 
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                { label: 'Steps', value: workflowNodes.length },
-                { label: 'Est. Time', value: workflowDesign.estimated_time_minutes < 60 ? `${workflowDesign.estimated_time_minutes} min` : `${Math.round(workflowDesign.estimated_time_minutes / 60)} hrs` },
-                { label: 'Est. Cost', value: `$${workflowDesign.estimated_cost.toFixed(2)}`, className: 'text-[#FDE047]' },
-              ].map(stat => (
-                <div key={stat.label} className="p-3 bg-[#020617] rounded border border-slate-800">
-                  <div className="text-xs text-slate-500 mb-1">{stat.label}</div>
-                  <div className={`text-lg font-semibold ${stat.className ?? 'text-white'}`}>{stat.value}</div>
+export function OperationPreviewStep({
+  workflowDesign,
+  workflowNodes,
+  taskDescription,
+  evolutionContext,
+  error,
+  onBack,
+  onClose,
+  onViewDetails,
+  onStart,
+}: OperationPreviewStepProps) {
+  return (
+    <div className="animate-evolve-in w-full max-w-3xl">
+      <div
+        className="relative rounded-md border shadow-2xl"
+        style={{ background: '#0B1215', borderColor: '#1E2D30' }}
+      >
+        {/* Teal top accent */}
+        <div className="absolute inset-x-0 top-0 h-[2px] rounded-t-md" style={{ background: '#5A9E8F60' }} />
+
+        {/* Header */}
+        <div className="border-b px-7 py-5" style={{ borderColor: '#162025' }}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#3A5056', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                workflow generated
+              </p>
+
+              {/* Evolution-informed banner */}
+              {evolutionContext && (evolutionContext.total_past_executions as number) > 0 && (
+                <div
+                  className="mt-2 mb-3 flex items-center gap-2 rounded-md border px-3 py-2"
+                  style={{ background: '#5A9E8F08', borderColor: '#5A9E8F30' }}
+                >
+                  <div className="h-1.5 w-1.5 rounded-full bg-[#5A9E8F] animate-pulse" />
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px', color: '#5A9E8F' }}>
+                    Evolution-Informed
+                  </span>
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px', color: '#3A5056' }}>
+                    · based on {evolutionContext.total_past_executions as number} past executions
+                    {evolutionContext.avg_quality ? ` · avg quality ${Math.round((evolutionContext.avg_quality as number) * 100)}%` : ''}
+                  </span>
                 </div>
-              ))}
+              )}
+
+              <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: '19px', color: '#EAE6DF' }} className="mt-2 leading-tight">
+                {workflowDesign.title}
+              </h2>
+              <p className="mt-1 max-w-xl text-[13px] leading-relaxed" style={{ color: '#4A6A72', fontFamily: "'Syne', sans-serif" }}>
+                {taskDescription}
+              </p>
             </div>
+            <button
+              onClick={onClose}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded border transition-all"
+              style={{ borderColor: '#1E2D30', color: '#3A5056', background: 'transparent' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = '#B8B2AA'; e.currentTarget.style.borderColor = '#2A4A52'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = '#3A5056'; e.currentTarget.style.borderColor = '#1E2D30'; }}
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
-          <div className="p-6">
-            <div className="text-xs text-slate-500 font-medium mb-4">EXECUTION SEQUENCE</div>
-            <div className="space-y-3 mb-6">
-              {workflowNodes.map(node => (
-                <div key={node.id} className="flex items-center gap-4">
-                  <div className="flex-shrink-0 w-6 h-6 rounded bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-medium text-slate-400">{node.order}</div>
-                  {node.assignedAgent?.photo_url ? (
-                    <img src={node.assignedAgent.photo_url} alt={node.assignedAgent.name} className="w-8 h-8 rounded-full object-cover" />
-                  ) : node.assignedAgent ? (
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#6366F1] to-[#818CF8] flex items-center justify-center text-white text-xs font-bold">{node.assignedAgent.name.substring(0, 2).toUpperCase()}</div>
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-400 text-xs">?</div>
-                  )}
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-white">{node.assignedAgent?.name || node.agent_role}</div>
-                    <div className="text-xs text-slate-500">{node.description}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {workflowNodes.some(n => !n.assignedAgent) && (
-              <div className="mb-4 p-3 bg-amber-900/20 border border-amber-800 rounded text-amber-400 text-sm">
-                Some steps don't have matching agents. Consider hiring agents with these roles.
+          {/* Stats row */}
+          <div className="mt-5 grid grid-cols-3 gap-3">
+            {[
+              { label: 'Steps', value: workflowNodes.length, color: '#B8B2AA' },
+              { label: 'Est. Time', value: workflowDesign.estimated_time_minutes < 60 ? `${workflowDesign.estimated_time_minutes} min` : `${Math.round(workflowDesign.estimated_time_minutes / 60)} hrs`, color: '#B8B2AA' },
+              { label: 'Est. Cost', value: `$${workflowDesign.estimated_cost.toFixed(2)}`, color: '#BF8A52' },
+            ].map(stat => (
+              <div key={stat.label} className="rounded-md border p-3" style={{ background: '#111A1D', borderColor: '#162025' }}>
+                <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', color: '#2E4248', textTransform: 'uppercase', letterSpacing: '0.1em' }} className="mb-1">
+                  {stat.label}
+                </p>
+                <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '16px', fontWeight: 600, color: stat.color }}>
+                  {stat.value}
+                </p>
               </div>
-            )}
-            {error && <div className="mb-4 p-3 bg-red-900/20 border border-red-800 rounded text-red-400 text-sm">{error}</div>}
+            ))}
+          </div>
+        </div>
 
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
-              <button onClick={onBack} className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors">Back</button>
-              <button onClick={onViewDetails} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded border border-slate-700 transition-all">View Details</button>
-              <button onClick={onStart} className="px-4 py-2 bg-[#6366F1] hover:bg-[#5558E3] text-white text-sm font-medium rounded transition-all">Start Operation</button>
+        {/* Execution sequence */}
+        <div className="px-7 py-5">
+          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#2E4248', textTransform: 'uppercase', letterSpacing: '0.1em' }} className="mb-4">
+            Execution Sequence
+          </p>
+          <div className="space-y-2.5 mb-5">
+            {workflowNodes.map((node, i) => (
+              <div
+                key={node.id}
+                className="flex items-center gap-4 rounded-md border px-4 py-3"
+                style={{ background: '#111A1D', borderColor: '#162025' }}
+              >
+                {/* Step number */}
+                <div
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border text-[10px] font-semibold"
+                  style={{ fontFamily: "'IBM Plex Mono', monospace", borderColor: '#1E2D30', color: '#3A5056', background: '#0B1215' }}
+                >
+                  {node.order}
+                </div>
+
+                {/* Avatar */}
+                <NodeAvatar node={node} />
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600, fontSize: '13px', color: '#D8D4CC' }}>
+                    {node.assignedAgent?.name || node.agent_role}
+                  </p>
+                  <p style={{ fontFamily: "'Syne', sans-serif", fontSize: '11px', color: '#3A5056' }} className="truncate">
+                    {node.description}
+                  </p>
+                </div>
+
+                {/* Connector dot */}
+                {i < workflowNodes.length - 1 && (
+                  <div className="flex items-center">
+                    <svg className="h-3.5 w-3.5 text-[#2A3E44]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* No-agent warning */}
+          {workflowNodes.some(n => !n.assignedAgent) && (
+            <div
+              className="mb-4 flex items-start gap-2 rounded-md border px-4 py-3 text-[12px]"
+              style={{ background: '#BF8A5210', borderColor: '#BF8A5230', color: '#BF8A52', fontFamily: "'IBM Plex Mono', monospace" }}
+            >
+              <svg className="mt-0.5 h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Some steps don't have matching agents. Consider hiring agents with these roles.
             </div>
+          )}
+
+          {error && (
+            <div
+              className="mb-4 rounded-md border px-4 py-3 text-[12px]"
+              style={{ background: '#9E5A5A10', borderColor: '#9E5A5A30', color: '#9E5A5A', fontFamily: "'IBM Plex Mono', monospace" }}
+            >
+              {error}
+            </div>
+          )}
+
+          {/* Footer actions */}
+          <div className="flex items-center justify-end gap-3 border-t pt-5" style={{ borderColor: '#162025' }}>
+            <button
+              onClick={onBack}
+              className="rounded border px-4 py-2 text-[11px] transition-all"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", borderColor: '#1E2D30', color: '#3A5056', background: 'transparent' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = '#B8B2AA'; e.currentTarget.style.borderColor = '#2A4A52'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = '#3A5056'; e.currentTarget.style.borderColor = '#1E2D30'; }}
+            >
+              Back
+            </button>
+            <button
+              onClick={onViewDetails}
+              className="rounded border px-4 py-2 text-[11px] transition-all"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", borderColor: '#1E2D30', color: '#7A9EA6', background: 'transparent' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = '#B8B2AA'; e.currentTarget.style.borderColor = '#2A4A52'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = '#7A9EA6'; e.currentTarget.style.borderColor = '#1E2D30'; }}
+            >
+              View Details
+            </button>
+            <button
+              onClick={onStart}
+              className="flex items-center gap-2 rounded border px-4 py-2 text-[11px] transition-all"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", background: '#5A9E8F12', borderColor: '#5A9E8F50', color: '#5A9E8F' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#5A9E8F20'; e.currentTarget.style.borderColor = '#5A9E8F80'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#5A9E8F12'; e.currentTarget.style.borderColor = '#5A9E8F50'; }}
+            >
+              Start Operation →
+            </button>
           </div>
         </div>
       </div>

@@ -19,113 +19,110 @@ export default function MyToolbox() {
     }
   };
 
+  const STATUS_STYLE: Record<string, { color: string; border: string; bg: string }> = {
+    connected:    { color: '#5A9E8F', border: '#5A9E8F30', bg: '#5A9E8F10' },
+    disconnected: { color: '#3A5056', border: '#1E2D30',   bg: 'transparent' },
+    error:        { color: '#9E5A5A', border: '#9E5A5A30', bg: '#9E5A5A10' },
+  };
+
   if (tools.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-slate-800/50 flex items-center justify-center">
-            <svg className="w-10 h-10 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-              />
-            </svg>
-          </div>
-          <h3 className="text-xl font-semibold text-white mb-2">No tools installed yet</h3>
-          <p className="text-slate-400 mb-6">Browse the Marketplace to equip your workforce</p>
+      <div className="flex h-full flex-col items-center justify-center gap-3 py-24">
+        <div className="flex h-12 w-12 items-center justify-center rounded-md border" style={{ background: '#111A1D', borderColor: '#1E2D30' }}>
+          <svg className="h-5 w-5 text-[#2A3E44]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+          </svg>
         </div>
+        <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }} className="text-[14px] text-[#3A5056]">No tools installed yet</p>
+        <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] text-[#2A3E44]">Browse the Marketplace to equip your workforce</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="grid grid-cols-1 gap-4">
-        {tools.map((installedTool) => {
+    <div className="px-8 py-6" style={{ fontFamily: "'Syne', sans-serif" }}>
+      <div className="space-y-3">
+        {tools.map((installedTool, i) => {
           const tool = installedTool.tool;
-          const assignedAgentsList = agents.filter((a) =>
-            installedTool.assignedAgents.includes(a.id)
-          );
+          const catColor = getCategoryColor(tool.category);
+          const statusStyle = STATUS_STYLE[installedTool.status] ?? STATUS_STYLE.disconnected;
+          const assignedAgentsList = agents.filter((a) => installedTool.assignedAgents.includes(a.id));
 
           return (
-            <div key={installedTool.toolId} className="glass rounded-xl p-6">
-              <div className="flex items-start gap-6">
+            <div
+              key={installedTool.toolId}
+              className="animate-evolve-in relative rounded-md border"
+              style={{ background: '#111A1D', borderColor: '#1E2D30', animationDelay: `${i * 50}ms` }}
+            >
+              {/* Category top bar */}
+              <div className="absolute inset-x-0 top-0 h-[2px] rounded-t-md" style={{ background: `${catColor}60` }} />
+
+              <div className="flex items-start gap-5 p-5 pt-6">
                 {/* Icon */}
                 <div
-                  className="w-16 h-16 rounded-xl flex items-center justify-center text-3xl flex-shrink-0"
-                  style={{ backgroundColor: getCategoryColor(tool.category) + '30' }}
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border text-[20px]"
+                  style={{ background: `${catColor}12`, borderColor: `${catColor}30` }}
                 >
                   {tool.icon}
                 </div>
 
-                {/* Main Content */}
+                {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="text-xl font-semibold text-white mb-1">{tool.name}</h3>
-                      <p className="text-sm text-slate-400">{tool.description}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`px-3 py-1 text-xs rounded-md font-medium ${
-                          installedTool.status === 'connected'
-                            ? 'bg-[#10B981]/20 text-[#10B981]'
-                            : installedTool.status === 'error'
-                            ? 'bg-red-500/20 text-red-400'
-                            : 'bg-slate-700/50 text-slate-400'
-                        }`}
+                  {/* Top row */}
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3
+                        style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700 }}
+                        className="truncate text-[15px] text-[#EAE6DF]"
                       >
-                        {installedTool.status}
-                      </span>
+                        {tool.name}
+                      </h3>
+                      <p className="mt-0.5 text-[12px] text-[#4A6A72]">{tool.description}</p>
                     </div>
+                    <span
+                      style={{ fontFamily: "'IBM Plex Mono', monospace", color: statusStyle.color, borderColor: statusStyle.border, background: statusStyle.bg }}
+                      className="shrink-0 rounded border px-2 py-0.5 text-[10px] uppercase"
+                    >
+                      {installedTool.status}
+                    </span>
                   </div>
 
-                  {/* Stats Grid */}
-                  <div className="grid grid-cols-4 gap-4 mb-4">
-                    <div className="p-3 bg-[#020617]/50 rounded-lg">
-                      <div className="text-xs text-slate-500 mb-1">Total Uses</div>
-                      <div className="text-lg font-semibold text-white">
-                        {installedTool.usage.totalCalls.toLocaleString()}
+                  {/* Stats */}
+                  <div className="mb-4 grid grid-cols-4 gap-2">
+                    {[
+                      { label: 'Total Uses', value: installedTool.usage.totalCalls.toLocaleString(), color: '#B8B2AA' },
+                      { label: 'Total Cost',  value: `$${installedTool.usage.totalCost.toFixed(2)}`, color: '#BF8A52' },
+                      { label: 'Access',      value: installedTool.usagePolicy.permissions, color: '#B8B2AA' },
+                      { label: 'Assigned To', value: `${installedTool.assignedAgents.length} agents`, color: '#B8B2AA' },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="rounded-md border p-3" style={{ background: '#0B1215', borderColor: '#162025' }}>
+                        <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="mb-1 text-[9px] uppercase tracking-widest text-[#2E4248]">
+                          {label}
+                        </p>
+                        <p style={{ fontFamily: "'IBM Plex Mono', monospace", color }} className="text-[14px] font-semibold">
+                          {value}
+                        </p>
                       </div>
-                    </div>
-                    <div className="p-3 bg-[#020617]/50 rounded-lg">
-                      <div className="text-xs text-slate-500 mb-1">Total Cost</div>
-                      <div className="text-lg font-semibold text-[#FDE047]">
-                        ${installedTool.usage.totalCost.toFixed(2)}
-                      </div>
-                    </div>
-                    <div className="p-3 bg-[#020617]/50 rounded-lg">
-                      <div className="text-xs text-slate-500 mb-1">Access</div>
-                      <div className="text-lg font-semibold text-white">
-                        {installedTool.usagePolicy.permissions}
-                      </div>
-                    </div>
-                    <div className="p-3 bg-[#020617]/50 rounded-lg">
-                      <div className="text-xs text-slate-500 mb-1">Assigned To</div>
-                      <div className="text-lg font-semibold text-white">
-                        {installedTool.assignedAgents.length} agents
-                      </div>
-                    </div>
+                    ))}
                   </div>
 
-                  {/* Assigned Agents */}
+                  {/* Assigned agents */}
                   {assignedAgentsList.length > 0 && (
                     <div className="mb-4">
-                      <div className="text-xs text-slate-500 mb-2">Equipped Agents:</div>
-                      <div className="flex flex-wrap gap-2">
+                      <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="mb-2 text-[10px] uppercase tracking-widest text-[#2E4248]">
+                        Equipped Agents
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
                         {assignedAgentsList.map((agent) => (
                           <div
                             key={agent.id}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-[#020617]/50 rounded-lg"
+                            className="flex items-center gap-2 rounded border px-2.5 py-1.5"
+                            style={{ background: '#0B1215', borderColor: '#1E2D30' }}
                           >
-                            <img
-                              src={agent.photo_url}
-                              alt={agent.name}
-                              className="w-6 h-6 rounded-full"
-                            />
-                            <span className="text-sm text-white">{agent.name}</span>
+                            <img src={agent.photo_url} alt={agent.name} className="h-5 w-5 rounded-sm object-cover" />
+                            <span style={{ fontFamily: "'Syne', sans-serif" }} className="text-[12px] text-[#B8B2AA]">
+                              {agent.name}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -133,16 +130,29 @@ export default function MyToolbox() {
                   )}
 
                   {/* Actions */}
-                  <div className="flex items-center gap-3">
-                    <button className="px-4 py-2 bg-[#6366F1] text-white text-sm font-medium rounded-lg hover:bg-[#5558E3] transition-colors">
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="rounded border px-3 py-1.5 text-[11px] transition-all"
+                      style={{ fontFamily: "'IBM Plex Mono', monospace", background: '#5A9E8F12', borderColor: '#5A9E8F40', color: '#5A9E8F' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = '#5A9E8F20'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = '#5A9E8F12'; }}
+                    >
                       Configure
                     </button>
-                    <button className="px-4 py-2 bg-[#020617]/50 border border-slate-700/50 text-slate-300 text-sm font-medium rounded-lg hover:bg-[#020617]/70 hover:border-slate-600 transition-all">
+                    <button
+                      className="rounded border px-3 py-1.5 text-[11px] transition-all"
+                      style={{ fontFamily: "'IBM Plex Mono', monospace", borderColor: '#1E2D30', color: '#3A5056', background: 'transparent' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = '#B8B2AA'; e.currentTarget.style.borderColor = '#2A4A52'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = '#3A5056'; e.currentTarget.style.borderColor = '#1E2D30'; }}
+                    >
                       View Usage
                     </button>
                     <button
                       onClick={() => handleUninstall(installedTool.toolId)}
-                      className="px-4 py-2 text-red-400 text-sm font-medium hover:text-red-300 transition-colors"
+                      className="ml-auto rounded border px-3 py-1.5 text-[11px] transition-all"
+                      style={{ fontFamily: "'IBM Plex Mono', monospace", borderColor: '#9E5A5A30', color: '#7A4A4A', background: 'transparent' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = '#9E5A5A'; e.currentTarget.style.borderColor = '#9E5A5A50'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = '#7A4A4A'; e.currentTarget.style.borderColor = '#9E5A5A30'; }}
                     >
                       Uninstall
                     </button>

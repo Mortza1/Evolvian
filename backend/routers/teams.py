@@ -322,7 +322,6 @@ def generate_team_events(team_id: int) -> Generator[str, None, None]:
 async def stream_team_events(
     team_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
 ):
     """
     Stream team-level events for real-time cross-view updates.
@@ -334,17 +333,24 @@ async def stream_team_events(
     - operation_created: New operation was created
     - active_operations_changed: Number of active operations changed
     """
-    # Verify team belongs to user (using injected db session for auth check only)
-    team = db.query(Team).filter(
-        Team.id == team_id,
-        Team.user_id == current_user.id
-    ).first()
+    from database import SessionLocal
 
-    if not team:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied"
-        )
+    # Use a short-lived session only for the auth check, then close it
+    # immediately before starting the long-running SSE stream so we don't
+    # hold a pool connection for the duration of the stream.
+    check_db = SessionLocal()
+    try:
+        team = check_db.query(Team).filter(
+            Team.id == team_id,
+            Team.user_id == current_user.id
+        ).first()
+        if not team:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+    finally:
+        check_db.close()
 
     # Generator creates its own session for the long-running stream
     return StreamingResponse(

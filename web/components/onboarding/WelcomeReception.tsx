@@ -25,13 +25,11 @@ export default function WelcomeReception({ onComplete }: WelcomeReceptionProps) 
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       setAudioContext(ctx);
 
-      // Enable audio on first user interaction
       const enableAudio = async () => {
         if (ctx.state === 'suspended') {
           await ctx.resume();
         }
         setAudioEnabled(true);
-        // Remove listeners after first interaction
         document.removeEventListener('click', enableAudio);
         document.removeEventListener('keydown', enableAudio);
       };
@@ -49,23 +47,17 @@ export default function WelcomeReception({ onComplete }: WelcomeReceptionProps) 
     }
   }, []);
 
-  // Sound effects using Web Audio API
   const playTypeSound = async () => {
     if (!audioContext || !audioEnabled) return;
-
     try {
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
-
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
-
       oscillator.frequency.value = 1200;
       oscillator.type = 'sine';
-
       gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.03);
-
       oscillator.start(audioContext.currentTime);
       oscillator.stop(audioContext.currentTime + 0.03);
     } catch (error) {
@@ -73,9 +65,6 @@ export default function WelcomeReception({ onComplete }: WelcomeReceptionProps) 
     }
   };
 
-  // No sound for complete button (as requested)
-
-  // Auto-start animation when component mounts
   useEffect(() => {
     let timeouts: NodeJS.Timeout[] = [];
     let intervals: NodeJS.Timeout[] = [];
@@ -92,17 +81,13 @@ export default function WelcomeReception({ onComplete }: WelcomeReceptionProps) 
 
     const typeNextMessage = () => {
       if (currentMessageIndex >= messagesToShow.length) {
-        const continueTimeout = setTimeout(() => {
-          setShowContinue(true);
-          // No sound for continue button
-        }, 500);
+        const continueTimeout = setTimeout(() => setShowContinue(true), 500);
         timeouts.push(continueTimeout);
         return;
       }
 
       const fullText = messagesToShow[currentMessageIndex];
 
-      // Add new message
       setMessages(prev => [...prev, {
         text: fullText,
         displayText: '',
@@ -111,41 +96,26 @@ export default function WelcomeReception({ onComplete }: WelcomeReceptionProps) 
       }]);
 
       let charIndex = 0;
-      const typingSpeed = 30; // ms per character
+      const typingSpeed = 30;
 
       const typeInterval = setInterval(() => {
         if (charIndex < fullText.length) {
-          // Play subtle typing sound every 3 characters
-          if (charIndex % 3 === 0) {
-            playTypeSound();
-          }
-
+          if (charIndex % 3 === 0) playTypeSound();
           setMessages(prev => {
             const updated = [...prev];
             const lastIndex = updated.length - 1;
-            updated[lastIndex] = {
-              ...updated[lastIndex],
-              displayText: fullText.substring(0, charIndex + 1)
-            };
+            updated[lastIndex] = { ...updated[lastIndex], displayText: fullText.substring(0, charIndex + 1) };
             return updated;
           });
           charIndex++;
         } else {
           clearInterval(typeInterval);
-
-          // Mark as complete
           setMessages(prev => {
             const updated = [...prev];
             const lastIndex = updated.length - 1;
-            updated[lastIndex] = {
-              ...updated[lastIndex],
-              isTyping: false,
-              isComplete: true
-            };
+            updated[lastIndex] = { ...updated[lastIndex], isTyping: false, isComplete: true };
             return updated;
           });
-
-          // Start next message after a pause
           currentMessageIndex++;
           const nextTimeout = setTimeout(() => typeNextMessage(), 400);
           timeouts.push(nextTimeout);
@@ -165,98 +135,154 @@ export default function WelcomeReception({ onComplete }: WelcomeReceptionProps) 
   }, [audioContext, audioEnabled]);
 
   return (
-    <div className="min-h-screen w-full relative overflow-hidden bg-black">
-      {/* Animated background with pulsing orbs */}
-      <div className="absolute inset-0 bg-black">
-        <div className="absolute inset-0 opacity-20">
-          <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-[#6366F1] rounded-full filter blur-[128px] animate-pulse"></div>
-          <div className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] bg-[#FDE047] rounded-full filter blur-[128px] animate-pulse delay-1000"></div>
-        </div>
-      </div>
+    <div className="min-h-screen w-full relative overflow-hidden" style={{ background: '#080E11' }}>
+      {/* Phylogenetic tree SVG background — same motif as AuthPage */}
+      <svg
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        style={{ opacity: 0.04 }}
+        viewBox="0 0 800 800"
+        preserveAspectRatio="xMidYMid slice"
+      >
+        <g stroke="#5A9E8F" strokeWidth="1" fill="none">
+          <line x1="400" y1="760" x2="400" y2="560" />
+          <line x1="400" y1="560" x2="240" y2="420" />
+          <line x1="400" y1="560" x2="560" y2="420" />
+          <line x1="240" y1="420" x2="160" y2="300" />
+          <line x1="240" y1="420" x2="320" y2="300" />
+          <line x1="560" y1="420" x2="480" y2="300" />
+          <line x1="560" y1="420" x2="640" y2="300" />
+          <line x1="160" y1="300" x2="120" y2="200" />
+          <line x1="160" y1="300" x2="200" y2="200" />
+          <line x1="320" y1="300" x2="280" y2="200" />
+          <line x1="320" y1="300" x2="360" y2="200" />
+          <line x1="480" y1="300" x2="440" y2="200" />
+          <line x1="480" y1="300" x2="520" y2="200" />
+          <line x1="640" y1="300" x2="600" y2="200" />
+          <line x1="640" y1="300" x2="680" y2="200" />
+          {[120, 200, 280, 360, 440, 520, 600, 680].map(x => (
+            <circle key={x} cx={x} cy={200} r="4" fill="#5A9E8F" stroke="none" />
+          ))}
+          <circle cx="400" cy="760" r="5" fill="#5A9E8F" stroke="none" />
+        </g>
+      </svg>
+
+      {/* Warm radial gradient — subtle depth */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: 'radial-gradient(ellipse 70% 60% at 50% 80%, #5A9E8F08 0%, transparent 70%)' }}
+      />
 
       {/* Content */}
       <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-12">
-        <div className="w-full max-w-2xl">
-          {/* Logo with gradient */}
-          <div className="text-center mb-10 animate-fade-in">
-            <div className="inline-block mb-4 relative">
-              <div className="w-16 h-16 bg-gradient-to-br from-[#6366F1] to-[#818CF8] rounded-2xl flex items-center justify-center shadow-2xl shadow-[#6366F1]/40">
-                <span className="text-white font-bold text-2xl">E</span>
-              </div>
+        <div className="w-full max-w-xl">
+
+          {/* Wordmark */}
+          <div className="flex items-center justify-center gap-3 mb-10">
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-sm text-[13px] font-bold"
+              style={{ background: '#5A9E8F', color: '#080E11', fontFamily: "'Syne', sans-serif" }}
+            >
+              E
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">
+            <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, color: '#EAE6DF', fontSize: '18px', letterSpacing: '0.04em' }}>
               Evolvian
-            </h1>
-            <p className="text-slate-400 text-sm">
-              Your AI Workforce Awaits
-            </p>
+            </span>
           </div>
 
-          {/* Chat Interface */}
-          <div className="relative bg-gradient-to-br from-[#0F0F23] via-[#1a1a2e] to-[#0F0F23] border border-[#6366F1]/20 rounded-2xl p-6 shadow-2xl backdrop-blur-xl">
-            {/* Subtle gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-br from-[#6366F1]/5 via-transparent to-[#818CF8]/5 rounded-2xl pointer-events-none"></div>
-
-            <div className="relative z-10">
-              {/* Evo Header */}
-              <div className="flex items-center gap-3 mb-6 pb-6 border-b border-[#6366F1]/20">
-                <div className="relative">
-                  <div className="w-12 h-12 bg-gradient-to-br from-[#6366F1] to-[#818CF8] rounded-xl flex items-center justify-center shadow-lg shadow-[#6366F1]/30">
-                    <span className="text-white font-bold text-base">EVO</span>
-                  </div>
-                  {/* Online indicator */}
-                  <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-[#0F0F23]"></div>
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Evo</h3>
-                  <p className="text-xs text-slate-400">Chief of Staff</p>
-                </div>
+          {/* Chat card */}
+          <div
+            className="rounded-md border"
+            style={{ background: '#111A1D', borderColor: '#1E2D30' }}
+          >
+            {/* Evo header */}
+            <div
+              className="flex items-center gap-3 px-5 py-4 border-b"
+              style={{ borderColor: '#162025' }}
+            >
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-[11px] font-bold"
+                style={{ background: '#5A9E8F', color: '#080E11', fontFamily: "'Syne', sans-serif" }}
+              >
+                EVO
               </div>
-
-              {/* Messages */}
-              <div className="space-y-3 mb-6 min-h-[200px]">
-                {messages.map((msg, index) => (
-                  <div
-                    key={index}
-                    className="flex justify-start animate-slide-up"
-                  >
-                    <div className="bg-gradient-to-br from-[#6366F1]/10 to-[#818CF8]/10 border border-[#6366F1]/30 rounded-xl px-4 py-3 max-w-[85%] backdrop-blur-sm">
-                      <p className="text-white leading-relaxed text-sm">
-                        {msg.displayText}
-                        {msg.isTyping && (
-                          <span className="inline-block w-0.5 h-4 bg-[#6366F1] ml-1 animate-blink"></span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+              <div>
+                <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: '14px', color: '#EAE6DF' }}>Evo</p>
+                <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#3A5056' }}>Chief of Staff</p>
               </div>
-
-              {/* Continue Button */}
-              {showContinue && (
-                <div className="flex justify-center animate-fade-in">
-                  <button
-                    onClick={onComplete}
-                    className="group px-6 py-3 bg-gradient-to-r from-[#6366F1] to-[#818CF8] text-white font-semibold text-sm rounded-xl shadow-2xl shadow-[#6366F1]/40 hover:shadow-[#6366F1]/60 transform hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
-                  >
-                    <span className="flex items-center gap-2">
-                      Let's Set Up My First Team
-                      <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                      </svg>
-                    </span>
-                  </button>
-                </div>
-              )}
+              {/* Status dot */}
+              <div className="ml-auto flex items-center gap-1.5">
+                <div className="h-1.5 w-1.5 rounded-full" style={{ background: '#5A9E8F' }} />
+                <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#3A5056' }}>online</span>
+              </div>
             </div>
+
+            {/* Messages */}
+            <div className="px-5 py-5 space-y-3 min-h-[200px]">
+              {messages.map((msg, index) => (
+                <div key={index} className="animate-evolve-in flex justify-start">
+                  <div
+                    className="rounded-md border px-4 py-3 max-w-[88%]"
+                    style={{ background: '#0B1215', borderColor: '#1E2D30' }}
+                  >
+                    <p style={{ fontFamily: "'Syne', sans-serif", fontSize: '13px', color: '#D8D4CC', lineHeight: '1.65' }}>
+                      {msg.displayText}
+                      {msg.isTyping && (
+                        <span
+                          className="inline-block ml-0.5 align-middle"
+                          style={{ width: '1px', height: '14px', background: '#5A9E8F', animation: 'blink 0.8s step-end infinite' }}
+                        />
+                      )}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Continue button */}
+            {showContinue && (
+              <div
+                className="px-5 pb-5 flex justify-end animate-evolve-in border-t pt-4"
+                style={{ borderColor: '#162025' }}
+              >
+                <button
+                  onClick={onComplete}
+                  className="rounded border px-5 py-2 text-[12px] transition-all"
+                  style={{
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    background: '#5A9E8F12',
+                    borderColor: '#5A9E8F50',
+                    color: '#5A9E8F',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#5A9E8F20';
+                    e.currentTarget.style.borderColor = '#5A9E8F80';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#5A9E8F12';
+                    e.currentTarget.style.borderColor = '#5A9E8F50';
+                  }}
+                >
+                  Set Up My First Team →
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Subtle hint */}
-          <p className="text-center text-slate-600 text-xs mt-6">
+          <p
+            className="text-center mt-5"
+            style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#2A3E44' }}
+          >
             This will take less than 60 seconds
           </p>
         </div>
       </div>
+
+      <style>{`
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 }

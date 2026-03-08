@@ -19,7 +19,10 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, onTaskCreate
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(4,9,12,0.88)' }}
+    >
       {flow.step === 'input' && (
         <TaskInputStep
           taskDescription={flow.taskDescription}
@@ -58,14 +61,6 @@ export default function TaskCreationFlow({ isOpen, onClose, teamId, onTaskCreate
           onStart={flow.handleCommence}
         />
       )}
-
-      <style jsx>{`
-        @keyframes fade-in {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .animate-fade-in { animation: fade-in 0.3s ease-out; }
-      `}</style>
     </div>
   );
 }

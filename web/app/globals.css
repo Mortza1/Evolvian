@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -349,6 +350,124 @@ body {
 
 .animate-rotate-geometric {
   animation: rotate-geometric 20s linear infinite;
+}
+
+/* ─── Evolvian Redesign Tokens & Animations ─────────────────────────── */
+
+/* Evolve-in: staggered card entry */
+@keyframes evolve-in {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-evolve-in {
+  animation: evolve-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Branch draw: SVG path stroke animation */
+@keyframes branch-draw {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+
+.animate-branch-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: branch-draw 3s ease-out forwards;
+  pathLength: 1;
+}
+
+/* Node pulse: subtle scale pulse on SVG circles */
+@keyframes node-pulse {
+  0%, 100% { opacity: 0.04; transform: scale(1); }
+  50%       { opacity: 0.10; transform: scale(1.4); }
+}
+
+.animate-node-pulse {
+  animation: node-pulse 4s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* Sweep accent: horizontal line sweep on card hover */
+@keyframes sweep-right {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* Stat counter: number roll-up feel */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-count-up {
+  animation: count-up 0.4s ease-out both;
+}
+
+/* ─── Inbox / Chat Animations ───────────────────────────────────────────── */
+
+/* Message slide in from left (agent) */
+@keyframes msg-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-10px) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-msg-left {
+  animation: msg-from-left 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Message slide in from right (user) */
+@keyframes msg-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(10px) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-msg-right {
+  animation: msg-from-right 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Typing dot wave */
+@keyframes typing-wave {
+  0%, 60%, 100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+.animate-typing-dot {
+  animation: typing-wave 1.2s ease-in-out infinite;
+}
+
+/* Specialist list item enter */
+@keyframes list-item-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.animate-list-item {
+  animation: list-item-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* Hide scrollbar utility */
