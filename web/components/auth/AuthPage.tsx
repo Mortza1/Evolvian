@@ -3,12 +3,13 @@
 import { useState } from 'react';
 
 interface AuthPageProps {
-  onAuthSuccess?: (email?: string) => void;
+  onAuthSuccess?: (email?: string, isNewUser?: boolean) => void;
+  onBack?: () => void;
 }
 
 const API_URL = 'http://localhost:8000';
 
-export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
+export default function AuthPage({ onAuthSuccess, onBack }: AuthPageProps) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,7 +63,7 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
 
       // Call the success callback with email
       if (onAuthSuccess) {
-        onAuthSuccess(email);
+        onAuthSuccess(email, !isLogin);
       }
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
@@ -221,6 +222,20 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
 
       {/* ── Right panel — auth form ───────────────────────────────────────────── */}
       <div className="flex flex-1 flex-col items-center justify-center px-8 py-14">
+        {/* Back to landing */}
+        {onBack && (
+          <button
+            onClick={onBack}
+            style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+            className="absolute top-6 left-6 flex items-center gap-2 text-[11px] text-[#3A5056] hover:text-[#5A9E8F] transition-colors z-20"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M9 2L4 7L9 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Back
+          </button>
+        )}
+
         {/* Mobile logo */}
         <div className="mb-8 flex items-center gap-2.5 lg:hidden">
           <div className="flex h-9 w-9 items-center justify-center rounded-md border border-[#5A9E8F]/40 bg-[#0F1E1B]">

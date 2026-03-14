@@ -4,11 +4,12 @@ import { useState, useEffect } from 'react';
 import AuthPage from '@/components/auth/AuthPage';
 import OnboardingFlow from '@/components/onboarding/OnboardingFlow';
 import Dashboard from '@/components/dashboard/Dashboard';
+import LandingPage from '@/components/landing/LandingPage';
 
-type AppState = 'auth' | 'onboarding' | 'dashboard';
+type AppState = 'landing' | 'auth' | 'onboarding' | 'dashboard';
 
 export default function Home() {
-  const [appState, setAppState] = useState<AppState>('auth');
+  const [appState, setAppState] = useState<AppState>('landing');
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false);
 
   useEffect(() => {
@@ -35,29 +36,23 @@ export default function Home() {
             setAppState('dashboard');
           }
         } else {
-          // Token is invalid, clear it
+          // Token is invalid, clear it — stay on landing
           localStorage.removeItem('access_token');
           localStorage.removeItem('has_seen_onboarding');
-          setAppState('auth');
         }
       } catch (error) {
-        // Network error or invalid token
+        // Network error or invalid token — stay on landing
         console.error('Token validation failed:', error);
         localStorage.removeItem('access_token');
         localStorage.removeItem('has_seen_onboarding');
-        setAppState('auth');
       }
     };
 
     validateAndAutoLogin();
   }, []);
 
-  const handleAuthSuccess = (email?: string) => {
-    // Check if user should see onboarding
-    const hasSeenOnboarding = localStorage.getItem('has_seen_onboarding');
-
-    // Show onboarding for new users or specific demo email
-    if (!hasSeenOnboarding || email === 'aa@gmail.com') {
+  const handleAuthSuccess = (email?: string, isNewUser?: boolean) => {
+    if (isNewUser) {
       setIsFirstTimeUser(true);
       setAppState('onboarding');
     } else {
@@ -80,13 +75,17 @@ export default function Home() {
     // Clear any other cached data
     localStorage.removeItem('teams_cache');
 
-    // Reset to auth state
-    setAppState('auth');
+    // Reset to landing state
+    setAppState('landing');
     setIsFirstTimeUser(false);
   };
 
+  if (appState === 'landing') {
+    return <LandingPage onGetStarted={() => setAppState('auth')} />;
+  }
+
   if (appState === 'auth') {
-    return <AuthPage onAuthSuccess={handleAuthSuccess} />;
+    return <AuthPage onAuthSuccess={handleAuthSuccess} onBack={() => setAppState('landing')} />;
   }
 
   if (appState === 'onboarding') {
