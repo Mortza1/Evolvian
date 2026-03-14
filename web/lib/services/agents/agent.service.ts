@@ -12,6 +12,7 @@ import type {
   HireAgentRequest,
   AgentFeedback,
   AgentUpdateRequest,
+  AgentCreateRequest,
 } from './types';
 
 class AgentService {
@@ -56,6 +57,13 @@ class AgentService {
   }
 
   // ==================== Team Agents ====================
+
+  /**
+   * Create a new custom agent for a team
+   */
+  async createAgent(data: AgentCreateRequest): Promise<Agent> {
+    return api.post<Agent>('/api/agents', data);
+  }
 
   /**
    * Get all agents for a team

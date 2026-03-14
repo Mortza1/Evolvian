@@ -4,6 +4,10 @@
  * TypeScript interfaces for agent-related data structures.
  */
 
+// ==================== Shared Types ====================
+
+export type SeniorityLevel = 'specialist' | 'practitioner' | 'manager';
+
 // ==================== Marketplace Types ====================
 
 export interface AgentTemplate {
@@ -22,6 +26,9 @@ export interface AgentTemplate {
   is_featured: boolean;
   is_premium: boolean;
   avatar_url?: string;
+  seniority_level: SeniorityLevel;
+  can_delegate: boolean;
+  can_ask_questions: boolean;
 }
 
 export interface MarketplaceCategory {
@@ -39,6 +46,13 @@ export interface HireAgentRequest {
 }
 
 // ==================== Team Agent Types ====================
+
+export interface KnowledgeEntry {
+  id: string;
+  title: string;
+  content: string;
+  type: 'text' | 'url' | 'document';
+}
 
 export interface Agent {
   id: number;
@@ -63,6 +77,32 @@ export interface Agent {
   evolution_history: EvolutionEvent[];
   hired_at: string;
   last_active_at?: string;
+  // Intelligence
+  system_prompt?: string;
+  model_id?: string;
+  seniority_level: SeniorityLevel;
+  can_delegate: boolean;
+  delegates_to: number[];
+  can_ask_questions: boolean;
+  knowledge_base: KnowledgeEntry[];
+}
+
+export interface AgentCreateRequest {
+  team_id: number;
+  name: string;
+  role: string;
+  specialty: string;
+  level?: number;
+  cost_per_hour?: number;
+  skills?: string[];
+  personality_traits?: string[];
+  system_prompt?: string;
+  model_id?: string;
+  seniority_level?: SeniorityLevel;
+  can_delegate?: boolean;
+  delegates_to?: number[];
+  can_ask_questions?: boolean;
+  knowledge_base?: KnowledgeEntry[];
 }
 
 export interface EvolutionEvent {

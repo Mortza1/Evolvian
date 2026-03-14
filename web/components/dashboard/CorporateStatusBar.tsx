@@ -50,7 +50,7 @@ export default function CorporateStatusBar({ teamId, onNavigateToBilling }: Corp
 
         activeTasks.forEach(task => {
           task.workflowNodes.forEach(node => {
-            activeAgentIds.add(node.agentId);
+            if (node.agentId) activeAgentIds.add(node.agentId);
           });
         });
 

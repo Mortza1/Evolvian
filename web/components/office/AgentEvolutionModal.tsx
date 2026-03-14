@@ -103,9 +103,9 @@ export default function AgentEvolutionModal({
           <div className="flex items-center gap-4">
             {/* Agent avatar */}
             <div className="relative">
-              {agent.photo ? (
+              {agent.photo_url ? (
                 <img
-                  src={agent.photo}
+                  src={agent.photo_url}
                   alt={agent.name}
                   className="h-14 w-14 rounded-sm object-cover border-2"
                   style={{ borderColor: '#5A9E8F' }}

@@ -35,7 +35,7 @@ export default function WorkflowVisualizer({
     }
 
     if (workflow) {
-      const nodes = [];
+      const nodes: { id: string; agent: string; action: string; input: string; output: string; status: 'pending'; isManager: boolean }[] = [];
 
       // Add Evo start node
       nodes.push({

@@ -124,6 +124,14 @@ class AgentCreate(BaseModel):
     cost_per_hour: float = 12.0
     skills: List[str] = []
     personality_traits: List[str] = []
+    # Intelligence
+    system_prompt: Optional[str] = None
+    model_id: Optional[str] = None
+    seniority_level: str = "practitioner"  # specialist | practitioner | manager
+    can_delegate: bool = False
+    delegates_to: List[int] = []
+    can_ask_questions: bool = False
+    knowledge_base: List[Dict[str, Any]] = []
 
 class AgentUpdate(BaseModel):
     name: Optional[str] = None
@@ -142,6 +150,14 @@ class AgentUpdate(BaseModel):
     personality_traits: Optional[List[str]] = None
     tools_access: Optional[List[str]] = None
     experience_points: Optional[int] = None
+    # Intelligence
+    system_prompt: Optional[str] = None
+    model_id: Optional[str] = None
+    seniority_level: Optional[str] = None
+    can_delegate: Optional[bool] = None
+    delegates_to: Optional[List[int]] = None
+    can_ask_questions: Optional[bool] = None
+    knowledge_base: Optional[List[Dict[str, Any]]] = None
 
 class AgentResponse(BaseModel):
     id: int
@@ -166,6 +182,14 @@ class AgentResponse(BaseModel):
     evolution_history: List[Any]
     hired_at: datetime
     last_active_at: Optional[datetime]
+    # Intelligence
+    system_prompt: Optional[str] = None
+    model_id: Optional[str] = None
+    seniority_level: str = "practitioner"
+    can_delegate: bool = False
+    delegates_to: List[Any] = []
+    can_ask_questions: bool = False
+    knowledge_base: List[Any] = []
 
     class Config:
         from_attributes = True
@@ -595,6 +619,9 @@ class MarketplaceAgentTemplate(BaseModel):
     hires_count: int = 0
     is_featured: bool = False
     is_premium: bool = False
+    seniority_level: str = "practitioner"
+    can_delegate: bool = False
+    can_ask_questions: bool = False
 
 
 class MarketplaceCategoryResponse(BaseModel):

@@ -17,6 +17,7 @@ from schemas import (
 )
 from models import User, Team, Agent
 from core.agents.registry import AGENT_REGISTRY
+from rag_service import rag_service
 
 router = APIRouter(prefix="/api/marketplace", tags=["Marketplace"])
 
@@ -83,7 +84,10 @@ async def browse_marketplace_agents(
             hires_count=t.hires_count,
             is_featured=t.is_featured,
             is_premium=t.is_premium,
-            avatar_url=t.avatar_url
+            avatar_url=t.avatar_url,
+            seniority_level=t.seniority_level,
+            can_delegate=t.can_delegate,
+            can_ask_questions=t.can_ask_questions,
         )
         for t in templates
     ]
@@ -115,7 +119,10 @@ async def get_marketplace_agent(
         hires_count=template.hires_count,
         is_featured=template.is_featured,
         is_premium=template.is_premium,
-        avatar_url=template.avatar_url
+        avatar_url=template.avatar_url,
+        seniority_level=template.seniority_level,
+        can_delegate=template.can_delegate,
+        can_ask_questions=template.can_ask_questions,
     )
 
 
@@ -141,7 +148,7 @@ async def hire_marketplace_agent(
     if not template:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent template not found")
 
-    # Create agent from template (uses registry's create method internally)
+    # Create agent from template
     agent = Agent(
         team_id=hire_data.team_id,
         name=hire_data.custom_name or template.name,
@@ -153,16 +160,22 @@ async def hire_marketplace_agent(
         rating=template.rating,
         cost_per_hour=template.base_cost_per_hour,
         skills=template.skills,
-        personality_traits=template.personality_traits
+        personality_traits=template.personality_traits,
+        system_prompt=template.system_prompt,
+        seniority_level=template.seniority_level,
+        can_delegate=template.can_delegate,
+        can_ask_questions=template.can_ask_questions,
+        knowledge_base=template.knowledge_base,
     )
 
     db.add(agent)
-
-    # Increment hire count in registry
     template.hires_count += 1
-
     db.commit()
     db.refresh(agent)
+
+    # Index knowledge base into RAG
+    if template.knowledge_base:
+        rag_service.index_agent_knowledge(agent.id, template.knowledge_base)
 
     return agent
 

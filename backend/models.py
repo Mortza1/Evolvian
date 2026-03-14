@@ -82,6 +82,23 @@ class Agent(Base):
     personality_traits = Column(JSON, default=[])
     tools_access = Column(JSON, default=[])  # List of tool IDs this agent can use
 
+    # Agent Intelligence — injected into LLM prompts at execution time
+    system_prompt = Column(Text, nullable=True)  # Core instructions that shape this agent's behaviour
+    model_id = Column(String, nullable=True)      # LLM override, e.g. "anthropic/claude-opus-4-6" — None = use global default
+
+    # Seniority & Delegation
+    # "specialist"   — deep domain knowledge, no delegation (leaf node)
+    # "practitioner" — executes tasks, uses tools, can ask questions
+    # "manager"      — orchestrates, delegates to sub-agents, asks clarifying questions
+    seniority_level = Column(String, default="practitioner")
+    can_delegate = Column(Boolean, default=False)       # Managers can spin up sub-agents
+    delegates_to = Column(JSON, default=[])             # List of agent IDs this agent may delegate to
+    can_ask_questions = Column(Boolean, default=False)  # Surfaces clarifying questions before workflow starts
+
+    # RAG Knowledge Base — chunks injected into prompt at runtime
+    # Each entry: {id, title, content, type: "text"|"url"|"document"}
+    knowledge_base = Column(JSON, default=[])
+
     # Evolution tracking
     experience_points = Column(Integer, default=0)
     evolution_history = Column(JSON, default=[])  # Track how the agent evolved

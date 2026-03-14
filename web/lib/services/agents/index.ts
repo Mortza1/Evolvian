@@ -13,4 +13,7 @@ export type {
   MarketplaceCategory,
   HireAgentRequest,
   AgentFeedback,
+  AgentCreateRequest,
+  KnowledgeEntry,
+  SeniorityLevel,
 } from './types';

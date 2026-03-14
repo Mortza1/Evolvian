@@ -83,7 +83,6 @@ function AgentAvatars({ agents }: { agents: { name: string; photo?: string }[] }
       ))}
       {overflow > 0 && (
         <span
-          style={{ fontFamily: "'IBM Plex Mono', monospace", marginLeft: '-6px' }}
           className="flex h-6 w-6 items-center justify-center rounded-md border-2 bg-[#1E2D30] text-[9px] text-[#4A6A72]"
           style={{ borderColor: '#111A1D', marginLeft: '-6px', fontFamily: "'IBM Plex Mono', monospace" }}
         >

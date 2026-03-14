@@ -28,6 +28,7 @@ from core.runtime import (
 )
 from core.tools.executor import ToolExecutor, parse_tool_calls_from_response, parse_assumptions_from_response
 from core.tools.registry import get_tool_registry
+from rag_service import rag_service
 from core.utils import infer_task_type as _infer_task_type
 
 router = APIRouter(prefix="/api/operations", tags=["Operations"])
@@ -1065,8 +1066,59 @@ def generate_execution_events(
 
 Only raise assumptions for truly critical uncertainties. Most tasks can proceed with reasonable assumptions."""
 
+                # ── Agent intelligence sections ──────────────────────────
+                # 1. Custom system prompt (overrides generic intro if set)
+                agent_custom_prompt = getattr(assigned_agent, 'system_prompt', None) or ""
+                agent_specialty = getattr(assigned_agent, 'specialty', None) or ""
+                agent_traits = getattr(assigned_agent, 'personality_traits', None) or []
+                agent_seniority = getattr(assigned_agent, 'seniority_level', None) or "practitioner"
+                agent_kb = getattr(assigned_agent, 'knowledge_base', None) or []
+
+                # Identity block
+                if agent_custom_prompt:
+                    identity_block = agent_custom_prompt
+                else:
+                    trait_str = ", ".join(agent_traits) if agent_traits else ""
+                    identity_block = f"You are {agent_name}, a {agent_role}."
+                    if agent_specialty:
+                        identity_block += f" Your specialty is {agent_specialty}."
+                    if trait_str:
+                        identity_block += f" You are {trait_str}."
+
+                # Seniority context
+                seniority_note = ""
+                if agent_seniority == "specialist":
+                    seniority_note = "\nYou are a deep specialist. Provide authoritative, precise answers within your domain. Do not speculate outside it."
+                elif agent_seniority == "manager":
+                    seniority_note = "\nYou are a manager-level agent. Your job is to think strategically, coordinate outputs, and ensure quality across the team's work."
+
+                # Knowledge base — semantic retrieval (RAG)
+                # Query = node name + description + overall goal for maximum relevance
+                kb_section = ""
+                if agent_kb and assigned_agent:
+                    rag_query = f"{node_name}: {node_desc}\nOverall goal: {operation.description}"
+                    try:
+                        relevant_chunks = rag_service.retrieve(
+                            agent_id=assigned_agent.id,
+                            query=rag_query,
+                            top_k=5,
+                        )
+                        if relevant_chunks:
+                            kb_section = "\n## Relevant Knowledge\n"
+                            for chunk in relevant_chunks:
+                                kb_section += f"### {chunk['entry_title']}\n{chunk['chunk_text']}\n\n"
+                    except Exception as _rag_err:
+                        # Fallback: inject all entries as plain text if RAG fails
+                        print(f"[execute] RAG retrieval failed, falling back to full injection: {_rag_err}")
+                        kb_section = "\n## Your Knowledge Base\n"
+                        for entry in agent_kb:
+                            title = entry.get("title", "Reference")
+                            content = entry.get("content", "")
+                            if content:
+                                kb_section += f"### {title}\n{content}\n\n"
+
                 # Combine into full prompt
-                system_prompt = f"""You are {agent_name}, a {agent_role}.
+                system_prompt = f"""{identity_block}{seniority_note}
 
 ## Task: {node_name}
 {node_desc}
@@ -1074,6 +1126,7 @@ Only raise assumptions for truly critical uncertainties. Most tasks can proceed 
 ## Overall Goal
 {operation.description}
 {previous_work_section}
+{kb_section}
 {knowledge_section}
 {tools_prompt_section}
 

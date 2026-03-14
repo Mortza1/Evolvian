@@ -34,7 +34,7 @@ export default function GraphVisualizer({
   const [nodes, setNodes] = useState<NodePosition[]>([]);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState({ width: 1600, height: 1000 });
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | undefined>(undefined);
 
   // Zoom and Pan state
   const [zoom, setZoom] = useState(1);

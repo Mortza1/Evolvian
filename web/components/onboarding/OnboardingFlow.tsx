@@ -30,12 +30,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     if (dept === 'personal-branding') {
       const newTeam = await createTeam({
         name: 'Personal Branding',
-        department: 'personal-branding',
         icon: '✨',
         color: '#EC4899',
       });
       // Mark as new team for HQ to detect
-      localStorage.setItem('newTeamId', newTeam.id.toString());
+      if (newTeam) localStorage.setItem('newTeamId', newTeam.id.toString());
       localStorage.setItem('isNewTeam', 'true');
       onComplete();
       return;

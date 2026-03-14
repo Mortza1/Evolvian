@@ -2,32 +2,31 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useMarketplace, useTeamAgents } from '@/lib/services/agents';
-import type { AgentTemplate } from '@/lib/services/agents';
+import type { AgentTemplate, Agent } from '@/lib/services/agents';
+import AgentDevModal from '@/components/agents/AgentDevModal';
+import { Dialog } from '@/components/ui/Dialog';
 
 interface TalentHubViewProps {
   teamId: string;
 }
 
-// ─── Category label map ────────────────────────────────────────────────────────
-const CATEGORY_LABELS: Record<string, string> = {
-  all: 'All',
-  management: 'Mgmt',
-  research: 'Research',
-  creative: 'Creative',
-  technical: 'Technical',
-  operations: 'Ops',
+type MainTab = 'my-agents' | 'marketplace';
+
+const SENIORITY_COLORS: Record<string, string> = {
+  specialist: '#BF8A52',
+  practitioner: '#5A9E8F',
+  manager: '#9E7ABF',
 };
 
 export default function TalentHubView({ teamId }: TalentHubViewProps) {
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [mainTab, setMainTab] = useState<MainTab>('my-agents');
   const [searchQuery, setSearchQuery] = useState('');
-  const [hiringId, setHiringId] = useState<string | null>(null);
+  const [showDevModal, setShowDevModal] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<Agent | undefined>(undefined);
 
   const {
     templates,
-    categories,
     isLoading: loadingTemplates,
-    error: templatesError,
     hireAgent,
   } = useMarketplace({ autoFetch: true });
 
@@ -35,75 +34,62 @@ export default function TalentHubView({ teamId }: TalentHubViewProps) {
     agents: hiredAgents,
     isLoading: loadingHired,
     refresh: refreshHired,
+    fireAgent,
   } = useTeamAgents({ teamId: parseInt(teamId, 10), autoFetch: true });
 
-  const [filteredTemplates, setFilteredTemplates] = useState<AgentTemplate[]>([]);
+  const [firingId, setFiringId] = useState<number | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<{ id: number; name: string } | null>(null);
+  const [hiringId, setHiringId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let filtered = templates;
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(
-        (t) => t.category.toLowerCase() === selectedCategory.toLowerCase()
-      );
-    }
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (t) =>
-          t.name.toLowerCase().includes(q) ||
-          t.role.toLowerCase().includes(q) ||
-          t.specialty.toLowerCase().includes(q) ||
-          t.skills.some((s) => s.toLowerCase().includes(q))
-      );
-    }
-    setFilteredTemplates(filtered);
-  }, [templates, selectedCategory, searchQuery]);
+  // Filtered my-agents list
+  const filteredAgents = hiredAgents.filter((a) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      a.name.toLowerCase().includes(q) ||
+      a.role.toLowerCase().includes(q) ||
+      (a.specialty ?? '').toLowerCase().includes(q)
+    );
+  });
 
-  const isHired = useCallback(
-    (templateId: string) => hiredAgents.some((a) => a.avatar_seed === templateId),
-    [hiredAgents]
-  );
-
-  const handleHireAgent = async (template: AgentTemplate) => {
-    setHiringId(template.id);
-    try {
-      const hired = await hireAgent({
-        team_id: parseInt(teamId, 10),
-        template_id: template.id,
-      });
-      if (hired) await refreshHired();
-    } catch (err) {
-      console.error('Failed to hire agent:', err);
-    } finally {
-      setHiringId(null);
-    }
+  const handleAgentSaved = async (agent: Agent) => {
+    setShowDevModal(false);
+    setEditingAgent(undefined);
+    await refreshHired();
   };
 
-  const categoryList = [
-    { id: 'all', name: 'All Agents' },
-    ...(categories.length > 0
-      ? categories.map((c) => ({ id: c.id, name: c.name }))
-      : [
-          { id: 'management', name: 'Management' },
-          { id: 'research', name: 'Research' },
-          { id: 'creative', name: 'Creative' },
-          { id: 'technical', name: 'Technical' },
-          { id: 'operations', name: 'Operations' },
-        ]),
-  ];
+  const handleEditAgent = (agent: Agent) => {
+    setEditingAgent(agent);
+    setShowDevModal(true);
+  };
 
-  const isLoading = loadingTemplates || loadingHired;
+  const handleFireAgent = async () => {
+    if (!confirmRemove) return;
+    setFiringId(confirmRemove.id);
+    await fireAgent(confirmRemove.id);
+    setFiringId(null);
+    setConfirmRemove(null);
+  };
+
+  const handleHire = async (templateId: string) => {
+    setHiringId(templateId);
+    await hireAgent({ team_id: parseInt(teamId, 10), template_id: templateId });
+    await refreshHired();
+    setHiringId(null);
+  };
+
+  const openNewAgent = () => {
+    setEditingAgent(undefined);
+    setShowDevModal(true);
+  };
 
   return (
     <div
       className="flex h-full flex-col overflow-hidden"
       style={{ background: '#080E11', fontFamily: "'Syne', sans-serif" }}
     >
-      {/* ── Header bar ───────────────────────────────────────────────────────── */}
-      <div
-        className="shrink-0 border-b px-8 py-5"
-        style={{ borderColor: '#162025' }}
-      >
+      {/* ── Header ───────────────────────────────────────────────────────────── */}
+      <div className="shrink-0 border-b px-8 py-5" style={{ borderColor: '#162025' }}>
         <div className="flex items-end justify-between gap-6">
           <div>
             <p
@@ -116,41 +102,63 @@ export default function TalentHubView({ teamId }: TalentHubViewProps) {
               style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700 }}
               className="text-[22px] leading-none text-[#EAE6DF]"
             >
-              Agent Marketplace
+              {mainTab === 'my-agents' ? 'My Agents' : 'Agent Marketplace'}
             </h1>
           </div>
 
-          {/* Search */}
-          <div className="relative w-[280px]">
-            <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#2E4248]"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search agents…"
-              className="w-full rounded-md border bg-[#111A1D] py-2 pl-8 pr-3 text-[12px] text-[#D8D4CC] placeholder-[#2E4248] outline-none transition-all"
-              style={{ borderColor: '#1E2D30', fontFamily: "'Syne', sans-serif" }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#5A9E8F50'; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#1E2D30'; }}
-            />
+          <div className="flex items-center gap-3">
+            {/* Search */}
+            <div className="relative w-[240px]">
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#2E4248]"
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search agents…"
+                className="w-full rounded-md border bg-[#111A1D] py-2 pl-8 pr-3 text-[12px] text-[#D8D4CC] placeholder-[#2E4248] outline-none transition-all"
+                style={{ borderColor: '#1E2D30', fontFamily: "'Syne', sans-serif" }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#5A9E8F50'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#1E2D30'; }}
+              />
+            </div>
+
+            {/* Add Agent — only on My Agents tab */}
+            {mainTab === 'my-agents' && (
+              <button
+                onClick={openNewAgent}
+                className="flex items-center gap-2 rounded-md border px-4 py-2 text-[12px] transition-all"
+                style={{
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  background: '#5A9E8F12',
+                  borderColor: '#5A9E8F40',
+                  color: '#5A9E8F',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#5A9E8F22'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#5A9E8F12'; }}
+              >
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Agent
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Category tabs */}
+        {/* Main tabs */}
         <div className="mt-4 flex items-center gap-1">
-          {categoryList.map((cat) => {
-            const isActive = selectedCategory === cat.id;
+          {(['my-agents', 'marketplace'] as MainTab[]).map((t) => {
+            const label = t === 'my-agents' ? 'My Agents' : 'Marketplace';
+            const isActive = mainTab === t;
             return (
               <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
+                key={t}
+                onClick={() => setMainTab(t)}
                 className="relative rounded px-3 py-1.5 text-[11px] transition-all"
                 style={{
                   fontFamily: "'IBM Plex Mono', monospace",
@@ -159,270 +167,435 @@ export default function TalentHubView({ teamId }: TalentHubViewProps) {
                   border: `1px solid ${isActive ? '#5A9E8F30' : 'transparent'}`,
                 }}
               >
-                {cat.name}
+                {label}
+                {t === 'my-agents' && hiredAgents.length > 0 && (
+                  <span
+                    className="ml-1.5 rounded-full px-1.5 py-0.5 text-[9px]"
+                    style={{
+                      fontFamily: "'IBM Plex Mono', monospace",
+                      background: isActive ? '#5A9E8F20' : '#1E2D30',
+                      color: isActive ? '#5A9E8F' : '#3A5056',
+                    }}
+                  >
+                    {hiredAgents.length}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* ── Error ────────────────────────────────────────────────────────────── */}
-      {templatesError && (
-        <div
-          className="mx-8 mt-4 shrink-0 rounded border px-4 py-3"
-          style={{ background: '#9E5A5A12', borderColor: '#9E5A5A30' }}
-        >
-          <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] text-[#9E5A5A]">
-            {templatesError}
-          </p>
-        </div>
-      )}
-
-      {/* ── Grid area ────────────────────────────────────────────────────────── */}
+      {/* ── Body ─────────────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto scrollbar-hide px-8 py-6">
 
-        {/* Loading skeleton */}
-        {isLoading && (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div
-                key={i}
-                className="rounded-md border p-5 animate-pulse"
-                style={{ background: '#111A1D', borderColor: '#1E2D30' }}
-              >
-                <div className="mb-4 flex items-start gap-3">
-                  <div className="h-12 w-12 rounded-md" style={{ background: '#162025' }} />
-                  <div className="flex-1 space-y-2 pt-1">
-                    <div className="h-3 w-2/3 rounded" style={{ background: '#162025' }} />
-                    <div className="h-2.5 w-1/2 rounded" style={{ background: '#162025' }} />
-                  </div>
-                </div>
-                <div className="h-10 rounded" style={{ background: '#162025' }} />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Agent grid */}
-        {!isLoading && filteredTemplates.length > 0 && (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredTemplates.map((template, i) => {
-              const hired = isHired(template.id);
-              const isHiring = hiringId === template.id;
-
-              return (
-                <div
-                  key={template.id}
-                  className="animate-evolve-in group relative flex flex-col rounded-md border transition-all duration-150"
-                  style={{
-                    background: hired ? '#0F1E1B' : '#111A1D',
-                    borderColor: hired ? '#5A9E8F30' : '#1E2D30',
-                    animationDelay: `${i * 40}ms`,
-                  }}
-                >
-                  {/* Featured bar */}
-                  {template.is_featured && (
-                    <div
-                      className="absolute inset-x-0 top-0 h-[2px] rounded-t-md"
-                      style={{ background: '#BF8A52' }}
-                    />
-                  )}
-
-                  <div className="flex flex-1 flex-col p-5">
-                    {/* Card header */}
+        {/* ══ MY AGENTS TAB ══ */}
+        {mainTab === 'my-agents' && (
+          <>
+            {loadingHired && (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="rounded-md border p-5 animate-pulse" style={{ background: '#111A1D', borderColor: '#1E2D30' }}>
                     <div className="mb-4 flex items-start gap-3">
-                      {/* Avatar */}
-                      <div
-                        className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-md border"
-                        style={{ background: '#0B1215', borderColor: hired ? '#5A9E8F30' : '#1E2D30' }}
-                      >
-                        <span
-                          style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: '18px' }}
-                          className="text-[#5A9E8F] leading-none"
-                        >
-                          {template.name.charAt(0)}
-                        </span>
-                        {hired && (
-                          <span
-                            className="absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded-full border-2"
-                            style={{ background: '#5A9E8F', borderColor: '#111A1D' }}
-                          />
-                        )}
+                      <div className="h-12 w-12 rounded-md" style={{ background: '#162025' }} />
+                      <div className="flex-1 space-y-2 pt-1">
+                        <div className="h-3 w-2/3 rounded" style={{ background: '#162025' }} />
+                        <div className="h-2.5 w-1/2 rounded" style={{ background: '#162025' }} />
                       </div>
+                    </div>
+                    <div className="h-10 rounded" style={{ background: '#162025' }} />
+                  </div>
+                ))}
+              </div>
+            )}
 
-                      {/* Name / role / badges */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3
-                            style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }}
-                            className="truncate text-[14px] text-[#EAE6DF] leading-tight"
+            {!loadingHired && filteredAgents.length > 0 && (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {filteredAgents.map((agent, i) => {
+                  const seniority = agent.seniority_level ?? 'practitioner';
+                  const senColor = SENIORITY_COLORS[seniority] ?? '#5A9E8F';
+
+                  return (
+                    <div
+                      key={agent.id}
+                      className="group relative flex flex-col rounded-md border transition-all duration-150"
+                      style={{
+                        background: '#111A1D',
+                        borderColor: '#1E2D30',
+                        animationDelay: `${i * 40}ms`,
+                      }}
+                    >
+                      {/* Seniority colour bar */}
+                      <div
+                        className="absolute inset-x-0 top-0 h-[2px] rounded-t-md"
+                        style={{ background: senColor }}
+                      />
+
+                      <div className="flex flex-1 flex-col p-5">
+                        {/* Header */}
+                        <div className="mb-4 flex items-start gap-3">
+                          <div
+                            className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-md border"
+                            style={{ background: '#0B1215', borderColor: '#1E2D30' }}
                           >
-                            {template.name}
-                          </h3>
-                          {template.is_premium && (
                             <span
-                              style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#BF8A52', borderColor: '#BF8A5230' }}
-                              className="shrink-0 rounded border px-1.5 py-0.5 text-[9px]"
+                              style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: '18px', color: senColor }}
+                              className="leading-none"
                             >
-                              PRO
+                              {agent.name.charAt(0)}
                             </span>
-                          )}
+                            <span
+                              className="absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded-full border-2"
+                              style={{
+                                background: agent.is_online ? '#5A9E8F' : '#2A3E44',
+                                borderColor: '#111A1D',
+                              }}
+                            />
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <h3
+                              style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }}
+                              className="truncate text-[14px] text-[#EAE6DF] leading-tight"
+                            >
+                              {agent.name}
+                            </h3>
+                            <p className="truncate text-[11px] text-[#3A5056]">{agent.role}</p>
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <span
+                                className="rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wider"
+                                style={{
+                                  fontFamily: "'IBM Plex Mono', monospace",
+                                  color: senColor,
+                                  background: `${senColor}15`,
+                                }}
+                              >
+                                {seniority}
+                              </span>
+                              {agent.can_delegate && (
+                                <span
+                                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#4A6A72', borderColor: '#1E2D30' }}
+                                  className="rounded border px-1.5 py-0.5 text-[9px]"
+                                >
+                                  delegates
+                                </span>
+                              )}
+                              {agent.can_ask_questions && (
+                                <span
+                                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#4A6A72', borderColor: '#1E2D30' }}
+                                  className="rounded border px-1.5 py-0.5 text-[9px]"
+                                >
+                                  asks Qs
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <p className="truncate text-[11px] text-[#3A5056]">{template.role}</p>
-                        <div className="mt-1.5 flex items-center gap-2">
-                          <span
-                            style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#5A9E8F', borderColor: '#5A9E8F30' }}
-                            className="rounded border px-1.5 py-0.5 text-[9px]"
-                          >
-                            LV {template.level}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            <svg className="h-3 w-3 text-[#BF8A52]" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+
+                        {/* Specialty */}
+                        {agent.specialty && (
+                          <p className="mb-3 text-[12px] text-[#4A6A72]">{agent.specialty}</p>
+                        )}
+
+                        {/* Knowledge Base indicator */}
+                        {agent.knowledge_base?.length > 0 && (
+                          <div className="mb-3 flex items-center gap-1.5">
+                            <svg className="h-3 w-3 text-[#3A5056]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                             </svg>
-                            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[10px] text-[#BF8A52]">
-                              {template.rating.toFixed(1)}
+                            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[10px] text-[#3A5056]">
+                              {agent.knowledge_base.length} knowledge {agent.knowledge_base.length === 1 ? 'entry' : 'entries'}
                             </span>
+                          </div>
+                        )}
+
+                        {/* Model override */}
+                        {agent.model_id && (
+                          <div className="mb-3 flex items-center gap-1.5">
+                            <svg className="h-3 w-3 text-[#3A5056]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[10px] text-[#3A5056] truncate">
+                              {agent.model_id.split('/').pop()}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Footer actions */}
+                        <div
+                          className="mt-auto flex items-center justify-between border-t pt-4"
+                          style={{ borderColor: '#162025' }}
+                        >
+                          <span
+                            style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#BF8A52' }}
+                            className="text-[13px] font-semibold"
+                          >
+                            ${agent.cost_per_hour.toFixed(2)}
+                            <span className="text-[10px] text-[#5A6E58]">/hr</span>
+                          </span>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleEditAgent(agent)}
+                              className="flex items-center gap-1.5 rounded border px-3 py-1.5 text-[11px] transition-all"
+                              style={{
+                                fontFamily: "'IBM Plex Mono', monospace",
+                                background: 'transparent',
+                                borderColor: '#1E2D30',
+                                color: '#4A6A72',
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#5A9E8F40'; e.currentTarget.style.color = '#5A9E8F'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1E2D30'; e.currentTarget.style.color = '#4A6A72'; }}
+                            >
+                              Configure
+                            </button>
+                            <button
+                              onClick={() => setConfirmRemove({ id: agent.id, name: agent.name })}
+                              disabled={firingId === agent.id}
+                              className="flex items-center gap-1 rounded border px-2 py-1.5 text-[11px] text-[#2E4248] transition-all disabled:opacity-40"
+                              style={{ borderColor: 'transparent' }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = '#9E5A5A'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.color = '#2E4248'; }}
+                              title="Remove agent"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
                           </div>
                         </div>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
+            )}
 
-                    {/* Description */}
-                    <p className="mb-3 line-clamp-2 text-[12px] leading-relaxed text-[#4A6A72]">
-                      {template.description}
-                    </p>
+            {!loadingHired && filteredAgents.length === 0 && (
+              <div className="flex h-full flex-col items-center justify-center py-24 text-center">
+                <div
+                  className="mb-4 flex h-16 w-16 items-center justify-center rounded-xl border"
+                  style={{ background: '#111A1D', borderColor: '#1E2D30' }}
+                >
+                  <svg className="h-7 w-7 text-[#2A3E44]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }} className="text-[15px] text-[#3A5056]">
+                  {searchQuery ? 'No agents match your search' : 'No agents on this team yet'}
+                </p>
+                <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="mt-1 text-[12px] text-[#2A3E44]">
+                  {searchQuery ? 'Try a different search term' : 'Add your first agent to get started'}
+                </p>
+                {!searchQuery && (
+                  <button
+                    onClick={openNewAgent}
+                    className="mt-6 flex items-center gap-2 rounded-md border px-5 py-2.5 text-[12px] transition-all"
+                    style={{
+                      fontFamily: "'IBM Plex Mono', monospace",
+                      background: '#5A9E8F12',
+                      borderColor: '#5A9E8F40',
+                      color: '#5A9E8F',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#5A9E8F22'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = '#5A9E8F12'; }}
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Agent
+                  </button>
+                )}
+              </div>
+            )}
+          </>
+        )}
 
-                    {/* Specialty */}
-                    <div className="mb-3">
-                      <span
-                        style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-                        className="text-[9px] uppercase tracking-widest text-[#2E4248]"
-                      >
-                        Specialty
-                      </span>
-                      <p className="mt-0.5 text-[12px] text-[#B8B2AA]">{template.specialty}</p>
-                    </div>
-
-                    {/* Skills */}
-                    <div className="mb-4 flex flex-wrap gap-1">
-                      {template.skills.slice(0, 3).map((skill, idx) => (
-                        <span
-                          key={idx}
-                          style={{ fontFamily: "'IBM Plex Mono', monospace", borderColor: '#1E2D30', color: '#3A5056' }}
-                          className="rounded border bg-[#0B1215] px-2 py-0.5 text-[10px]"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                      {template.skills.length > 3 && (
-                        <span
-                          style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-                          className="px-1 text-[10px] text-[#2E4248]"
-                        >
-                          +{template.skills.length - 3}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Footer */}
-                    <div
-                      className="mt-auto flex items-center justify-between border-t pt-4"
-                      style={{ borderColor: '#162025' }}
-                    >
-                      <div>
-                        <span
-                          style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-                          className="text-[9px] uppercase tracking-widest text-[#2E4248]"
-                        >
-                          Cost
-                        </span>
-                        <p
-                          style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#BF8A52' }}
-                          className="text-[15px] font-semibold leading-tight"
-                        >
-                          ${template.base_cost_per_hour.toFixed(2)}
-                          <span className="text-[10px] text-[#5A6E58]">/hr</span>
-                        </p>
+        {/* ══ MARKETPLACE TAB ══ */}
+        {mainTab === 'marketplace' && (
+          <>
+            {loadingTemplates && (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {[1,2,3,4].map((i) => (
+                  <div key={i} className="rounded-md border p-5 animate-pulse" style={{ background: '#111A1D', borderColor: '#1E2D30' }}>
+                    <div className="mb-4 flex items-start gap-3">
+                      <div className="h-12 w-12 rounded-md" style={{ background: '#162025' }} />
+                      <div className="flex-1 space-y-2 pt-1">
+                        <div className="h-3 w-2/3 rounded" style={{ background: '#162025' }} />
+                        <div className="h-2.5 w-1/2 rounded" style={{ background: '#162025' }} />
                       </div>
+                    </div>
+                    <div className="h-10 rounded" style={{ background: '#162025' }} />
+                  </div>
+                ))}
+              </div>
+            )}
 
-                      {hired ? (
-                        <div
-                          className="flex items-center gap-1.5 rounded border px-3 py-1.5"
-                          style={{ background: '#0F1E1B', borderColor: '#5A9E8F30', color: '#5A9E8F' }}
-                        >
-                          <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                          <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px]">
-                            Hired
+            {!loadingTemplates && templates.length === 0 && (
+              <div className="flex h-full flex-col items-center justify-center py-24 text-center">
+                <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }} className="text-[15px] text-[#3A5056]">
+                  No agents in the marketplace yet
+                </p>
+              </div>
+            )}
+
+            {!loadingTemplates && templates.length > 0 && (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {templates.map((template, i) => {
+                  const senColor = SENIORITY_COLORS[template.seniority_level] ?? '#5A9E8F';
+                  const alreadyHired = hiredAgents.some((a) => a.avatar_seed === template.id);
+                  const isHiring = hiringId === template.id;
+
+                  return (
+                    <div
+                      key={template.id}
+                      className="relative flex flex-col rounded-md border transition-all duration-150"
+                      style={{ background: '#111A1D', borderColor: '#1E2D30', animationDelay: `${i * 40}ms` }}
+                    >
+                      {/* Seniority bar */}
+                      <div className="absolute inset-x-0 top-0 h-[2px] rounded-t-md" style={{ background: senColor }} />
+
+                      {template.is_featured && (
+                        <div className="absolute right-3 top-3">
+                          <span
+                            style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', color: '#BF8A52', borderColor: '#BF8A5230', background: '#BF8A5210' }}
+                            className="rounded border px-1.5 py-0.5 uppercase tracking-wider"
+                          >
+                            Featured
                           </span>
                         </div>
-                      ) : (
-                        <button
-                          onClick={() => handleHireAgent(template)}
-                          disabled={isHiring}
-                          className="flex items-center gap-1.5 rounded border px-3 py-1.5 text-[11px] transition-all disabled:cursor-not-allowed disabled:opacity-40"
-                          style={{
-                            fontFamily: "'IBM Plex Mono', monospace",
-                            background: '#5A9E8F12',
-                            borderColor: '#5A9E8F40',
-                            color: '#5A9E8F',
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = '#5A9E8F20'; e.currentTarget.style.borderColor = '#5A9E8F70'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = '#5A9E8F12'; e.currentTarget.style.borderColor = '#5A9E8F40'; }}
-                        >
-                          {isHiring ? (
-                            <>
-                              <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                              </svg>
-                              Hiring…
-                            </>
-                          ) : (
-                            'Hire Agent →'
-                          )}
-                        </button>
                       )}
+
+                      <div className="flex flex-1 flex-col p-5 pt-6">
+                        {/* Header */}
+                        <div className="mb-3 flex items-start gap-3">
+                          <div
+                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border"
+                            style={{ background: `${senColor}12`, borderColor: `${senColor}30` }}
+                          >
+                            <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: '20px', color: senColor }}>
+                              {template.name.charAt(0)}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0 pr-12">
+                            <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700 }} className="truncate text-[14px] text-[#EAE6DF]">
+                              {template.name}
+                            </h3>
+                            <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="truncate text-[11px] text-[#3A5056]">
+                              {template.role}
+                            </p>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              <span
+                                className="rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wider"
+                                style={{ fontFamily: "'IBM Plex Mono', monospace", color: senColor, background: `${senColor}15` }}
+                              >
+                                {template.seniority_level}
+                              </span>
+                              {template.can_delegate && (
+                                <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#4A6A72', borderColor: '#1E2D30' }} className="rounded border px-1.5 py-0.5 text-[9px]">
+                                  delegates
+                                </span>
+                              )}
+                              {template.can_ask_questions && (
+                                <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#4A6A72', borderColor: '#1E2D30' }} className="rounded border px-1.5 py-0.5 text-[9px]">
+                                  asks Qs
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Description */}
+                        <p style={{ fontFamily: "'Syne', sans-serif" }} className="mb-3 text-[12px] leading-relaxed text-[#4A6A72] line-clamp-2">
+                          {template.description}
+                        </p>
+
+                        {/* Skills */}
+                        {template.skills.length > 0 && (
+                          <div className="mb-4 flex flex-wrap gap-1">
+                            {template.skills.slice(0, 3).map((skill) => (
+                              <span
+                                key={skill}
+                                style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#3A5056', borderColor: '#1E2D30', background: '#0B1215' }}
+                                className="rounded border px-2 py-0.5 text-[10px]"
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Footer */}
+                        <div className="mt-auto flex items-center justify-between border-t pt-4" style={{ borderColor: '#162025' }}>
+                          <div>
+                            <div style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#BF8A52' }} className="text-[13px] font-semibold">
+                              ${template.base_cost_per_hour.toFixed(0)}<span className="text-[10px] text-[#5A6E58]">/hr</span>
+                            </div>
+                            <div style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[10px] text-[#2E4248]">
+                              ★ {template.rating} · {template.hires_count} hires
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => !alreadyHired && handleHire(template.id)}
+                            disabled={alreadyHired || isHiring}
+                            className="flex items-center gap-1.5 rounded border px-3 py-1.5 text-[11px] transition-all disabled:cursor-not-allowed"
+                            style={{
+                              fontFamily: "'IBM Plex Mono', monospace",
+                              background: alreadyHired ? '#5A9E8F10' : '#5A9E8F12',
+                              borderColor: alreadyHired ? '#5A9E8F30' : '#5A9E8F40',
+                              color: alreadyHired ? '#3A6A62' : '#5A9E8F',
+                              opacity: alreadyHired ? 0.6 : 1,
+                            }}
+                            onMouseEnter={(e) => { if (!alreadyHired && !isHiring) e.currentTarget.style.background = '#5A9E8F22'; }}
+                            onMouseLeave={(e) => { if (!alreadyHired && !isHiring) e.currentTarget.style.background = '#5A9E8F12'; }}
+                          >
+                            {isHiring ? (
+                              <>
+                                <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                                Hiring…
+                              </>
+                            ) : alreadyHired ? (
+                              'On Team'
+                            ) : (
+                              'Hire →'
+                            )}
+                          </button>
+                        </div>
+                      </div>
                     </div>
-
-                    {/* Hires count */}
-                    {template.hires_count > 0 && (
-                      <p
-                        style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-                        className="mt-3 text-center text-[10px] text-[#2A3E44]"
-                      >
-                        {template.hires_count.toLocaleString()} teams hired
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!isLoading && filteredTemplates.length === 0 && (
-          <div className="flex h-full flex-col items-center justify-center py-24 text-center">
-            <div
-              className="mb-4 flex h-12 w-12 items-center justify-center rounded-md border"
-              style={{ background: '#111A1D', borderColor: '#1E2D30' }}
-            >
-              <svg className="h-5 w-5 text-[#2A3E44]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }} className="text-[14px] text-[#3A5056]">
-              No agents found
-            </p>
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="mt-1 text-[11px] text-[#2A3E44]">
-              Try adjusting your search or filters
-            </p>
-          </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
+
+      {/* ── Agent Dev Modal ───────────────────────────────────────────────────── */}
+      <Dialog
+        open={!!confirmRemove}
+        title={`Remove ${confirmRemove?.name ?? 'agent'}?`}
+        description="This agent will be removed from your team. Their configuration and knowledge base will be deleted."
+        variant="destructive"
+        confirmLabel="Remove"
+        loading={firingId !== null}
+        onConfirm={handleFireAgent}
+        onCancel={() => setConfirmRemove(null)}
+      />
+
+      {showDevModal && (
+        <AgentDevModal
+          teamId={parseInt(teamId, 10)}
+          teamAgents={hiredAgents}
+          agent={editingAgent}
+          onClose={() => { setShowDevModal(false); setEditingAgent(undefined); }}
+          onSaved={handleAgentSaved}
+        />
+      )}
     </div>
   );
 }

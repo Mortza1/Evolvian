@@ -21,9 +21,9 @@ export async function apiRequest<T = any>(
 ): Promise<T> {
   const token = getAuthToken();
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(options.headers as Record<string, string>),
   };
 
   if (token) {
@@ -44,7 +44,7 @@ export async function apiRequest<T = any>(
   // Handle responses with no content (like DELETE requests)
   const contentLength = response.headers.get('Content-Length');
   if (response.status === 204 || contentLength === '0') {
-    return undefined;
+    return undefined as unknown as T;
   }
 
   // Check if response has content

@@ -3,20 +3,22 @@
 import { useState, useEffect } from 'react';
 import { getInstalledTools, InstalledTool, getCategoryColor, uninstallTool } from '@/lib/tools';
 import { getAgents } from '@/lib/agents';
+import { Dialog } from '@/components/ui/Dialog';
 
 export default function MyToolbox() {
   const [tools, setTools] = useState<InstalledTool[]>([]);
+  const [confirmUninstall, setConfirmUninstall] = useState<{ id: string; name: string } | null>(null);
   const agents = getAgents();
 
   useEffect(() => {
     setTools(getInstalledTools());
   }, []);
 
-  const handleUninstall = (toolId: string) => {
-    if (confirm('Are you sure you want to uninstall this tool?')) {
-      uninstallTool(toolId);
-      setTools(getInstalledTools());
-    }
+  const handleUninstall = () => {
+    if (!confirmUninstall) return;
+    uninstallTool(confirmUninstall.id);
+    setTools(getInstalledTools());
+    setConfirmUninstall(null);
   };
 
   const STATUS_STYLE: Record<string, { color: string; border: string; bg: string }> = {
@@ -148,7 +150,7 @@ export default function MyToolbox() {
                       View Usage
                     </button>
                     <button
-                      onClick={() => handleUninstall(installedTool.toolId)}
+                      onClick={() => setConfirmUninstall({ id: installedTool.toolId, name: tool.name })}
                       className="ml-auto rounded border px-3 py-1.5 text-[11px] transition-all"
                       style={{ fontFamily: "'IBM Plex Mono', monospace", borderColor: '#9E5A5A30', color: '#7A4A4A', background: 'transparent' }}
                       onMouseEnter={(e) => { e.currentTarget.style.color = '#9E5A5A'; e.currentTarget.style.borderColor = '#9E5A5A50'; }}
@@ -163,6 +165,16 @@ export default function MyToolbox() {
           );
         })}
       </div>
+
+      <Dialog
+        open={!!confirmUninstall}
+        title={`Uninstall ${confirmUninstall?.name ?? 'tool'}?`}
+        description="This tool will be removed from your workspace. Any agents using it will lose access immediately."
+        variant="destructive"
+        confirmLabel="Uninstall"
+        onConfirm={handleUninstall}
+        onCancel={() => setConfirmUninstall(null)}
+      />
     </div>
   );
 }

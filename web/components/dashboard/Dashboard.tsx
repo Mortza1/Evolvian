@@ -233,7 +233,7 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
 
   return (
     <ToastProvider>
-      <div className="min-h-screen w-full bg-[#0B0E14] flex flex-col">
+      <div className="h-screen w-full bg-[#0B0E14] flex flex-col overflow-hidden">
         {currentTeam ? (
           <TeamEventsProvider teamId={currentTeam.id}>
             {mainContent}

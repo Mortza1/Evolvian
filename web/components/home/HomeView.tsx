@@ -7,6 +7,7 @@ import CreateTeamModal from './CreateTeamModal';
 import PersonalBrandingFlow from '../personal-branding/PersonalBrandingFlow';
 import DeleteTeamModal from './DeleteTeamModal';
 import { TeamIcon } from '@/components/ui/TeamIcon';
+import { Dialog } from '@/components/ui/Dialog';
 
 interface HomeViewProps {
   onSelectTeam: (teamId: number) => void;
@@ -239,6 +240,7 @@ export default function HomeView({ onSelectTeam }: HomeViewProps) {
   const [personalBrandingTeam, setPersonalBrandingTeam] = useState<Team | null>(null);
   const [showPersonalBrandingFlow, setShowPersonalBrandingFlow] = useState(false);
   const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => { loadTeams(); }, []);
 
@@ -283,8 +285,8 @@ export default function HomeView({ onSelectTeam }: HomeViewProps) {
       await loadTeams();
       setTeamToDelete(null);
     } catch (error) {
-      alert(`Failed to delete team: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setTeamToDelete(null);
+      setDeleteError(error instanceof Error ? error.message : 'Failed to delete team. Please try again.');
     }
   };
 
@@ -425,6 +427,13 @@ export default function HomeView({ onSelectTeam }: HomeViewProps) {
 
       <CreateTeamModal isOpen={isCreateTeamOpen} onClose={() => setIsCreateTeamOpen(false)} onCreated={handleTeamCreated} />
       <DeleteTeamModal isOpen={!!teamToDelete} team={teamToDelete} onClose={() => setTeamToDelete(null)} onConfirm={() => teamToDelete && handleDeleteTeam(teamToDelete)} />
+      <Dialog
+        open={!!deleteError}
+        title="Could not delete team"
+        description={deleteError ?? undefined}
+        variant="warning"
+        onCancel={() => setDeleteError(null)}
+      />
     </div>
   );
 }

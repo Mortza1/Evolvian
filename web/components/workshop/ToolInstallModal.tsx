@@ -43,9 +43,10 @@ export default function ToolInstallModal({ tool, isOpen, onClose }: ToolInstallM
     setConfiguration((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleAgentToggle = (agentId: string) => {
+  const handleAgentToggle = (agentId: number) => {
+    const id = String(agentId);
     setSelectedAgents((prev) =>
-      prev.includes(agentId) ? prev.filter((id) => id !== agentId) : [...prev, agentId]
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   };
 
@@ -347,7 +348,7 @@ export default function ToolInstallModal({ tool, isOpen, onClose }: ToolInstallM
                     </div>
                   )}
                   {agents.map((agent) => {
-                    const sel = selectedAgents.includes(agent.id);
+                    const sel = selectedAgents.includes(String(agent.id));
                     return (
                       <div
                         key={agent.id}

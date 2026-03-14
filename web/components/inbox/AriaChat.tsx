@@ -352,7 +352,7 @@ Available branding agents:
                           {msg.from === 'aria' && msg.suggestedAgents && msg.suggestedAgents.length > 0 && !msg.isTyping && (
                             <div className="mt-3">
                               <AgentSuggestionCards
-                                agents={msg.suggestedAgents}
+                                agents={msg.suggestedAgents as any}
                                 teamId={teamId}
                                 onAgentHired={(agent) => { console.log('Agent hired:', agent.name); }}
                               />

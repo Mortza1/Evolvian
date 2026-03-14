@@ -1,5 +1,7 @@
 'use client';
 
+import type { ReactElement } from 'react';
+
 // Known geometric symbols used in the new design system
 const DESIGN_SYMBOLS = new Set(['◈', '▲', '◉', '◆', '⬡', '▣', '◐', '▽', '◑', '◧', '◫', '◻']);
 
@@ -25,7 +27,7 @@ function PersonalBrandingIcon({ color }: { color: string }) {
 }
 
 // Known emoji → SVG mapping
-const EMOJI_SVG_MAP: Record<string, (color: string) => JSX.Element> = {
+const EMOJI_SVG_MAP: Record<string, (color: string) => ReactElement> = {
   '✨': (color) => <PersonalBrandingIcon color={color} />,
 };
 

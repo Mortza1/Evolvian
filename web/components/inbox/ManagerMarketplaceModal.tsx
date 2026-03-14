@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Dialog } from '@/components/ui/Dialog';
 
 interface ManagerAgent {
   id: string;
@@ -72,9 +73,11 @@ export default function ManagerMarketplaceModal({
 
   if (!isOpen) return null;
 
+  const [showComingSoon, setShowComingSoon] = useState(false);
+
   const handleHire = async (managerId: string) => {
     if (managerId !== 'aria') {
-      alert('Only Aria is available for hire in this demo');
+      setShowComingSoon(true);
       return;
     }
     setIsHiring(true);
@@ -256,6 +259,14 @@ export default function ManagerMarketplaceModal({
           </button>
         </div>
       </div>
+
+      <Dialog
+        open={showComingSoon}
+        title="Coming soon"
+        description="Only Aria is available right now. More managers will be available in a future update."
+        variant="default"
+        onCancel={() => setShowComingSoon(false)}
+      />
     </div>
   );
 }

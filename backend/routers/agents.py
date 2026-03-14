@@ -12,6 +12,7 @@ from database import get_db
 from auth import get_current_user
 from schemas import AgentCreate, AgentUpdate, AgentResponse
 from models import User, Team, Agent
+from rag_service import rag_service
 
 router = APIRouter(prefix="/api", tags=["Agents"])
 
@@ -46,7 +47,15 @@ async def create_agent(
         rating=agent_data.rating,
         cost_per_hour=agent_data.cost_per_hour,
         skills=agent_data.skills,
-        personality_traits=agent_data.personality_traits
+        personality_traits=agent_data.personality_traits,
+        # Intelligence
+        system_prompt=agent_data.system_prompt,
+        model_id=agent_data.model_id,
+        seniority_level=agent_data.seniority_level,
+        can_delegate=agent_data.can_delegate,
+        delegates_to=agent_data.delegates_to,
+        can_ask_questions=agent_data.can_ask_questions,
+        knowledge_base=[e.dict() if hasattr(e, 'dict') else e for e in (agent_data.knowledge_base or [])],
     )
 
     db.add(new_agent)
@@ -56,6 +65,13 @@ async def create_agent(
 
     db.commit()
     db.refresh(new_agent)
+
+    # Index knowledge base in background (non-blocking)
+    if new_agent.knowledge_base:
+        try:
+            rag_service.index_agent_knowledge(new_agent.id, new_agent.knowledge_base)
+        except Exception as e:
+            print(f"[agents] RAG indexing failed for agent {new_agent.id}: {e}")
 
     return new_agent
 
@@ -131,6 +147,13 @@ async def update_agent(
 
     db.commit()
     db.refresh(agent)
+
+    # Re-index knowledge base if it was updated
+    if "knowledge_base" in update_data:
+        try:
+            rag_service.index_agent_knowledge(agent.id, agent.knowledge_base or [])
+        except Exception as e:
+            print(f"[agents] RAG re-indexing failed for agent {agent.id}: {e}")
 
     return agent
 
