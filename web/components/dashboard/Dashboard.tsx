@@ -146,6 +146,7 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
           setActiveView={handleViewChange}
           currentTeam={currentTeam}
           onGoHome={handleGoHome}
+          onSelectTeam={handleSelectTeam}
           onLogout={onLogout}
         />
 
@@ -205,11 +206,11 @@ export default function Dashboard({ isFirstTime = false, onLogout }: DashboardPr
             <div className="p-6">
               {/* home/hq rendered above at full height */}
 
-              {activeView === 'board' && currentTeam && <BoardView teamId={currentTeam.id.toString()} />}
+              {activeView === 'board' && currentTeam && <BoardView teamId={currentTeam.id.toString()} onNavigateToVault={() => setActiveView('vault')} />}
               {activeView === 'office' && currentTeam && <OfficeView teamId={currentTeam.id.toString()} />}
               {activeView === 'store' && currentTeam && <TalentHubView teamId={currentTeam.id.toString()} />}
               {activeView === 'workshop' && currentTeam && <WorkshopView />}
-              {activeView === 'war-room' && currentTeam && <OperationsView teamId={currentTeam.id.toString()} />}
+              {activeView === 'war-room' && currentTeam && <OperationsView teamId={currentTeam.id.toString()} onNavigateToVault={() => setActiveView('vault')} />}
             </div>
           )}
         </main>

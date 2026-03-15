@@ -271,7 +271,7 @@ class WorkflowService {
     workflow: WorkflowDesign
   ): Promise<{ success: boolean; operationId?: number; error?: string }> {
     try {
-      const result = await api.post<{ id: number }>('/api/operations', {
+      const result = await api.post<{ id: number }>('/api/operations/', {
         team_id: teamId,
         title,
         description,

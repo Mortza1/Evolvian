@@ -7,9 +7,10 @@ import WarRoomLive from '@/components/operations/WarRoomLive';
 
 interface OperationsViewProps {
   teamId: string;
+  onNavigateToVault?: () => void;
 }
 
-export default function OperationsView({ teamId }: OperationsViewProps) {
+export default function OperationsView({ teamId, onNavigateToVault }: OperationsViewProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
@@ -132,6 +133,10 @@ export default function OperationsView({ teamId }: OperationsViewProps) {
             taskDescription={activeTask.description}
             initialStatus={activeTask.status}
             hierarchical={activeTask.hierarchical}
+            initialHierarchyTeam={activeTask.hierarchyTeam}
+            initialVaultFileId={activeTask.vaultFileId}
+            initialVaultFileName={activeTask.vaultFileName}
+            onViewVault={onNavigateToVault}
             onClose={() => {
               setShowWarRoom(false);
               setActiveTaskId(null);

@@ -16,6 +16,9 @@ export function useWarRoom(
   teamId: string,
   workflowNodes: WorkflowNode[],
   initialStatus: 'pending' | 'active' | 'completed' | 'failed' | 'paused' | 'cancelled' = 'pending',
+  initialHierarchyTeam?: HierarchyTeam,
+  initialVaultFileId?: number,
+  initialVaultFileName?: string,
 ) {
   const { showNotification, playNotificationSound, canNotify } = useNotifications();
   const { showToast } = useToast();
@@ -31,16 +34,17 @@ export function useWarRoom(
   const [totalCost, setTotalCost] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
-  const [savedFileId, setSavedFileId] = useState<number | null>(null);
-  const [savedFileName, setSavedFileName] = useState<string | null>(null);
+  const [savedFileId, setSavedFileId] = useState<number | null>(initialVaultFileId ?? null);
+  const [savedFileName, setSavedFileName] = useState<string | null>(initialVaultFileName ?? null);
   const [userRating, setUserRating] = useState(0);
   const [hoveredStar, setHoveredStar] = useState(0);
   const [ratingFeedback, setRatingFeedback] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
   const [qualityScore, setQualityScore] = useState<number | null>(null);
-  const [hierarchyTeam, setHierarchyTeam] = useState<HierarchyTeam | null>(null);
+  const [hierarchyTeam, setHierarchyTeam] = useState<HierarchyTeam | null>(initialHierarchyTeam ?? null);
   const [hierarchyMetrics, setHierarchyMetrics] = useState<HierarchyMetrics | null>(null);
+  const [activeStepTeamId, setActiveStepTeamId] = useState<string | null>(null);
   const [currentAssumption, setCurrentAssumption] = useState<AssumptionData | null>(null);
   const [assumptionAnswer, setAssumptionAnswer] = useState('');
   const [isSubmittingAssumption, setIsSubmittingAssumption] = useState(false);
@@ -144,6 +148,7 @@ export function useWarRoom(
         setIsCancelled(true);
         setIsExecuting(false);
         setIsCancelRequested(false);
+        setActiveStepTeamId(null);
         setTotalCost(data.total_cost || 0);
         addLog('System', `Operation cancelled at "${data.node_name}". Total cost: $${(data.total_cost || 0).toFixed(2)}`, 'error');
         break;
@@ -152,7 +157,7 @@ export function useWarRoom(
         break;
       case 'hierarchy_decompose':
         if (data.workers) {
-          setHierarchyTeam({ supervisor: data.supervisor, workers: data.workers, teamName: data.team_name || 'Hierarchical Team' });
+          setHierarchyTeam({ supervisor: data.supervisor, workers: data.workers, teamName: data.team_name || 'Hierarchical Team', stepTree: data.step_tree });
           addLog(data.supervisor, `Team ready: ${data.workers.join(', ')}`, 'info');
           if (data.reasoning) addLog(data.supervisor, data.reasoning, 'info');
         } else {
@@ -164,10 +169,12 @@ export function useWarRoom(
         break;
       case 'hierarchy_worker_start':
         addLog(data.worker, data.message || 'Working on subtask...', 'llm');
+        if (data.team_id) setActiveStepTeamId(data.team_id);
         break;
       case 'hierarchy_worker_complete':
         addLog(data.worker, data.message || 'Subtask complete', 'output');
         if (data.output_preview) addLog(data.worker, `Preview: ${data.output_preview.slice(0, 120)}...`, 'output');
+        setActiveStepTeamId(null);
         break;
       case 'hierarchy_escalate':
         addLog('⚠ Escalation', data.message || `${data.from_worker} → ${data.to_worker}`, 'error');
@@ -334,11 +341,16 @@ export function useWarRoom(
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
       const data = await res.json();
-      if (data.success && data.status === 'cancelled') {
-        setIsCancelled(true);
-        setIsPaused(false);
-        addLog('System', 'Operation cancelled.', 'error');
-      } else if (!data.success) {
+      if (data.success) {
+        // 'cancelled' = was paused/pending, done immediately
+        // 'cancel_requested' = running, will stop at next boundary via SSE
+        if (data.status === 'cancelled') {
+          setIsCancelled(true);
+          setIsPaused(false);
+          addLog('System', 'Operation cancelled.', 'error');
+        }
+        // else: stay in isCancelRequested=true state; SSE 'cancelled' event will finalize
+      } else {
         addLog('System', `Cancel failed: ${data.message}`, 'error');
         setIsCancelRequested(false);
       }
@@ -498,7 +510,7 @@ export function useWarRoom(
     savedFileId, savedFileName,
     userRating, setUserRating, hoveredStar, setHoveredStar,
     ratingFeedback, setRatingFeedback, isSubmittingRating, ratingSubmitted, qualityScore,
-    hierarchyTeam, hierarchyMetrics,
+    hierarchyTeam, hierarchyMetrics, activeStepTeamId,
     currentAssumption, assumptionAnswer, setAssumptionAnswer, isSubmittingAssumption,
     chatMessages, isChatExpanded, setIsChatExpanded,
     newChatMessage, setNewChatMessage, isSendingMessage,

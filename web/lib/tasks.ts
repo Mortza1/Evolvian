@@ -17,6 +17,20 @@ export interface TaskWorkflowNode {
   order: number;
 }
 
+export interface TaskHierarchyStep {
+  id: string;
+  name: string;
+  agent: string;
+  depends_on: string[];
+}
+
+export interface TaskHierarchyTeam {
+  supervisor: string;
+  workers: string[];
+  teamName: string;
+  stepTree?: TaskHierarchyStep[];
+}
+
 export interface Task {
   id: number;
   title: string;
@@ -32,11 +46,14 @@ export interface Task {
   estimatedCost?: number;
   workflowNodes: TaskWorkflowNode[];
   hierarchical?: boolean;
+  hierarchyTeam?: TaskHierarchyTeam;
+  vaultFileId?: number;
+  vaultFileName?: string;
 }
 
 export async function getTasks(teamId: number): Promise<Task[]> {
   try {
-    const response = await apiRequest(`/api/operations?team_id=${teamId}`, {
+    const response = await apiRequest(`/api/operations/?team_id=${teamId}`, {
       method: 'GET',
     });
 
@@ -88,6 +105,20 @@ function mapOperationToTask(op: any): Task {
     estimatedCost: op.workflow_config?.estimated_cost,
     workflowNodes,
     hierarchical: op.workflow_config?.hierarchy_mode === true,
+    vaultFileId: op.workflow_config?.vault_file_id ?? undefined,
+    vaultFileName: op.workflow_config?.vault_file_name ?? undefined,
+    hierarchyTeam: op.workflow_config?.hierarchy_team
+      ? {
+          supervisor: typeof op.workflow_config.hierarchy_team.supervisor === 'string'
+            ? op.workflow_config.hierarchy_team.supervisor
+            : op.workflow_config.hierarchy_team.supervisor?.name ?? '',
+          workers: (op.workflow_config.hierarchy_team.workers ?? []).map((w: any) =>
+            typeof w === 'string' ? w : w?.name ?? ''
+          ),
+          teamName: op.workflow_config.hierarchy_team.team_name ?? '',
+          stepTree: op.workflow_config.hierarchy_team.step_tree ?? undefined,
+        }
+      : undefined,
   };
 }
 
@@ -128,7 +159,7 @@ export async function createTask(task: Omit<Task, 'id' | 'createdAt'>): Promise<
       estimated_cost: task.estimatedCost,
     };
 
-    const response = await apiRequest('/api/operations', {
+    const response = await apiRequest('/api/operations/', {
       method: 'POST',
       body: JSON.stringify({
         team_id: task.teamId,

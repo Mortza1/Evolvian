@@ -6,6 +6,10 @@ export interface WarRoomLiveProps {
   initialStatus?: 'pending' | 'active' | 'completed' | 'failed' | 'paused' | 'cancelled';
   onClose?: () => void;
   hierarchical?: boolean;
+  initialHierarchyTeam?: HierarchyTeam;
+  initialVaultFileId?: number;
+  initialVaultFileName?: string;
+  onViewVault?: () => void;
 }
 
 export interface WorkflowNode {
@@ -48,10 +52,19 @@ export interface AssumptionData {
   assumptionIndex: number;
 }
 
+export interface HierarchyStep {
+  id: string;
+  team_id: string;
+  name: string;
+  agent: string;
+  depends_on: string[];
+}
+
 export interface HierarchyTeam {
   supervisor: string;
   workers: string[];
   teamName: string;
+  stepTree?: HierarchyStep[];
 }
 
 export interface HierarchyMetrics {

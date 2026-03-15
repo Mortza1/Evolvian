@@ -8,8 +8,8 @@ import { CompletionPanel } from './components/CompletionPanel';
 import { HierarchyView } from './components/HierarchyView';
 import type { WarRoomLiveProps } from './types';
 
-export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescription, initialStatus = 'pending', onClose }: WarRoomLiveProps) {
-  const war = useWarRoom(taskId, teamId, workflowNodes, initialStatus);
+export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescription, initialStatus = 'pending', onClose, initialHierarchyTeam, initialVaultFileId, initialVaultFileName, onViewVault }: WarRoomLiveProps) {
+  const war = useWarRoom(taskId, teamId, workflowNodes, initialStatus, initialHierarchyTeam, initialVaultFileId, initialVaultFileName);
 
   return (
     <div className="h-full flex flex-col" style={{ background: '#080E11', fontFamily: "'Syne', sans-serif" }}>
@@ -153,6 +153,7 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
             hierarchyTeam={war.hierarchyTeam}
             hierarchyMetrics={war.hierarchyMetrics}
             isExecuting={war.isExecuting}
+            activeStepTeamId={war.isCancelRequested || war.isCancelled ? null : war.activeStepTeamId}
           />
 
           {war.isComplete && (
@@ -170,6 +171,7 @@ export default function WarRoomLive({ taskId, teamId, workflowNodes, taskDescrip
               onHoverChange={war.setHoveredStar}
               onFeedbackChange={war.setRatingFeedback}
               onSubmitRating={war.submitRating}
+              onViewVault={onViewVault}
             />
           )}
         </div>

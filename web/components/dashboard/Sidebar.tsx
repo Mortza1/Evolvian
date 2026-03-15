@@ -11,10 +11,11 @@ interface SidebarProps {
   setActiveView: (view: string) => void;
   currentTeam: Team | null;
   onGoHome: () => void;
+  onSelectTeam?: (teamId: number) => void;
   onLogout?: () => void;
 }
 
-export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHome, onLogout }: SidebarProps) {
+export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHome, onSelectTeam, onLogout }: SidebarProps) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [isTeamDropdownOpen, setIsTeamDropdownOpen] = useState(false);
   const [baseUnreadCount, setBaseUnreadCount] = useState(0);
@@ -112,7 +113,7 @@ export default function Sidebar({ activeView, setActiveView, currentTeam, onGoHo
                 {teams.map((team) => (
                   <button
                     key={team.id}
-                    onClick={() => { setActiveView('hq'); setIsTeamDropdownOpen(false); }}
+                    onClick={() => { onSelectTeam ? onSelectTeam(team.id) : setActiveView('hq'); setIsTeamDropdownOpen(false); }}
                     className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[#141E22] ${
                       currentTeam.id === team.id ? 'bg-[#141E22]' : ''
                     }`}

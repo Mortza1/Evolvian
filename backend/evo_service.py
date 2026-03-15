@@ -80,6 +80,8 @@ Task: {task}
 Analysis: {analysis}
 Available Agents: {agents}
 
+IMPORTANT: The "agent_role" field in each step MUST be the exact specialty string of one of the available agents listed above (the text in parentheses). Do not invent new role names — only use the specialties that appear in the Available Agents list.
+
 Design a workflow with clear steps that can be executed by AI agents.
 
 Respond in this JSON format:
@@ -91,7 +93,7 @@ Respond in this JSON format:
             "id": "1",
             "name": "Step name",
             "description": "What happens in this step",
-            "agent_role": "What type of agent handles this",
+            "agent_role": "Exact specialty from Available Agents list",
             "inputs": ["What information/resources are needed"],
             "outputs": ["What this step produces"],
             "depends_on": ["IDs of steps that must complete first"]
@@ -103,6 +105,8 @@ Respond in this JSON format:
 
 Guidelines:
 - Keep steps atomic and clear
+- Assign each step to the most relevant agent from the Available Agents list
+- Only use agent specialties that appear in the list — no invented roles
 - Identify dependencies between steps
 - Be realistic about time and cost estimates
 - Steps should flow logically

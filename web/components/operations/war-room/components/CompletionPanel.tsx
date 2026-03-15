@@ -16,12 +16,13 @@ interface CompletionPanelProps {
   onHoverChange: (star: number) => void;
   onFeedbackChange: (text: string) => void;
   onSubmitRating: () => void;
+  onViewVault?: () => void;
 }
 
 export function CompletionPanel({
   totalCost, savedFileId, savedFileName,
   userRating, hoveredStar, ratingFeedback, isSubmittingRating, ratingSubmitted, qualityScore,
-  onRatingChange, onHoverChange, onFeedbackChange, onSubmitRating,
+  onRatingChange, onHoverChange, onFeedbackChange, onSubmitRating, onViewVault,
 }: CompletionPanelProps) {
   const activeRating = hoveredStar || userRating;
 
@@ -36,20 +37,14 @@ export function CompletionPanel({
         >
           <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: '#5A9E8F60' }} />
           <div className="px-6 py-6">
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#3A5056', textTransform: 'uppercase', letterSpacing: '0.1em' }} className="mb-2">
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#3A5056', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               Operation Complete
-            </p>
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '28px', fontWeight: 700, color: '#BF8A52' }}>
-              ${totalCost.toFixed(2)}
-            </p>
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#2E4248' }} className="mt-0.5">
-              Total Cost
             </p>
 
             {savedFileId && (
               <div className="mt-5 border-t pt-5" style={{ borderColor: '#5A9E8F20' }}>
-                <a
-                  href={`/dashboard?view=vault&fileId=${savedFileId}`}
+                <button
+                  onClick={onViewVault}
                   className="inline-flex items-center gap-2 rounded border px-4 py-2 text-[12px] transition-all"
                   style={{ fontFamily: "'IBM Plex Mono', monospace", background: '#5A9E8F12', borderColor: '#5A9E8F50', color: '#5A9E8F' }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = '#5A9E8F22'; }}
@@ -58,8 +53,8 @@ export function CompletionPanel({
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  View Results →
-                </a>
+                  View in Vault →
+                </button>
                 {savedFileName && (
                   <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '10px', color: '#2E4248' }} className="mt-2">
                     {savedFileName}

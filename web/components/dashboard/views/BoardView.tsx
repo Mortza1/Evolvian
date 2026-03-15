@@ -8,6 +8,7 @@ import WarRoomLive from '@/components/operations/WarRoomLive';
 
 interface BoardViewProps {
   teamId: string;
+  onNavigateToVault?: () => void;
 }
 
 // ─── Column definitions ───────────────────────────────────────────────────────
@@ -193,7 +194,7 @@ function EmptyColumn({ label }: { label: string }) {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export default function BoardView({ teamId }: BoardViewProps) {
+export default function BoardView({ teamId, onNavigateToVault }: BoardViewProps) {
   const [tasks, setTasks] = useState<StoredTask[]>([]);
   const [isTaskCreationOpen, setIsTaskCreationOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
@@ -295,6 +296,10 @@ export default function BoardView({ teamId }: BoardViewProps) {
               taskDescription={activeTask.description}
               initialStatus={activeTask.status}
               hierarchical={activeTask.hierarchical}
+              initialHierarchyTeam={activeTask.hierarchyTeam}
+              initialVaultFileId={activeTask.vaultFileId}
+              initialVaultFileName={activeTask.vaultFileName}
+              onViewVault={onNavigateToVault}
               onClose={handleClose}
             />
           </div>

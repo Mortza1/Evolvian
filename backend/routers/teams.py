@@ -313,8 +313,10 @@ def generate_team_events(team_id: int) -> Generator[str, None, None]:
         traceback.print_exc()
         yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
     finally:
-        # Always close the database session when stream ends
-        db.close()
+        try:
+            db.close()
+        except Exception:
+            pass
         print(f"[team_events] Database session closed for team {team_id}")
 
 
