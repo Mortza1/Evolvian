@@ -490,11 +490,15 @@ function RoadmapCard({ quarter, status, title, items, accent, align }: {
 
 function ReplacesStrip() {
   const [visible, setVisible] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold: 0.3 });
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold: 0.2 });
     if (ref.current) obs.observe(ref.current);
-    return () => obs.disconnect();
+    return () => { obs.disconnect(); window.removeEventListener('resize', check); };
   }, []);
 
   const replacements = [
@@ -506,39 +510,53 @@ function ReplacesStrip() {
     { from: 'Support Centre',      to: 'Support Collective', color: '#A3FF12' },
   ];
 
+  const cols = isMobile ? 2 : 3;
+  const rows = Math.ceil(replacements.length / cols);
+  const lastRowStart = (rows - 1) * cols;
+
   return (
     <div ref={ref} style={{ maxWidth: 1100, margin: '0 auto' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
-        {replacements.map((r, i) => (
-          <div key={i} style={{
-            padding: '28px 32px',
-            background: 'rgba(22,27,34,0.4)',
-            border: '1px solid rgba(90,158,143,0.08)',
-            borderRadius: i === 0 ? '16px 0 0 0' : i === 2 ? '0 16px 0 0' : i === 3 ? '0 0 0 16px' : i === 5 ? '0 0 16px 0' : '0',
-            opacity: visible ? 1 : 0,
-            transition: `opacity 0.5s ease ${i * 80}ms`,
-          }}>
-            {/* Old name — strikethrough animates in */}
-            <div style={{ position: 'relative', display: 'inline-block', marginBottom: 8 }}>
-              <span style={{
-                fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: '#2D3748',
-                textDecoration: visible ? 'line-through' : 'none',
-                transition: `text-decoration 0.1s ease ${i * 80 + 400}ms`,
-              }}>{r.from}</span>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 1 }}>
+        {replacements.map((r, i) => {
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          const isFirstRow = row === 0;
+          const isLastRow = row === rows - 1;
+          const isFirstCol = col === 0;
+          const isLastCol = col === cols - 1;
+          const tl = isFirstRow && isFirstCol ? '16px' : '0';
+          const tr = isFirstRow && isLastCol ? '16px' : '0';
+          const bl = isLastRow && isFirstCol ? '16px' : '0';
+          const br = isLastRow && isLastCol ? '16px' : '0';
+          return (
+            <div key={i} style={{
+              padding: isMobile ? '20px 18px' : '28px 32px',
+              background: 'rgba(22,27,34,0.4)',
+              border: '1px solid rgba(90,158,143,0.08)',
+              borderRadius: `${tl} ${tr} ${br} ${bl}`,
+              opacity: visible ? 1 : 0,
+              transition: `opacity 0.5s ease ${i * 80}ms`,
+            }}>
+              <div style={{ position: 'relative', display: 'inline-block', marginBottom: 8 }}>
+                <span style={{
+                  fontFamily: "'DM Sans', sans-serif", fontSize: isMobile ? 11 : 13, color: '#2D3748',
+                  textDecoration: visible ? 'line-through' : 'none',
+                  transition: `text-decoration 0.1s ease ${i * 80 + 400}ms`,
+                }}>{r.from}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <svg width="14" height="9" viewBox="0 0 16 10" fill="none">
+                  <path d="M0 5H13M10 2L13 5L10 8" stroke={r.color} strokeWidth="1.4" strokeLinecap="round"/>
+                </svg>
+                <span style={{
+                  fontFamily: "'Bebas Neue', cursive", fontSize: isMobile ? 16 : 20, letterSpacing: '0.04em', color: r.color,
+                  opacity: visible ? 1 : 0,
+                  transition: `opacity 0.4s ease ${i * 80 + 600}ms`,
+                }}>{r.to}</span>
+              </div>
             </div>
-            {/* Arrow + new name */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <svg width="16" height="10" viewBox="0 0 16 10" fill="none">
-                <path d="M0 5H13M10 2L13 5L10 8" stroke={r.color} strokeWidth="1.4" strokeLinecap="round"/>
-              </svg>
-              <span style={{
-                fontFamily: "'Bebas Neue', cursive", fontSize: 20, letterSpacing: '0.04em', color: r.color,
-                opacity: visible ? 1 : 0,
-                transition: `opacity 0.4s ease ${i * 80 + 600}ms`,
-              }}>{r.to}</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

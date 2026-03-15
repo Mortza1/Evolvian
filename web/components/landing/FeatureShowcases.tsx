@@ -30,6 +30,18 @@ function useReveal(threshold = 0.15) {
   return { ref, visible };
 }
 
+// ─── Mobile detection hook ────────────────────────────────────────────────────
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return isMobile;
+}
+
 // ─── Browser-chrome video frame ───────────────────────────────────────────────
 function AppFrame({
   videoSrc,
@@ -204,11 +216,12 @@ function FeatureShowcase({
   accent, flip = false, icon, windowTitle,
 }: ShowcaseProps) {
   const { ref, visible } = useReveal();
+  const isMobile = useIsMobile();
 
   const textBlock = (
     <div style={{
       display: 'flex', flexDirection: 'column', justifyContent: 'center',
-      padding: flip ? '0 0 0 60px' : '0 60px 0 0',
+      padding: isMobile ? '0 0 24px 0' : flip ? '0 0 0 60px' : '0 60px 0 0',
     }}>
       <div style={{
         display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -280,25 +293,30 @@ function FeatureShowcase({
   return (
     <div ref={ref} style={{
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: 0,
+      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+      gap: isMobile ? 0 : 0,
       alignItems: 'center',
       opacity: visible ? 1 : 0,
       transform: visible ? 'translateY(0)' : 'translateY(36px)',
       transition: 'opacity 0.7s cubic-bezier(0.16,1,0.3,1), transform 0.7s cubic-bezier(0.16,1,0.3,1)',
-      padding: '80px 0',
+      padding: isMobile ? '40px 0' : '80px 0',
       position: 'relative',
     }}>
-      {/* Accent line on the side */}
-      <div style={{
-        position: 'absolute',
-        [flip ? 'right' : 'left']: 0,
-        top: '50%', transform: 'translateY(-50%)',
-        width: 2, height: '40%',
-        background: `linear-gradient(to bottom, transparent, ${accent}40, transparent)`,
-      }} />
+      {/* Accent line on the side — desktop only */}
+      {!isMobile && (
+        <div style={{
+          position: 'absolute',
+          [flip ? 'right' : 'left']: 0,
+          top: '50%', transform: 'translateY(-50%)',
+          width: 2, height: '40%',
+          background: `linear-gradient(to bottom, transparent, ${accent}40, transparent)`,
+        }} />
+      )}
 
-      {flip ? (
+      {/* On mobile always: text first, video second */}
+      {isMobile ? (
+        <>{textBlock}{videoBlock}</>
+      ) : flip ? (
         <>{videoBlock}{textBlock}</>
       ) : (
         <>{textBlock}{videoBlock}</>
@@ -464,18 +482,19 @@ const FEATURES: ShowcaseProps[] = [
 ];
 
 // ─── Divider between features ─────────────────────────────────────────────────
-function FeatureDivider({ accent }: { accent: string }) {
+function FeatureDivider({ accent, isMobile }: { accent: string; isMobile: boolean }) {
   return (
     <div style={{
       height: 1,
       background: `linear-gradient(90deg, transparent, ${accent}20, ${accent}40, ${accent}20, transparent)`,
-      margin: '0 80px',
+      margin: isMobile ? '0' : '0 80px',
     }} />
   );
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 export default function FeaturesFlow() {
+  const isMobile = useIsMobile();
   return (
     <section style={{ padding: '60px 0 0' }}>
       <style>{`
@@ -498,7 +517,7 @@ export default function FeaturesFlow() {
       `}</style>
 
       {/* Section header */}
-      <div style={{ textAlign: 'center', marginBottom: 20, padding: '0 48px' }}>
+      <div style={{ textAlign: 'center', marginBottom: 20, padding: isMobile ? '0 20px' : '0 48px' }}>
         <span style={{
           fontFamily: "'DM Sans', sans-serif",
           fontSize: 11, letterSpacing: '0.2em',
@@ -524,11 +543,11 @@ export default function FeaturesFlow() {
       </div>
 
       {/* Feature rows */}
-      <div style={{ padding: '0 80px' }}>
+      <div style={{ padding: isMobile ? '0 20px' : '0 80px' }}>
         {FEATURES.map((feature, i) => (
           <React.Fragment key={i}>
             <FeatureShowcase {...feature} />
-            {i < FEATURES.length - 1 && <FeatureDivider accent={feature.accent} />}
+            {i < FEATURES.length - 1 && <FeatureDivider accent={feature.accent} isMobile={isMobile} />}
           </React.Fragment>
         ))}
       </div>
