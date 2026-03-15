@@ -549,15 +549,28 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
   const [scrolled, setScrolled] = useState(false);
   const [heroVisible, setHeroVisible] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showMobileModal, setShowMobileModal] = useState(false);
 
   useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
     const timer = setTimeout(() => setHeroVisible(true), 100);
     const onScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener('scroll', onScroll);
-    return () => { clearTimeout(timer); window.removeEventListener('scroll', onScroll); };
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', checkMobile);
+    };
   }, []);
 
   const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+  const handleGetStarted = () => {
+    if (isMobile) { setShowMobileModal(true); return; }
+    onGetStarted();
+  };
 
   const row1 = ['Content Creation', 'Image Generation', 'Social Media', 'Write Blog Posts', 'Email Campaigns', 'Script Videos', 'Branding Visuals', 'Video Generation'];
   const row2 = ['Automate Workflows', 'Weekly Planning', 'Build Chatbots', 'Customer Support', 'Voice Assistants', 'Meme Generation', 'Presentations', 'Calendar Optimization'];
@@ -629,6 +642,78 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
 
   return (
     <div style={{ background: '#0B0E14', color: '#E2E8F0', overflowX: 'hidden', position: 'relative' }}>
+
+      {/* ── MOBILE DESKTOP-ONLY MODAL ──────────────────────── */}
+      {showMobileModal && (
+        <div
+          onClick={() => setShowMobileModal(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(7,10,15,0.92)', backdropFilter: 'blur(20px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '24px',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'rgba(14,20,26,0.98)',
+              border: '1px solid rgba(90,158,143,0.3)',
+              borderRadius: 24, padding: '40px 32px',
+              textAlign: 'center', maxWidth: 340, width: '100%',
+              boxShadow: '0 0 60px rgba(0,245,255,0.08)',
+              position: 'relative', overflow: 'hidden',
+            }}
+          >
+            {/* Top accent */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, transparent, #5A9E8F, #00F5FF, #5A9E8F, transparent)' }} />
+
+            {/* Icon */}
+            <div style={{
+              width: 56, height: 56, borderRadius: 16,
+              background: 'rgba(90,158,143,0.1)', border: '1px solid rgba(90,158,143,0.3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 20px',
+            }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="9" width="18" height="13" rx="2" stroke="#5A9E8F" strokeWidth="1.5"/>
+                <path d="M8 9V6C8 3.791 9.791 2 12 2C14.209 2 16 3.791 16 6V9" stroke="#5A9E8F" strokeWidth="1.5" strokeLinecap="round"/>
+                <circle cx="12" cy="15.5" r="1.5" fill="#5A9E8F"/>
+              </svg>
+            </div>
+
+            <h3 style={{
+              fontFamily: "'Bebas Neue', cursive", fontSize: 26, letterSpacing: '0.04em',
+              color: '#E2E8F0', marginBottom: 12,
+            }}>
+              Desktop Required
+            </h3>
+            <p style={{
+              fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: '#64748B',
+              lineHeight: 1.7, marginBottom: 28,
+            }}>
+              Evolvian is optimised for desktop. Please visit us on a laptop or computer for the full experience.
+            </p>
+            <p style={{
+              fontFamily: "'IBM Plex Mono', monospace", fontSize: 11,
+              color: '#5A9E8F', letterSpacing: '0.08em', marginBottom: 28,
+            }}>
+              evolvian.com
+            </p>
+            <button
+              onClick={() => setShowMobileModal(false)}
+              style={{
+                width: '100%', padding: '12px', borderRadius: 12,
+                background: 'rgba(90,158,143,0.1)', border: '1px solid rgba(90,158,143,0.3)',
+                color: '#94A3B8', fontFamily: "'DM Sans', sans-serif", fontSize: 14,
+                cursor: 'pointer',
+              }}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap');
 
@@ -738,12 +823,24 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
           from { stroke-dashoffset: 200; }
           to { stroke-dashoffset: 0; }
         }
+
+        @media (max-width: 767px) {
+          .mobile-hide { display: none !important; }
+          .mobile-grid-1 { grid-template-columns: 1fr !important; }
+          .mobile-stack { flex-direction: column !important; align-items: flex-start !important; }
+          .mobile-pad { padding-left: 20px !important; padding-right: 20px !important; }
+          .mobile-text-center { text-align: center !important; }
+          .mobile-full-width { width: 100% !important; max-width: 100% !important; }
+          .mobile-timeline { grid-template-columns: 32px 1fr !important; }
+          .btn-primary { padding: 12px 28px !important; font-size: 14px !important; }
+          .btn-ghost { padding: 12px 22px !important; font-size: 14px !important; }
+        }
       `}</style>
 
       {/* ── NAVBAR ──────────────────────────────────────────── */}
       <nav style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-        padding: '0 48px', height: 68,
+        padding: isMobile ? '0 20px' : '0 48px', height: 68,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: scrolled ? 'rgba(11,14,20,0.88)' : 'transparent',
         backdropFilter: scrolled ? 'blur(24px)' : 'none',
@@ -762,20 +859,24 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
           <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: '0.1em', color: '#E2E8F0' }}>EVOLVIAN</span>
         </div>
 
-        <div style={{ display: 'flex', gap: 40 }}>
-          {['Features', 'How It Works', 'Pricing'].map(l => (
-            <span key={l} className="nav-item" onClick={() => scrollTo(l.toLowerCase().replace(/ /g, '-'))}>{l}</span>
-          ))}
-        </div>
+        {!isMobile && (
+          <div style={{ display: 'flex', gap: 40 }}>
+            {['Features', 'How It Works', 'Pricing'].map(l => (
+              <span key={l} className="nav-item" onClick={() => scrollTo(l.toLowerCase().replace(/ /g, '-'))}>{l}</span>
+            ))}
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <button className="nav-item" onClick={onGetStarted} style={{ background: 'none', border: 'none', fontSize: 14, cursor: 'pointer', padding: '4px 0' }}>Sign In</button>
-          <button className="btn-primary" onClick={onGetStarted} style={{ padding: '9px 22px', fontSize: 13 }}>Get Started →</button>
+          {!isMobile && (
+            <button className="nav-item" onClick={handleGetStarted} style={{ background: 'none', border: 'none', fontSize: 14, cursor: 'pointer', padding: '4px 0' }}>Sign In</button>
+          )}
+          <button className="btn-primary" onClick={handleGetStarted} style={{ padding: '9px 22px', fontSize: 13 }}>Get Started →</button>
         </div>
       </nav>
 
       {/* ── HERO ───────────────────────────────────────────── */}
-      <section id="hero" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', padding: '100px 48px 0', overflow: 'hidden', textAlign: 'center' }}>
+      <section id="hero" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', padding: isMobile ? '80px 20px 0' : '100px 48px 0', overflow: 'hidden', textAlign: 'center' }}>
         <NetworkCanvas />
 
         {/* Big ambient orbs */}
@@ -835,7 +936,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
 
         {/* Subtitle */}
         <p style={{
-          fontFamily: "'DM Sans', sans-serif", fontSize: 18, lineHeight: 1.7,
+          fontFamily: "'DM Sans', sans-serif", fontSize: isMobile ? 15 : 18, lineHeight: 1.7,
           color: '#64748B', maxWidth: 560, marginBottom: 48,
           opacity: heroVisible ? 1 : 0, filter: heroVisible ? 'blur(0)' : 'blur(6px)',
           transition: 'all 0.8s ease 0.5s',
@@ -845,12 +946,12 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
 
         {/* CTAs */}
         <div style={{
-          display: 'flex', gap: 16, justifyContent: 'center',
+          display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap',
           opacity: heroVisible ? 1 : 0, transform: heroVisible ? 'translateY(0)' : 'translateY(16px)',
           transition: 'all 0.6s ease 0.7s',
         }}>
-          <button className="btn-primary" onClick={onGetStarted}>Start Building →</button>
-          <button className="btn-ghost" onClick={() => scrollTo('features')}>See How It Works</button>
+          <button className="btn-primary" onClick={handleGetStarted}>Start Building →</button>
+          {!isMobile && <button className="btn-ghost" onClick={() => scrollTo('features')}>See How It Works</button>}
         </div>
 
         {/* Scroll hint */}
@@ -874,7 +975,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
       {/* ── ANIMATED DEMO ───────────────────────────────────── */}
-      <section id="how-it-works" style={{ padding: '60px 48px 100px' }}>
+      <section id="how-it-works" style={{ padding: isMobile ? '40px 20px 60px' : '60px 48px 100px' }}>
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, letterSpacing: '0.2em', color: '#5A9E8F', textTransform: 'uppercase' }}>Live Demo</span>
           <h2 style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 'clamp(36px, 5vw, 60px)', letterSpacing: '0.03em', color: '#E2E8F0', marginTop: 10 }}>
@@ -888,7 +989,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
       {/* ── REPLACES STRIP ──────────────────────────────────── */}
-      <section style={{ padding: '0 48px 100px' }}>
+      <section style={{ padding: isMobile ? '0 20px 60px' : '0 48px 100px' }}>
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, letterSpacing: '0.2em', color: '#5A9E8F', textTransform: 'uppercase' }}>What We Replace</span>
           <h2 style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 'clamp(36px, 5vw, 56px)', letterSpacing: '0.03em', color: '#E2E8F0', marginTop: 10 }}>
@@ -899,7 +1000,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
       {/* ── BIG STATEMENT ───────────────────────────────────── */}
-      <section style={{ padding: '80px 48px 120px', maxWidth: 1100, margin: '0 auto', textAlign: 'center' }}>
+      <section style={{ padding: isMobile ? '60px 20px 80px' : '80px 48px 120px', maxWidth: 1100, margin: '0 auto', textAlign: 'center' }}>
         <h2 style={{
           fontFamily: "'Bebas Neue', cursive",
           fontSize: 'clamp(40px, 6vw, 80px)',
@@ -1085,14 +1186,14 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
       {/* ── TESTIMONIALS ────────────────────────────────────── */}
-      <section style={{ padding: '40px 48px 120px', background: 'rgba(22,27,34,0.15)' }}>
+      <section style={{ padding: isMobile ? '40px 20px 80px' : '40px 48px 120px', background: 'rgba(22,27,34,0.15)' }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 60 }}>
             <h2 style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 'clamp(36px, 4vw, 56px)', letterSpacing: '0.03em', color: '#E2E8F0' }}>
               What People Are Saying
             </h2>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 20 }}>
             <TestimonialCard
               quote="Evolvian built an entire AI team for our project overnight. Evo manages everything flawlessly."
               name="Emily R."
@@ -1110,12 +1211,12 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
       {/* ── RECOGNITION ─────────────────────────────────────── */}
-      <section style={{ padding: '80px 48px', position: 'relative', overflow: 'hidden' }}>
+      <section style={{ padding: isMobile ? '60px 20px' : '80px 48px', position: 'relative', overflow: 'hidden' }}>
         <div style={{ maxWidth: 860, margin: '0 auto' }}>
           {/* Divider top */}
-          <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(163,255,18,0.2), rgba(163,255,18,0.4), rgba(163,255,18,0.2), transparent)', marginBottom: 72 }} />
+          <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(163,255,18,0.2), rgba(163,255,18,0.4), rgba(163,255,18,0.2), transparent)', marginBottom: isMobile ? 40 : 72 }} />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, alignItems: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 32 : 40, alignItems: 'center' }}>
             {/* Left — badges */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, letterSpacing: '0.2em', color: '#A3FF12', textTransform: 'uppercase' }}>
@@ -1205,7 +1306,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
       {/* ── PRICING ─────────────────────────────────────────── */}
-      <section id="pricing" style={{ padding: '120px 48px', position: 'relative', overflow: 'hidden' }}>
+      <section id="pricing" style={{ padding: isMobile ? '80px 20px' : '120px 48px', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 800, height: 600, background: 'radial-gradient(ellipse, rgba(90,158,143,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
         <div style={{ maxWidth: 860, margin: '0 auto', textAlign: 'center', position: 'relative' }}>
           <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, letterSpacing: '0.2em', color: '#5A9E8F', textTransform: 'uppercase' }}>Pricing</span>
@@ -1217,7 +1318,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
           </p>
 
           {/* Three pricing pillars */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 40 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 16, marginBottom: 40 }}>
             {[
               { label: 'Per Agent', value: 'Hourly', sub: 'billed by the hour of active work', color: '#5A9E8F', icon: (
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="9" r="4" stroke="#5A9E8F" strokeWidth="1.4"/><path d="M5 20C5 16.686 8.134 14 12 14C15.866 14 19 16.686 19 20" stroke="#5A9E8F" strokeWidth="1.4" strokeLinecap="round"/></svg>
@@ -1247,7 +1348,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
           {/* Free trial CTA */}
           <div style={{
             background: 'rgba(22,27,34,0.8)', backdropFilter: 'blur(20px)',
-            border: '1px solid #5A9E8F', borderRadius: 24, padding: '44px 48px',
+            border: '1px solid #5A9E8F', borderRadius: 24, padding: isMobile ? '32px 24px' : '44px 48px',
             boxShadow: '0 0 60px rgba(90,158,143,0.12)',
             position: 'relative', overflow: 'hidden',
           }}>
@@ -1259,7 +1360,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
               Deploy your first agent team. No seat fees, no subscriptions — costs scale with what you build.
             </p>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button className="btn-primary" onClick={onGetStarted} style={{ padding: '14px 40px', fontSize: 15 }}>
+              <button className="btn-primary" onClick={handleGetStarted} style={{ padding: '14px 40px', fontSize: 15 }}>
                 Start Building →
               </button>
             </div>
@@ -1268,7 +1369,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
       {/* ── FAQ ─────────────────────────────────────────────── */}
-      <section style={{ padding: '0 48px 120px', maxWidth: 720, margin: '0 auto' }}>
+      <section style={{ padding: isMobile ? '0 20px 80px' : '0 48px 120px', maxWidth: 720, margin: '0 auto' }}>
         <h2 style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 'clamp(36px, 4vw, 52px)', letterSpacing: '0.03em', color: '#E2E8F0', textAlign: 'center', marginBottom: 56 }}>
           Frequently Asked Questions
         </h2>
@@ -1298,7 +1399,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
       {/* ── ROADMAP ─────────────────────────────────────────── */}
-      <section id="roadmap" style={{ padding: '120px 48px', position: 'relative', overflow: 'hidden' }}>
+      <section id="roadmap" style={{ padding: isMobile ? '80px 20px' : '120px 48px', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 0%, rgba(0,245,255,0.04) 0%, transparent 60%)', pointerEvents: 'none' }} />
         <div style={{ maxWidth: 860, margin: '0 auto', position: 'relative' }}>
           <div style={{ textAlign: 'center', marginBottom: 72 }}>
@@ -1314,11 +1415,13 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
           {/* Timeline */}
           <div style={{ position: 'relative' }}>
             {/* Vertical line */}
-            <div style={{
-              position: 'absolute', left: '50%', top: 0, bottom: 0,
-              width: 1, transform: 'translateX(-50%)',
-              background: 'linear-gradient(to bottom, rgba(0,245,255,0.3), rgba(90,158,143,0.15), transparent)',
-            }} />
+            {!isMobile && (
+              <div style={{
+                position: 'absolute', left: '50%', top: 0, bottom: 0,
+                width: 1, transform: 'translateX(-50%)',
+                background: 'linear-gradient(to bottom, rgba(0,245,255,0.3), rgba(90,158,143,0.15), transparent)',
+              }} />
+            )}
 
             {[
               {
@@ -1356,35 +1459,55 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
             ].map((item, i) => (
               <div key={i} style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 40px 1fr',
+                gridTemplateColumns: isMobile ? '28px 1fr' : '1fr 40px 1fr',
                 gap: 0,
-                marginBottom: 56,
+                marginBottom: isMobile ? 32 : 56,
                 alignItems: 'start',
               }}>
-                {/* Left content or spacer */}
-                <div style={{ padding: item.side === 'left' ? '0 40px 0 0' : '0', textAlign: item.side === 'left' ? 'right' : 'left' }}>
-                  {item.side === 'left' && (
-                    <RoadmapCard quarter={item.quarter} status={item.status} title={item.title} items={item.items} accent={item.accent} align="right" />
-                  )}
-                </div>
+                {isMobile ? (
+                  <>
+                    {/* Mobile: dot + card side by side */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 6 }}>
+                      <div style={{
+                        width: 12, height: 12, borderRadius: '50%',
+                        background: item.status === 'live' ? item.accent : 'transparent',
+                        border: `2px solid ${item.accent}`,
+                        boxShadow: item.status === 'live' ? `0 0 10px ${item.accent}60` : 'none',
+                        flexShrink: 0,
+                      }} />
+                    </div>
+                    <div style={{ paddingLeft: 16 }}>
+                      <RoadmapCard quarter={item.quarter} status={item.status} title={item.title} items={item.items} accent={item.accent} align="left" />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Desktop: left content or spacer */}
+                    <div style={{ padding: item.side === 'left' ? '0 40px 0 0' : '0', textAlign: item.side === 'left' ? 'right' : 'left' }}>
+                      {item.side === 'left' && (
+                        <RoadmapCard quarter={item.quarter} status={item.status} title={item.title} items={item.items} accent={item.accent} align="right" />
+                      )}
+                    </div>
 
-                {/* Center dot */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 6 }}>
-                  <div style={{
-                    width: 14, height: 14, borderRadius: '50%',
-                    background: item.status === 'live' ? item.accent : 'transparent',
-                    border: `2px solid ${item.accent}`,
-                    boxShadow: item.status === 'live' ? `0 0 12px ${item.accent}60` : 'none',
-                    flexShrink: 0,
-                  }} />
-                </div>
+                    {/* Center dot */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 6 }}>
+                      <div style={{
+                        width: 14, height: 14, borderRadius: '50%',
+                        background: item.status === 'live' ? item.accent : 'transparent',
+                        border: `2px solid ${item.accent}`,
+                        boxShadow: item.status === 'live' ? `0 0 12px ${item.accent}60` : 'none',
+                        flexShrink: 0,
+                      }} />
+                    </div>
 
-                {/* Right content or spacer */}
-                <div style={{ padding: item.side === 'right' ? '0 0 0 40px' : '0' }}>
-                  {item.side === 'right' && (
-                    <RoadmapCard quarter={item.quarter} status={item.status} title={item.title} items={item.items} accent={item.accent} align="left" />
-                  )}
-                </div>
+                    {/* Right content or spacer */}
+                    <div style={{ padding: item.side === 'right' ? '0 0 0 40px' : '0' }}>
+                      {item.side === 'right' && (
+                        <RoadmapCard quarter={item.quarter} status={item.status} title={item.title} items={item.items} accent={item.accent} align="left" />
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -1392,7 +1515,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
       {/* ── FINAL CTA ───────────────────────────────────────── */}
-      <section style={{ padding: '120px 48px 140px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+      <section style={{ padding: isMobile ? '80px 20px 100px' : '120px 48px 140px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 50%, rgba(90,158,143,0.08) 0%, transparent 70%)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg, transparent, #5A9E8F30, #00F5FF40, #5A9E8F30, transparent)' }} />
         <div style={{ position: 'relative', maxWidth: 700, margin: '0 auto' }}>
@@ -1406,7 +1529,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
             Evolvian transforms ideas into fully operational AI teams that manage themselves.
           </p>
           <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
-            <button className="btn-primary" onClick={onGetStarted} style={{ padding: '16px 48px', fontSize: 16 }}>
+            <button className="btn-primary" onClick={handleGetStarted} style={{ padding: '16px 48px', fontSize: 16 }}>
               Start Building →
             </button>
           </div>
@@ -1414,8 +1537,8 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
       {/* ── FOOTER ──────────────────────────────────────────── */}
-      <footer style={{ borderTop: '1px solid #111827', padding: '52px 48px 40px' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 48 }}>
+      <footer style={{ borderTop: '1px solid #111827', padding: isMobile ? '40px 20px 32px' : '52px 48px 40px' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: 'start', gap: isMobile ? 32 : 0, marginBottom: 48 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <div style={{ width: 28, height: 28, borderRadius: 7, background: 'rgba(90,158,143,0.15)', border: '1px solid #5A9E8F40', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1427,7 +1550,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
               The org chart for your AI workforce.
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 80 }}>
+          <div style={{ display: 'flex', gap: isMobile ? 40 : 80, flexWrap: 'wrap' }}>
             {/* Product column */}
             <div>
               <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, color: '#2D3748', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 16, fontWeight: 600 }}>Product</div>
