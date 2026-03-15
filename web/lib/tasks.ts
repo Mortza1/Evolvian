@@ -19,6 +19,7 @@ export interface TaskWorkflowNode {
 
 export interface TaskHierarchyStep {
   id: string;
+  team_id: string;
   name: string;
   agent: string;
   depends_on: string[];
