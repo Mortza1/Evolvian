@@ -267,26 +267,69 @@ def _build_tools_prompt_section(agent_tools: list) -> str:
     if not agent_tools:
         return ""
 
-    lines = ["\n## Available Tools\nYou have access to the following tools. To use a tool, include a <tool_call> tag in your response:\n"]
+    lines = [
+        "\n## Available Tools",
+        "Call tools by outputting a <tool_call> XML block. "
+        "You MUST call at least one tool before writing your final answer.\n",
+    ]
     for tool, _config in agent_tools:
         param_parts = []
+        example_args = []
         for p in tool.parameters:
             req = " (required)" if p.required else " (optional)"
             param_parts.append(f'    "{p.name}": "<{p.description}>{req}"')
+            if p.required:
+                example_args.append(f'"{p.name}": "example value"')
         params_json = ",\n".join(param_parts)
+        example_json = ", ".join(example_args)
         lines.append(
             f"### {tool.name}\n"
-            f"{tool.description}\n"
-            f'<tool_call>\n{{"name": "{tool.name}", "arguments": {{\n{params_json}\n}}}}\n</tool_call>\n'
+            f"{tool.description}\n\n"
+            f"Format:\n"
+            f'<tool_call>\n{{"name": "{tool.name}", "arguments": {{{params_json}\n}}}}\n</tool_call>\n\n'
+            f"Example:\n"
+            f'<tool_call>\n{{"name": "{tool.name}", "arguments": {{{example_json}}}}}\n</tool_call>\n'
         )
 
-    lines.append("You may call multiple tools. After each tool result, you can call more tools or provide your final answer.\n")
+    lines.append(
+        "Call tools one at a time. After receiving results, you may call more tools "
+        "or write your final answer. Always cite sources (URLs) in your answer.\n"
+    )
     return "\n".join(lines)
 
 
 def _strip_tool_calls(text: str) -> str:
     """Strip leftover <tool_call> XML tags from the agent's final response."""
     return re.sub(r'<tool_call>.*?</tool_call>', '', text, flags=re.DOTALL).strip()
+
+
+# Patterns injected by some LLM providers/models when they see tool schemas
+# in the conversation but decide not to call tools.
+_LLM_META_PATTERNS = [
+    # "CRITICAL: ..." lines or paragraphs (provider injections)
+    re.compile(r'(?:^|\n)CRITICAL:.*?(?=\n[A-Z]|\n\n|\Z)', re.DOTALL | re.IGNORECASE),
+    # "Note: ..." meta-commentary at the end of responses
+    re.compile(r'(?:^|\n)Note:.*?Do NOT call any tools.*?(?=\n\n|\Z)', re.DOTALL | re.IGNORECASE),
+    # Residual tool schemas accidentally echoed back
+    re.compile(r'## Available Tools\n.*?(?=\n##|\Z)', re.DOTALL),
+]
+
+
+def _clean_llm_output(text: str) -> str:
+    """
+    Remove LLM meta-instructions and provider injections from agent output.
+
+    Some models (via OpenRouter) inject self-reminder text like
+    "CRITICAL: Respond with TEXT ONLY. Do NOT call any tools..."
+    when tool schemas appear in the conversation history. This strips
+    those artifacts before the output is stored in the vault.
+    """
+    cleaned = text
+    for pattern in _LLM_META_PATTERNS:
+        cleaned = pattern.sub('', cleaned)
+    # Also strip <tool_call> remnants
+    cleaned = re.sub(r'<tool_call>.*?</tool_call>', '', cleaned, flags=re.DOTALL)
+    return cleaned.strip()
 
 
 def _update_tool_stats(db: Session, installed_tool_by_id: dict, tool_name: str, cost: float) -> None:

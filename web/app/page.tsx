@@ -28,12 +28,16 @@ export default function Home() {
         });
 
         if (response.ok) {
-          // Token is valid, proceed with auto-login
+          const teams = await response.json();
+          const hasTeams = Array.isArray(teams) && teams.length > 0;
           const hasSeenOnboarding = localStorage.getItem('has_seen_onboarding');
-          if (!hasSeenOnboarding) {
-            setAppState('onboarding');
-          } else {
+
+          if (hasTeams || hasSeenOnboarding) {
+            // User already set up — go straight to dashboard
+            if (!hasSeenOnboarding) localStorage.setItem('has_seen_onboarding', 'true');
             setAppState('dashboard');
+          } else {
+            setAppState('onboarding');
           }
         } else {
           // Token is invalid, clear it — stay on landing

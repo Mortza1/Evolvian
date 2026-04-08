@@ -40,6 +40,24 @@ function buildTree(steps: HierarchyStep[]): TreeNode[] {
   return roots;
 }
 
+/** Group steps by their sub-supervisor. Returns null if no sub-supervisor info. */
+function groupBySubSupervisor(
+  steps: HierarchyStep[],
+  subSupervisors: string[],
+): Map<string, HierarchyStep[]> | null {
+  if (!subSupervisors.length) return null;
+  const hasSupField = steps.some(s => s.supervisor && subSupervisors.includes(s.supervisor));
+  if (!hasSupField) return null;
+
+  const map = new Map<string, HierarchyStep[]>();
+  subSupervisors.forEach(ss => map.set(ss, []));
+  steps.forEach(s => {
+    const key = s.supervisor && map.has(s.supervisor) ? s.supervisor : subSupervisors[0];
+    map.get(key)!.push(s);
+  });
+  return map;
+}
+
 function agentInitials(name: string) {
   return name.replace(/_step\d+$/, '').substring(0, 2).toUpperCase();
 }
@@ -277,6 +295,92 @@ function StepNode({
   );
 }
 
+/* ─── Sub-supervisor node ────────────────────────────────────────────────── */
+function SubSupNode({
+  name, steps, activeStepTeamId, stagger = 0,
+}: {
+  name: string;
+  steps: HierarchyStep[];
+  activeStepTeamId?: string | null;
+  stagger?: number;
+}) {
+  const isAnyStepActive = steps.some(s => s.team_id === activeStepTeamId);
+
+  return (
+    <div className="flex flex-col items-center" style={{ animation: `hz-fadein .5s ease both`, animationDelay: `${stagger * 0.08}s` }}>
+      {/* Sub-supervisor card */}
+      <div
+        style={{
+          width: 160, borderRadius: 10,
+          background: isAnyStepActive ? '#0A1A24' : '#0B1820',
+          border: `1px solid ${isAnyStepActive ? '#5A9E8F60' : '#1A3040'}`,
+          padding: '12px 14px 10px',
+          textAlign: 'center',
+          transition: 'all .35s ease',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, height: 1,
+          background: isAnyStepActive
+            ? 'linear-gradient(to right, transparent, #5A9E8F, transparent)'
+            : 'linear-gradient(to right, transparent, #2A4A58, transparent)',
+        }} />
+
+        {/* Domain lead badge */}
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          background: '#5A9E8F12', border: '1px solid #5A9E8F30',
+          borderRadius: 4, padding: '2px 8px', marginBottom: 8,
+        }}>
+          <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#5A9E8F' }} />
+          <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 7.5, color: '#5A9E8F', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+            Domain Lead
+          </span>
+        </div>
+
+        <div style={{
+          width: 36, height: 36, borderRadius: 7, margin: '0 auto 8px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 12,
+          background: isAnyStepActive ? '#5A9E8F22' : '#0D2230',
+          border: `1.5px solid ${isAnyStepActive ? '#5A9E8F60' : '#1E3A48'}`,
+          color: isAnyStepActive ? '#7BCCB8' : '#3A7080',
+          transition: 'all .35s',
+        }}>
+          {name.substring(0, 2).toUpperCase()}
+        </div>
+
+        <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 12, color: isAnyStepActive ? '#C8E8E0' : '#4A7A80', letterSpacing: '0.02em', marginBottom: 2, transition: 'color .35s' }}>
+          {name}
+        </p>
+        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, color: '#1E3A48', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+          Supervises · Reviews
+        </p>
+      </div>
+
+      {/* Steps under this sub-supervisor */}
+      {steps.length > 0 && (
+        <div className="flex flex-col items-center">
+          <FlowLine active={isAnyStepActive} height={20} />
+          <HBridge count={steps.length} active={isAnyStepActive} />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            {steps.map((step, i) => (
+              <StepNode
+                key={step.id}
+                node={{ step, children: [], depth: 2, index: i }}
+                activeStepTeamId={activeStepTeamId}
+                stagger={stagger + i + 1}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Main component ─────────────────────────────────────────────────────── */
 export function HierarchyView({ hierarchyTeam, hierarchyMetrics, isExecuting, activeStepTeamId }: HierarchyViewProps) {
   useStyles();
@@ -305,7 +409,9 @@ export function HierarchyView({ hierarchyTeam, hierarchyMetrics, isExecuting, ac
   }
 
   const stepTree = hierarchyTeam.stepTree ?? [];
-  const treeRoots = stepTree.length > 0 ? buildTree(stepTree) : [];
+  const subSupervisors = hierarchyTeam.subSupervisors ?? [];
+  const subSupGroups = groupBySubSupervisor(stepTree, subSupervisors);
+  const treeRoots = !subSupGroups && stepTree.length > 0 ? buildTree(stepTree) : [];
   const anyChildActive = !!activeStepTeamId;
 
   return (
@@ -402,8 +508,29 @@ export function HierarchyView({ hierarchyTeam, hierarchyMetrics, isExecuting, ac
         </div>
       </div>
 
-      {/* ── Tree ─────────────────────────────────────────────────────────────── */}
-      {treeRoots.length > 0 && (
+      {/* ── Sub-supervisor tier ──────────────────────────────────────────────── */}
+      {subSupGroups && subSupGroups.size > 0 && (
+        <>
+          <FlowLine active={anyChildActive} height={32} />
+          <HBridge count={subSupGroups.size} active={anyChildActive} />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+            {Array.from(subSupGroups.entries()).map(([ssName, ssSteps], i) => (
+              <div key={ssName} className="flex flex-col items-center">
+                <FlowLine active={ssSteps.some(s => s.team_id === activeStepTeamId)} height={20} />
+                <SubSupNode
+                  name={ssName}
+                  steps={ssSteps}
+                  activeStepTeamId={activeStepTeamId}
+                  stagger={i}
+                />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ── Flat step tree (no sub-supervisors) ─────────────────────────────── */}
+      {!subSupGroups && treeRoots.length > 0 && (
         <>
           <FlowLine active={anyChildActive} height={32} />
           {treeRoots.length > 1 && (
@@ -423,7 +550,7 @@ export function HierarchyView({ hierarchyTeam, hierarchyMetrics, isExecuting, ac
       )}
 
       {/* Fallback flat workers */}
-      {treeRoots.length === 0 && hierarchyTeam.workers.length > 0 && (
+      {!subSupGroups && treeRoots.length === 0 && hierarchyTeam.workers.length > 0 && (
         <>
           <FlowLine active={anyChildActive} height={32} />
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>

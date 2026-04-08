@@ -57,13 +57,17 @@ export interface HierarchyStep {
   team_id: string;
   name: string;
   agent: string;
+  supervisor?: string;   // which sub-supervisor owns this step
+  tier?: number;
   depends_on: string[];
 }
 
 export interface HierarchyTeam {
   supervisor: string;
+  subSupervisors?: string[];
   workers: string[];
   teamName: string;
+  treeDepth?: number;
   stepTree?: HierarchyStep[];
 }
 

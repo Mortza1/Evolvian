@@ -1,0 +1,663 @@
+% Implementation
+%%%%%%%%%%%%%%%%%%%%
+\section{Implementation and Contributions} \label{cha:imple}
+
+This section details the implementation of Evolvian. The system realises the
+four-module architecture from Section~\ref{sec:method_two}, the Warden agent, Worker agents,
+Memory Layer and Evolution engine, as a production integrated system built on
+top of EvoAgentx. The implementation is organised into five packages:
+(i) a hierarchy module implementing the Warden and governance graph,
+(ii) benchmark-specific team configurations for HotPotQA and MATH,
+(iii) an evaluation harness supporting four ablation configurations,
+(iv) a statistical comparison framework, and
+(v) a comprehensive test suite of 99 unit and integration tests.
+
+The system is integrated into the Evolvian platform (a FastAPI backend with a
+React/TypeScript frontend) where it powers real-time hierarchical task
+execution with Server-Sent Events (SSE) streaming and human-in-the-loop
+quality feedback. This chapter describes each component in detail, maps the
+implementation to the formal architecture and research questions from
+Section~3, and presents the ablation study design used to isolate the
+contributions of hierarchy (RQ1), persistence (RQ2), evolution (RQ3), and
+human oversight (RQ4).
+
+\subsection{Warden Agent — Hierarchical Governance Implementation} \label{imp:one}
+
+The Warden Agent, described formally in section~\ref{sec:method_two} as the top-level controller governing the hierarchical governance graph G = (V, E, H), is implemented across three modules:
+
+\subsubsection{Data Model Layer (\texttt{hierarchy/team.py})}
+\leavevmode\par
+
+This module defines the organisational primitives that encode the governance
+graph $G = (V, E, H)$, where $V$ represents worker agents, $E$ their
+communication links, and $H$ the supervisory hierarchy. All classes use
+Pydantic-based data models extending EvoAgentX's \texttt{BaseModule},
+ensuring serialisability and validation.
+
+Table~\ref{tab:data-model} summarises the five core abstractions; all use Pydantic-based models for serialisability and evolutionary mutation.
+
+\begin{table}[h!]
+\centering\small
+\begin{tabular}{lp{4.6cm}p{4.6cm}}
+\toprule
+\textbf{Class} & \textbf{Role in $G=(V,E,H)$} & \textbf{Key fields / strategies} \\
+\midrule
+\texttt{Team} & One level of $H$; enforces structural invariants & Warden, workers, DelegationPolicy, EscalationRules, ReviewMode \\
+\texttt{HierarchicalAgent} & Node $v\in V$; extends EvoAgentX \texttt{Agent} & role (supervisor/worker/reviewer), team\_id, authority\_scope \\
+\texttt{DelegationPolicy} & Edges $E$; routes subtasks to workers & capability\_match, round\_robin, load\_balance, supervisor\_decides \\
+\texttt{EscalationRule} & Condition-action pair in $H$ & NL condition, action (escalate/retry/HITL/fail), max\_retries \\
+\texttt{HierarchicalAgentManager} & Index over $G$ & $O(1)$ team/Warden/worker lookup; scope-based discovery \\
+\bottomrule
+\end{tabular}
+\caption{Data model classes implementing $G=(V,E,H)$ (\texttt{hierarchy/team.py}).}
+\label{tab:data-model}
+\end{table}
+
+\subsubsection{Warden Intelligence Layer (\texttt{hierarchy/supervisor.py})}
+\leavevmode\par
+
+The three cognitive components implement graceful degradation throughout. \textbf{\texttt{SupervisorDecomposer}} calls the Warden's LLM to produce a JSON array of subtasks with \texttt{required\_skills}; on any parsing failure it falls back to a single pass-through subtask. \textbf{\texttt{DelegationEngine}} scores workers via capability-match (+2 exact, +1 partial overlap), maintaining assignment counts for load-balancing, and falls back to round-robin when skills are unspecified. \textbf{\texttt{SupervisorReviewer}} calls the Warden's LLM to produce a \texttt{ReviewDecision} with \texttt{approved}, \texttt{revisions\_needed}, and per-worker \texttt{feedback}; when \texttt{ReviewMode.NONE} is set, it aggregates outputs directly. Every LLM failure has a deterministic fallback, ensuring hierarchical execution always produces an output.
+
+\subsubsection{Governance Graph Construction (\texttt{hierarchy/hierarchical\_graph.py})}
+\leavevmode\par
+
+This module extends EvoAgentX's \texttt{WorkFlowGraph} to make teams
+first-class graph nodes, directly implementing the governance graph
+$G = (V, E, H)$ from Equation~1.
+
+The \texttt{HierarchicalWorkFlowGraph} stores team identity inside
+existing \texttt{WorkFlowNode} objects by writing a tag string
+(\texttt{\_hierarchical\_team\_id:<team\_id>}) into the node's
+\texttt{reason} field. This tag-based polymorphism was chosen deliberately
+to avoid modifying EvoAgentX's schema, maintaining full upstream
+compatibility. At runtime, \texttt{is\_team\_node()} and
+\texttt{get\_team\_for\_node()} read the tag to distinguish hierarchical
+team nodes from regular flat nodes, enabling polymorphic dispatch in the
+execution engine.
+
+The \texttt{from\_teams()} factory method constructs a complete graph from
+a list of \texttt{Team} objects: it creates one \texttt{WorkFlowNode} per
+team, generates sequential edges $E$ by default (or accepts custom
+dependency specifications for DAG topologies), and populates each node's
+\texttt{agents} field with the full agent roster for compatibility with
+EvoAgentX's scheduling algorithms.
+
+A \texttt{validate\_hierarchy()} method performs structural validation: it
+verifies that every team has a Warden, checks for cycles in the team
+dependency graph using depth-first search (ensuring $H$ is a valid
+hierarchy), and ensures worker names are globally unique across all teams.
+
+
+\subsection{Execution Engine — The Warden's Runtime} \label{imp:two}
+
+The execution engine (\texttt{hierarchy/execution.py}) is the
+largest and most complex component. It overrides EvoAgentX's
+\texttt{WorkFlow} to execute team nodes via the full Warden loop,
+implementing the lifecycle management described in
+Section~\ref{sec:method_two}: ``governing agent lifecycles (spawning,
+promotion, and retirement) while dynamically decomposing tasks.''
+
+The \texttt{HierarchicalWorkFlow} class overrides \texttt{async\_execute()} and \texttt{execute\_task()}; team nodes are dispatched to \texttt{\_execute\_team\_node()}, which runs the six-phase Warden loop formalised in Algorithm~\ref{alg:warden-loop} and illustrated in Figure~\ref{fig:warden-loop}.
+
+% Requires: \usepackage[ruled,vlined]{algorithm2e}
+\begin{algorithm}[h!]
+\small
+\caption{\textsc{WardenExecutionLoop}$(T,\,\mathcal{T})$}
+\label{alg:warden-loop}
+\DontPrintSemicolon
+\KwIn{Task $T$;\; team $\mathcal{T}=\{\text{Warden},w_1,\ldots,w_k\}$}
+\KwOut{Final synthesised answer}
+$\mathbf{S} \leftarrow \text{Warden.Decompose}(T)$\tcp*{JSON subtasks $\{s_i\}$ with required\_skills}
+$\text{asgn} \leftarrow \text{DelegationEngine}(\mathbf{S},\mathcal{T})$\tcp*{capability-match scoring}
+\ForEach{$s_i \in \mathbf{S}$}{
+  $r_i \leftarrow w_{\text{asgn}[i]}.\text{Execute}(s_i)$\;
+  \If{\upshape EscalationCheck$(r_i)$\tcp*[f]{empty / conf.$<$30 + error-cite / LLM}}{
+    $r_i \leftarrow \text{Warden.DirectSolve}(s_i)$\;
+  }
+}
+$\mathrm{rev} \leftarrow 0$\;
+\Repeat{\upshape approved \textbf{or} $\mathrm{rev} \geq 2$}{
+  $(\text{approved},\,\text{fb},\,\text{retry}) \leftarrow \text{Warden.Review}(\{r_i\})$\;
+  \ForEach{$s_i \in \text{retry}$}{$r_i \leftarrow w_{\text{asgn}[i]}.\text{Execute}(s_i,\,\text{fb}[i])$\;}
+  $\mathrm{rev} \mathrel{+}= 1$\;
+}
+\Return{\upshape Warden.Synthesise$(\{r_i\})$}\;
+\end{algorithm}
+
+% Requires: \usepackage{tikz} \usetikzlibrary{shapes.geometric,arrows.meta,positioning}
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[
+  >=Latex, node distance=0.42cm and 2.0cm,
+  box/.style={rectangle, rounded corners=4pt, draw,
+              minimum width=4.0cm, minimum height=0.56cm,
+              font=\small, align=center},
+  wbox/.style={box, fill=green!10, draw=green!50!black},
+  dbox/.style={diamond, draw=orange!70!black, fill=orange!8,
+               font=\scriptsize, align=center, aspect=2.8},
+  tbox/.style={box, fill=green!40!black, text=white, draw=none},
+]
+\node[wbox] (dec) {\textbf{\small①} Decompose $\to \{s_i\}$};
+\node[box,  below=of dec]        (del) {\textbf{\small②} Delegate (capability-match)};
+\node[box,  below=of del]        (exe) {\textbf{\small③} Execute Workers};
+\node[dbox, below=0.52cm of exe] (esc) {\textbf{\small④} Escalate?};
+\node[wbox, right=2.0cm of esc]  (wdo) {Warden\\Direct Solve};
+\node[wbox, below=0.55cm of esc] (rev) {\textbf{\small⑤} Review (Warden LLM)};
+\node[dbox, below=0.52cm of rev] (app) {Approved?};
+\node[tbox, below=0.55cm of app] (out) {\textbf{\small⑥} Synthesise $\to$ Answer};
+\draw[->] (dec)--(del); \draw[->] (del)--(exe); \draw[->] (exe)--(esc);
+\draw[->] (esc)--node[above,font=\tiny]{yes}(wdo);
+\draw[->] (wdo)|-(out);
+\draw[->] (esc)--node[right,font=\tiny]{no}(rev);
+\draw[->] (rev)--(app);
+\draw[->] (app)--node[right,font=\tiny]{yes}(out);
+\draw[->,dashed] (app.west)--++(-1.5,0)|-
+  node[pos=0.3,left,font=\tiny]{no (${\leq}2$)}(del.west);
+\end{tikzpicture}
+\caption{Warden execution loop. The dashed revision arc re-delegates flagged subtasks with reviewer feedback ($\leq 2$ rounds).}
+\label{fig:warden-loop}
+\end{figure}
+
+\paragraph{\textbf{Execution Trace and Persistence.}}
+The engine includes an \texttt{ExecutionTrace} system that records every
+event (decompose, delegate, execute, escalate, review, revise, handoff)
+with timestamps and metadata. These traces implement a component of the
+Memory Layer described in Section~\ref{sec:method_two}: new reasoning
+traces $\Delta R_t$ are recorded per execution cycle and persisted
+alongside benchmark results. The trace data enables post-hoc analysis
+of coordination dynamics (supporting qualitative behavioural analysis
+from Section~\ref{sec:method_five}) and feeds into the evolutionary feedback loop
+(Equation~4).
+
+\paragraph{\textbf{Cross-team handoff.}}
+Cross-team handoff is handled automatically through EvoAgentX's
+\texttt{Environment} abstraction: upstream team outputs are stored as
+\texttt{Message} objects in the shared environment, and downstream
+teams read them by parameter name. This means multi-team pipelines,
+where multiple Wardens coordinate, work without explicit data routing
+code.
+
+\paragraph{\textbf{SSE integration.}}
+SSE integration enables real-time frontend visualisation: the execution
+engine accepts an optional \texttt{sse\_emit} callback invoked for every
+hierarchy event. The Evolvian backend bridges the async execution
+engine with a synchronous SSE generator using a background thread with
+its own event loop, polling a shared queue every 200\,ms to yield
+buffered events to the client. This enables the human operator to
+observe and intervene in the Warden's decisions in real time (RQ4).
+
+
+\subsection{Auto-Build — Dynamic Team Design} \label{imp:three}
+
+The auto-build layer enables fully automatic team construction from a
+plain-text task description. A single LLM call receives a structured
+prompt requesting a JSON specification of: team name, Warden (name,
+description, authority scope), workers (same structure), delegation
+strategy, and reasoning. The output is parsed, validated (must have a
+Warden and at least two workers), and used to construct a complete
+\texttt{HierarchicalWorkFlowGraph} with default escalation rules and
+review mode.
+
+This auto-build capability implements the Warden's agent lifecycle
+management, the Warden dynamically spawns a team of specialist workers
+tailored to each task, analogous to the ``spawning'' function described
+in Section~\ref{sec:method_two}. In the Evolvian frontend, when a user
+submits any task, the system automatically designs a specialist team
+without requiring manual agent configuration, making the hierarchical
+governance transparent to the end user.
+
+\subsection{Worker Agent Configurations} \label{imp:four}
+
+Three benchmark-specific teams evaluate the Warden's governance on qualitatively different task types; Table~\ref{tab:team-configs} summarises each configuration.
+
+\begin{table}[h!]
+\centering\small
+\begin{tabular}{lp{2.8cm}p{6.0cm}}
+\toprule
+\textbf{Benchmark} & \textbf{Warden} & \textbf{Workers \& roles} \\
+\midrule
+HotPotQA & ResearchCoordinator & Retriever (evidence extraction), Reasoner (multi-hop inference), Synthesiser (answer consolidation) \\
+MATH L2--3 & MathStrategist & Planner (solution plan), Solver (step-by-step execution), Verifier$^\dagger$ (confidence scoring) \\
+Enterprise & ProjectSupervisor & ResearchAnalyst (trends/competitors), DataAnalyst (quantitative), ReportWriter (structured output) \\
+\bottomrule
+\end{tabular}
+\caption{Team configurations per benchmark. All use \texttt{capability\_match} delegation and \texttt{supervisor\_reviews\_all} review. $^\dagger$Verifier flags INCORRECT only when confidence $<30$ \emph{and} a specific error step is cited (calibrated after the pilot evaluation's 80\% false-negative rate). Enterprise briefs span 10 domains; LLM-as-Judge scores completeness (25\%), analytical depth (25\%), accuracy (20\%), coherence (15\%), actionability (15\%), plus question-alignment rate.}
+\label{tab:team-configs}
+\end{table}
+
+\subsection{Ablation Study Design} \label{imp:five}
+
+A four-configuration comparison isolates specialisation, hierarchy, and
+evolution:
+
+\begin{itemize}[itemsep=0.3em]
+
+\item \textbf{Config A (Base EvoAgentX)}: Single agent, one LLM call.
+Baseline for all RQs.
+
+\item \textbf{Config B (Flat Pipeline)}: Three specialists chained
+sequentially. No Warden, no review. Isolates \emph{specialisation}
+(B vs A).
+
+\item \textbf{Config C (Warden Hierarchy)}: Full team with delegation,
+escalation, and review. 5--8 LLM calls. Isolates \emph{hierarchy}
+(C vs B). Addresses \textbf{RQ1}.
+
+\item \textbf{Config D (Hierarchy + Evolution)}: Config C plus
+text-gradient prompt optimisation across generations. Isolates
+\emph{evolution} (D vs C). Addresses \textbf{RQ3}.
+
+\end{itemize}
+
+\subsection{Evaluation Framework} \label{imp:six}
+
+The evaluation framework ($\sim$2{,}700 lines, 8 files) provides a complete pipeline from benchmark loading through statistical analysis. Config runners implement A (single agent, regex-based answer extraction), B (flat sequential \texttt{WorkFlowGraph}), C (Warden hierarchy with graph deep-copying), and D (TextGrad evolution with generational rollback). \textbf{Answer extraction} (\texttt{answer\_extraction.py}) uses a lightweight LLM call (max 64 tokens, $T{=}0$) to produce concise answers from verbose multi-agent outputs, applied uniformly across all configurations. \textbf{Statistical comparison} (\texttt{compare\_results.py}) produces pairwise significance tests (Wilcoxon signed-rank, Welch's $t$-test), LaTeX \texttt{booktabs} tables, and \texttt{matplotlib} charts.
+
+\subsection{Memory Layer and Persistence (RQ2)} \label{imp:seven}
+
+The persistence function $M_{t+1} = f_{\text{persist}}(M_t, \Delta R_t)$
+from Equation~3 is realised through three complementary mechanisms:
+
+\begin{itemize}[itemsep=0.5em]
+
+\item \textbf{Execution Traces ($\Delta R_t$)}: Every hierarchy event
+(decomposition, delegation, worker execution, escalation, review,
+revision, handoff) is recorded in the \texttt{ExecutionTrace} with
+timestamps and metadata. Traces are serialised to JSON alongside
+benchmark metrics, enabling post-hoc analysis of coordination dynamics.
+
+\item \textbf{Quality Feedback Store}: The three-layer quality scoring
+system (Section~4.9) persists assessments in the database across
+sessions. Each workflow execution records proxy scores, LLM-judge
+scores, and user ratings, constituting the persistent memory $M_t$
+that informs subsequent workflow selection.
+
+\item \textbf{WorkflowDNA Registry}: The Evolution Service maintains a
+persistent registry of workflow configurations indexed by SHA-256
+signature. Each entry accumulates performance statistics across
+executions: average quality, cost, latency, success rate, and execution
+count. New results $\Delta R_t$ consolidate into existing aggregate
+metrics $M_t$, producing updated statistics $M_{t+1}$ that inform
+future selection and mutation.
+
+\end{itemize}
+
+While agent-level episodic memory (as in MemGPT-style systems from
+Section~2.4) was not implemented within scope, the combination of
+these three mechanisms provides cross-session learning at the
+orchestration level.
+
+\subsection{Human-in-the-Loop Quality Feedback (RQ4)} \label{imp:eight}
+
+Addressing RQ4, Evolvian implements a three-layer hybrid quality scoring
+system (\texttt{core/\allowbreak runtime/\allowbreak quality\_evaluator.py}):
+
+\begin{itemize}[itemsep=0.5em]
+
+\item \textbf{Layer 1, Proxy Score}: A heuristic starting at 0.5 with
+bonuses for output length, completion rate, speed, tool usage, and
+assumption coverage. Provides instant feedback without LLM cost.
+
+\item \textbf{Layer 2, LLM-as-Judge}: Scores on five dimensions,
+Relevance, Completeness, Specificity, Coherence, and Quality,
+each 0--10. The Coherence dimension directly addresses the metric
+identified in Section~3.7.
+
+\item \textbf{Layer 3, Human Rating (HITL)}: 1--5 star rating via
+\texttt{POST /operations/\{id\}/rate}. The user observes the Warden's
+execution via SSE streaming, evaluates the output, and provides a
+rating that directly influences future workflow selection.
+
+\end{itemize}
+
+The hybrid formula prioritises human judgement: with user feedback
+$0.6 \times \text{user} + 0.3 \times \text{LLM} + 0.1 \times \text{proxy}$;
+without user feedback
+$0.7 \times \text{LLM} + 0.3 \times \text{proxy}$.
+Human ratings feed into the Evolution Service's fitness function,
+meaning HITL supervision shapes the evolutionary trajectory,
+not just correcting individual outputs but influencing which workflow
+configurations are selected in future executions.
+
+\subsection{Evolution Engine (RQ3)} \label{imp:nine}
+
+The Evolution Engine is implemented in two complementary forms:
+
+\begin{itemize}[itemsep=0.5em]
+
+\item \textbf{Production Evolution Service} (\texttt{core/runtime/evolution.py}):
+Implements $O_{\text{evo}}(G_t\allowbreak, E_t)$ from Equation~4 at the workflow level.
+Maintains a population of \texttt{WorkflowDNA} configurations, each identified by SHA-256 signature.
+The fitness function weighs quality (0.6), success rate (0.3), and efficiency (0.1) for quality-focused optimisation,
+with an experience bonus (up to 0.2) rewarding well-tested workflows.
+Mutation operators randomly add, remove, or reorder agents (rate 0.3).
+
+\item \textbf{Benchmark Evolution Optimiser} (\texttt{run\_hierarchical\_evo.py}):
+Implements text-gradient prompt evolution for Config~D.
+Each generation: (1) collects failures from a training batch, (2) diagnoses root causes via an optimiser LLM,
+(3) produces updated agent descriptions, (4) evaluates, (5) rolls back to the best generation.
+This operates on semantic prompt content rather than model weights.
+
+\end{itemize}
+
+\subsection{Frontend Integration and Test Suite} \label{imp:ten}
+
+The hierarchical execution system integrates into the Evolvian frontend via SSE streaming, rendering Warden decisions (decomposition, delegation, escalation, review) in real time for human oversight. 
+
+The test suite comprises 99 tests across four files: \texttt{test\_team.py} (43), \texttt{test\_supervisor.py} (20), \texttt{test\_hierarchical\_graph.py} (18), \texttt{test\_execution.py} (18), using mock LLMs for API-independent validation. All 99 tests pass consistently.
+
+\subsection{Reproducibility} \label{imp:repro}
+
+All dissertation code resides in \texttt{backend/\allowbreak dissertation/} with the following layout:
+
+{\small\begin{itemize}[itemsep=0.15em]
+\item \texttt{config.py} --- shared LLM/budget config (\texttt{DEFAULT\_MODEL}, \texttt{RANDOM\_SEED=42}, \texttt{BUDGET\_CAP\_USD=20.0})
+\item \texttt{hierarchy/} --- Warden implementation: \texttt{team.py}, \texttt{supervisor.py}, \texttt{hierarchical\_\allowbreak graph.py}, \texttt{execution.py}
+\item \texttt{benchmarks/} --- team configs (\texttt{hotpotqa\_teams.py}, \texttt{math\_teams.py}, \texttt{enterprise\_\allowbreak teams.py}), enterprise briefs
+\item \texttt{evaluation/} --- Config A--D runners, answer extraction, statistical comparison, enterprise judge
+\item \texttt{results/} --- JSON results per config $\times$ benchmark $\times$ run (e.g.\ \texttt{config\_c\_\allowbreak hotpotqa\_run0.json})
+\item \texttt{tests/} --- 99 unit and integration tests
+\end{itemize}}
+
+\paragraph{Environment setup.}
+{\small\begin{enumerate}[itemsep=0.15em]
+\item Ensure Python~3.12 is installed; clone the repository.
+\item Add \texttt{OPENROUTER\_API\_KEY=\textless key\textgreater} to \texttt{evoAgentX/.env}.
+\item Install dependencies: \texttt{pip install -r requirements.txt} (from \texttt{evoAgentX/} directory).
+\item Verify without API:\\
+      \texttt{PYTHONPATH=backend:evoAgentX python -m pytest}\\
+      \texttt{\hspace*{1.8em}backend/dissertation/tests/ -v}
+\end{enumerate}}
+
+\paragraph{Running experiments.} Each ablation configuration is a standalone script; all accept \texttt{--sample-k} (examples), \texttt{--seed} (default 42), and \texttt{--run-idx}:
+
+{\small\begin{itemize}[itemsep=0.2em]
+\item \textbf{Config A:} \texttt{python -m dissertation.evaluation.run\_baseline}\\
+      \texttt{\hspace*{1.8em}--benchmark hotpotqa --sample-k 20}
+\item \textbf{Config B:} \texttt{python -m dissertation.evaluation.run\_flat\_pipeline}\\
+      \texttt{\hspace*{1.8em}--benchmark hotpotqa --sample-k 20}
+\item \textbf{Config C:} \texttt{python -m dissertation.benchmarks.base\_runner}\\
+      \texttt{\hspace*{1.8em}--benchmark hotpotqa --sample-k 20}
+\item \textbf{Config D:} \texttt{python -m dissertation.evaluation.run\_hierarchical\_evo}\\
+      \texttt{\hspace*{1.8em}--benchmark hotpotqa --train-k 5 --max-steps 3}
+\end{itemize}}
+
+Substitute \texttt{math\_moderate} for MATH Level 2--3; enterprise evaluation via \texttt{dissertation.\allowbreak evaluation.\allowbreak enterprise\_benchmark}; statistical comparison via \texttt{dissertation.\allowbreak evaluation.\allowbreak compare\_results}. All results are saved as timestamped JSON files to \texttt{backend/\allowbreak dissertation/\allowbreak results/}, enabling complete post-hoc reproduction of all tables in this dissertation.
+
+\newpage
+
+\subsection{Summary of Key Design Contributions} \label{imp:eleven}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|c|p{10cm}|c|}
+\hline
+\textbf{\#} & \textbf{Contribution} & \textbf{Addresses} \\
+\hline
+1 & Tag-based polymorphism maintaining EvoAgentX compatibility & Engineering \\
+\hline
+2 & Graceful degradation, every LLM call has a deterministic fallback & Reliability (RQ1) \\
+\hline
+3 & Calibrated verification with confidence scoring and error-citation requirement & RQ1 \\
+\hline
+4 & Text-gradient evolution on prompt semantics with generational rollback & RQ3 \\
+\hline
+5 & Three-layer hybrid quality scoring with human-dominant weighting & RQ4 \\
+\hline
+6 & Auto-build team design from plain-text task descriptions & RQ1 \\
+\hline
+7 & Real-time SSE visualisation of Warden decisions for human oversight & RQ4 \\
+\hline
+\end{tabular}
+\caption{Key design contributions of the Evolvian framework.}
+\label{tab:design-contributions}
+\end{table}
+
+%%%%%%%%%%%%%%%%%%%%
+
+
+% Evaluation
+%%%%%%%%%%%%%%%%%%%%
+\section{Evaluation} \label{cha:eva}
+
+\subsection{Experimental Setup} \label{eva:one}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Parameter} & \textbf{Value} \\
+\hline
+LLM & \texttt{openai/gpt-4o-mini} via OpenRouter API \\
+\hline
+LLM settings & Temperature 0.1; max tokens 1,024 (workers), 2,048 (Warden); seed 42 \\
+\hline
+Hardware & macOS 12 Monterey (Darwin 21.6.0); LLM inference offloaded via OpenRouter \\
+\hline
+Software & Python 3.12, EvoAgentX, FastAPI, SQLAlchemy, Matplotlib \\
+\hline
+\end{tabular}
+\caption{Experimental configuration for Evolvian evaluation.}
+\label{tab:experimental-setup}
+\end{table}
+
+\textbf{HotPotQA} \cite{yang2018hotpotqadatasetdiverseexplainable}: Multi-hop QA requiring evidence retrieval and multi-step reasoning. Metrics: token-level F1, exact match (EM), accuracy.
+
+\textbf{MATH} \cite{measuring_hendrycks_2021}: Mathematical problem solving. Tested at Level 4--5 (pilot) and Level 2--3 (main evaluation). Metric: solve rate.
+
+\textbf{Enterprise Research-to-Report}: 10 structured research briefs evaluated via LLM-as-Judge on five quality criteria and brief-alignment scoring. Configs A, B, C evaluated; Config D omitted due to budget.
+
+Experiments followed two phases: a pilot evaluation ($n=5$) to establish baselines, then expanded evaluation ($n=20$ academic, $n=10$ enterprise) with design corrections.
+
+\subsection{Datasets} \label{eva:datasets}
+
+\subsubsection{HotPotQA}
+\leavevmode\par
+
+HotPotQA~\cite{yang2018hotpotqadatasetdiverseexplainable} (Yang et al., 2018; \url{https://hotpotqa.github.io/}) is an open-domain multi-hop QA benchmark containing 113{,}000 English Wikipedia-sourced question--answer pairs of two types: \textit{bridge} questions (requiring traversal across entity links, e.g.\ ``In what country was the director of \textit{Film X} born?'') and \textit{comparison} questions (requiring set-theoretic comparison of two entities). Each question is paired with 10 candidate paragraphs drawn from Wikipedia; exactly two are the gold supporting documents. Answers are short spans (names, dates, numbers, or brief phrases) enabling automatic F1 and exact-match evaluation. The full dataset has 90{,}564 training, 7{,}405 validation, and 7{,}405 test examples; we sample $n=20$ validation examples with seed 42 via EvoAgentX's built-in \texttt{HotPotQA} loader.
+
+\textbf{Justification.} The multi-hop structure requires exactly the Warden's decompose-delegate-synthesise cycle: no single-hop lookup suffices. Retrieving supporting facts, reasoning across entities, and synthesising a final answer maps directly onto the three-worker chain (Retriever, Reasoner, Synthesiser), making HotPotQA the primary benchmark for evaluating RQ1. Metrics are token-level F1, exact match (EM), and answer-level accuracy (lenient substring match after answer extraction).
+
+\subsubsection{MATH}
+\leavevmode\par
+
+The MATH benchmark~\cite{measuring_hendrycks_2021} (Hendrycks et al., 2021; \url{https://github.com/hendrycks/math}) contains 12{,}500 competition-style mathematics problems drawn from AMC 10/12, AIME, and MATHCOUNTS competitions. Problems span seven subjects (Prealgebra, Algebra, Number Theory, Counting \& Probability, Geometry, Intermediate Algebra, and Precalculus) across five difficulty levels (1 = easiest, 5 = hardest). Each problem has a structured step-by-step solution and a boxed final answer, enabling exact-match evaluation without human grading. We evaluate at Level~4--5 ($n=5$, pilot) and Level~2--3 ($n=20$, main evaluation) using the custom \texttt{MATHLevel23}/\texttt{MATHLevel45} wrappers that filter the EvoAgentX MATH loader by difficulty.
+
+\textbf{Justification.} MATH provides symbolic, verifiable answers that allow automatic grading. Mathematical reasoning is a deliberate stress test for hierarchical decomposition: tight symbolic chains may be harmed by multi-agent handoffs (confirmed by our results), providing a clear boundary condition for RQ1. The difficulty shift from Level~4--5 to Level~2--3 was motivated by the pilot evaluation finding that Level~4--5 exceeded \texttt{gpt-4o-mini}'s capability ceiling (all multi-agent configurations scored 0.00). Metric is \textit{solve rate} (proportion of correctly answered problems).
+
+\subsubsection{Enterprise Research-to-Report (Original Benchmark)}
+\leavevmode\par
+
+The Enterprise Research-to-Report benchmark is an original dataset of 10 structured research briefs created for this dissertation. It tests the Warden's governance on realistic, open-ended business research with explicit completeness requirements. Table~\ref{tab:enterprise-briefs} lists all 10 briefs.
+
+\begin{table}[h!]
+\centering\small
+\begin{tabular}{clll}
+\toprule
+\textbf{\#} & \textbf{Title} & \textbf{Domain} & \textbf{Complexity} \\
+\midrule
+1  & AI Agent Framework Competitive Analysis          & Tech strategy    & High   \\
+2  & EU AI Act Compliance for a UK SaaS Startup       & Regulatory       & High   \\
+3  & Build vs Buy: Customer Support Chatbot           & Tech strategy    & High   \\
+4  & EV Charging Market Entry: Southeast Asia         & Market entry     & High   \\
+5  & Q1 2026 Technology Trends for VC Committee       & Investment       & High   \\
+6  & SOC2 Compliance Preparation Report              & Security         & Medium \\
+7  & Employee Onboarding Process Redesign             & HR/Operations    & Medium \\
+8  & Technical Due Diligence: Series B Acquisition    & Finance          & High   \\
+9  & B2B Cybersecurity Content Marketing Strategy     & Marketing        & Medium \\
+10 & Annual Engineering Review and 2026 Planning      & Operations       & Medium \\
+\bottomrule
+\end{tabular}
+\caption{Enterprise Research-to-Report benchmark: 10 original research briefs. Each specifies 5--6 required sections and 5 specific answerable questions.}
+\label{tab:enterprise-briefs}
+\end{table}
+
+Seven briefs are rated high complexity, three medium. Evaluation uses LLM-as-Judge on five weighted dimensions (completeness 25\%, analytical depth 25\%, accuracy 20\%, coherence 15\%, actionability 15\%) plus alignment scoring (proportion of the five specific questions fully addressed in the output). Config D was excluded from enterprise evaluation due to API budget constraints.
+
+\textbf{Justification.} Open-ended research tasks with explicit section and question requirements directly stress-test the Warden's review and revision loop. A single-agent (Config A) consistently addresses only a subset of required sections, while the Warden's structured review catches and corrects omissions through targeted re-delegation. The domain diversity (regulatory, financial, technical, and operational tasks) tests governance robustness across fundamentally different information requirements, making this benchmark uniquely suited to evaluating RQ1 qualitatively.
+
+\subsection{Phase 1: Pilot Evaluation (n=5)} \label{eva:two}
+
+\textbf{HotPotQA Pilot Evaluation}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{Config A} & \textbf{Config C (Warden)} & \textbf{Config D (Warden+Evo)} \\
+\midrule
+F1              & \textbf{0.200} & 0.152 & 0.148 \\
+Accuracy        & 0.20$\pm$0.18 & \textbf{0.80$\pm$0.18} & \textbf{0.80$\pm$0.18} \\
+Wall-clock (s)  & 11.9 & 68.7 & 131.1 \\
+\bottomrule
+\end{tabular}
+\caption{HotPotQA pilot evaluation results for Configs A, C, and D.}
+\label{tab:hotpotqa-pilot}
+\end{table}
+
+The pilot evaluation revealed a critical measurement artifact: Config A's higher F1 reflected terse outputs, not better reasoning. The Warden's team answered correctly 80\% of the time but produced verbose answers scoring poorly on token-level F1. This motivated answer extraction and accuracy as a primary metric.
+
+\textbf{MATH Level 4--5 Pilot Evaluation}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{Config A} & \textbf{Config C} & \textbf{Config D} \\
+\midrule
+Solve Rate      & \textbf{0.20$\pm$0.18} & 0.00 & 0.00 \\
+Wall-clock (s)  & 84.3 & 381.4 & 1,122.8 \\
+\bottomrule
+\end{tabular}
+\caption{MATH Level 4--5 pilot evaluation results for Configs A, C, and D.}
+\label{tab:math-pilot}
+\end{table}
+
+Level 4--5 exceeded \texttt{gpt-4o-mini}'s capability, and the Verifier produced approximately 80\% false-negative rates. These findings informed answer extraction, Verifier calibration, difficulty shift to Level 2--3, and the addition of Config B to separate specialisation from hierarchy effects.
+
+\subsection{Phase 2: Main Results} \label{eva:three}
+
+\subsubsection{HotPotQA ($n=20$)}
+\leavevmode\par
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Metric} & \textbf{Config A} & \textbf{Config B (Pipeline)} & \textbf{Config C (Warden)} & \textbf{Config D (+Evo)} \\
+\midrule
+F1              & \textbf{0.403} & 0.375 & 0.138 & 0.137 \\
+Exact Match     & \textbf{0.35$\pm$0.11}  & 0.20$\pm$0.09  & 0.00  & 0.00 \\
+Accuracy        & 0.35$\pm$0.11           & 0.45$\pm$0.11  & \textbf{0.65$\pm$0.11} & 0.60$\pm$0.11 \\
+Wall-clock (s)  & 40.0           & 175.7 & 328.2 & 1,730.5 \\
+\bottomrule
+\end{tabular}
+\caption{HotPotQA main evaluation results for Configs A--D.}
+\label{tab:hotpotqa-main}
+\end{table}
+
+\noindent
+\textbf{RQ1}: Config C (0.65 accuracy) nearly doubles Config A (0.35) and exceeds Config B (0.45) by +0.20, isolating the Warden's contribution beyond specialisation. The F1--accuracy divergence reflects output verbosity, not reasoning quality.
+
+\subsubsection{MATH Level 2--3 ($n=20$)}
+\leavevmode\par
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Metric} & \textbf{Config A} & \textbf{Config B} & \textbf{Config C} & \textbf{Config D} \\
+\midrule
+Solve Rate      & \textbf{0.25$\pm$0.10} & 0.05$\pm$0.05 & 0.05$\pm$0.05 & 0.05$\pm$0.05 \\
+Wall-clock (s)  & 304.3 & 331.2 & 815.7 & 2,093.7 \\
+\bottomrule
+\end{tabular}
+\caption{MATH Level 2--3 main evaluation results.}
+\label{tab:math-main}
+\end{table}
+
+Config A outperforms all multi-agent configurations. Hierarchical governance hurts when sub-problems exceed model capability, decomposition introduces error propagation.
+
+\subsubsection{Enterprise Research-to-Report ($n=10$)}
+\leavevmode\par
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{Config A} & \textbf{Config B} & \textbf{Config C (Warden)} \\
+\midrule
+Quality (/10)   & 8.06$\pm$0.35 & 8.13$\pm$0.32 & \textbf{8.13$\pm$0.51} \\
+Alignment (\%)  & 72.0$\pm$10.3 & 78.0$\pm$19.9 & \textbf{86.0$\pm$19.0} \\
+Wall-clock (s)  & 19.1$\pm$3.5 & 65.9$\pm$8.3 & \textbf{180.9$\pm$41.2} \\
+\bottomrule
+\end{tabular}
+\caption{Enterprise Research-to-Report main evaluation results.}
+\label{tab:enterprise-main}
+\end{table}
+
+Config C achieves the highest alignment (+14pp over Config A), demonstrating the Warden's review mechanisms ensure completeness. Config C achieved 100\% alignment on 4/10 briefs vs 0/10 for Config A. On Brief 3 (Build vs Buy), Config C scored 8.85/10 quality with perfect alignment using just 1 review loop. Conversely, Brief 6 (SOC2) saw 3 escalations but only 40\% alignment, governance cannot compensate for missing domain expertise.
+
+\subsubsection{Latency Overhead Summary}
+\leavevmode\par
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Configuration} & \textbf{HotPotQA} & \textbf{MATH L2--3} & \textbf{Enterprise} \\
+\midrule
+A (Base)      & 40.0s (1.0$\times$)   & 304.3s (1.0$\times$) & 18.3s (1.0$\times$) \\
+B (Pipeline)  & 175.7s (4.4$\times$)  & 331.2s (1.1$\times$) & 64.0s (3.5$\times$) \\
+C (Warden)    & 328.2s (8.2$\times$)  & 815.7s (2.7$\times$) & 175.1s (9.6$\times$) \\
+D (+Evo)      & 1,730.5s (43.3$\times$) & 2,093.7s (6.9$\times$) & -- \\
+\bottomrule
+\end{tabular}
+\caption{Latency overhead summary across benchmarks.}
+\label{tab:latency-summary}
+\end{table}
+
+Latency scales approximately linearly with the number of LLM calls per example. The Warden's governance adds 3--10$\times$ overhead through sequential decomposition, delegation, execution, and review. The enterprise benchmark shows the highest relative overhead (9.6$\times$) because its base task is fast (18.3s single LLM call) while the hierarchical loop involves the same fixed coordination cost. The evolution training loop dominates Config D's overhead: 1,366.7s of HotPotQA's 1,730.5s was spent on evolutionary optimisation.
+
+\subsection{Escalation and Review Analysis} \label{eva:four}
+
+\textbf{HotPotQA}: Escalation decreased from 60\% (pilot) to approximately 30\% (calibrated). When triggered, the Warden's direct access to all context typically produced higher-quality answers.
+
+\textbf{MATH}: The calibrated Verifier reduced false INCORRECT flags from approximately 80\% to approximately 40\%, but escalation still degraded performance, because the Warden has the same mathematical limitations as workers.
+
+\textbf{Enterprise}: The enterprise benchmark provides the richest governance data, with Config C averaging 1.9 review loops, 2.3 escalations, and 2.0 revisions per brief.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Metric} & \textbf{Total (10 briefs)} & \textbf{Average} & \textbf{Range} \\
+\hline
+Review Loops & 19 & 1.9 & 0--3 \\
+Escalations & 23 & 2.3 & 0--4 \\
+Revisions & 20 & 2.0 & 0--5 \\
+\hline
+\end{tabular}
+\caption{Governance mechanism activity for Config C on the enterprise benchmark.}
+\label{tab:enterprise-governance}
+\end{table}
+
+Three distinct behavioural modes emerged: \textit{efficient governance} (Briefs 3 and 4, 1--2 loops, 100\% alignment, quality 8.3--8.85, the Warden's single review pass catches missing sections and directs targeted revisions), \textit{active governance} (Briefs 1, 5, 7, and 10, 2--3 loops with iterative improvement trading latency for completeness), and \textit{diminishing returns} (Brief 6, 3 escalations but only 40\% alignment and 7.5/10 quality, governance cannot compensate when workers lack domain expertise). The sweet spot is 1--2 escalations with corresponding revisions; beyond 3 escalations, returns diminish.
+
+\subsection{Evolution Analysis (RQ3)}\label{eva:five}
+
+Config D's text-gradient evolution (\texttt{max\_steps=3}, \texttt{train\_k=5}) demonstrated correct mechanical operation, failure detection, diagnostic analysis, description mutation, and rollback all function as designed. On MATH, an intermediate generation showed 4$\times$ improvement (0.20 vs 0.05 baseline), but over-corrected in subsequent generations. On HotPotQA, evolution produced no net improvement. The rollback mechanism correctly restored the best-performing generation in both cases. \textbf{Conclusion}: evolution requires larger training batches ($n=5$ is insufficient) and more generations for adequate exploration.
+
+\subsection{Human-in-the-Loop Analysis (RQ4)}\label{eva:six}
+
+The three-layer quality feedback system provides: (1) real-time SSE visibility into Warden decisions (interpretability); (2) user ratings weighted at 60\% that shape evolutionary trajectory (error correction); (3) automated LLM-as-Judge quality assessment (coherence monitoring). The mechanism is fully implemented and operational; longitudinal experimental validation remains future work.
+
+\subsection{Test Suite Validation} \label{eva:seven}
+
+All 99 tests pass consistently: 
+\texttt{test\_team.py} (43), 
+\texttt{test\_supervisor.py} (20), 
+\texttt{test\_hierarchical\allowbreak\_graph.py} (18), 
+\texttt{test\_execution.py} (18). 
+Mock LLMs enable API-independent continuous testing.
+

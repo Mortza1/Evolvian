@@ -157,7 +157,7 @@ export function useWarRoom(
         break;
       case 'hierarchy_decompose':
         if (data.workers) {
-          setHierarchyTeam({ supervisor: data.supervisor, workers: data.workers, teamName: data.team_name || 'Hierarchical Team', stepTree: data.step_tree });
+          setHierarchyTeam({ supervisor: data.supervisor, subSupervisors: data.sub_supervisors ?? [], workers: data.workers, teamName: data.team_name || 'Hierarchical Team', treeDepth: data.tree_depth, stepTree: data.step_tree });
           addLog(data.supervisor, `Team ready: ${data.workers.join(', ')}`, 'info');
           if (data.reasoning) addLog(data.supervisor, data.reasoning, 'info');
         } else {

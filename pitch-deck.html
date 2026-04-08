@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Evolvian — Pitch Deck 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+:root{
+  --bg:#0B0E14;
+  --surf:#161B22;
+  --cyan:#00F5FF;
+  --teal:#5A9E8F;
+  --lime:#A3FF12;
+  --amber:#FFB800;
+  --text:#E2E8F0;
+  --mid:#94A3B8;
+  --mute:#64748B;
+}
+
+html,body{
+  font-family:'DM Sans',sans-serif;
+  background:#0B0E14 !important;
+  color:#E2E8F0;
+  -webkit-print-color-adjust:exact !important;
+  print-color-adjust:exact !important;
+}
+
+@page{size:338.7mm 190.5mm landscape;margin:0}
+@media print{
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+  canvas{display:none}
+  .print-bg{display:block !important}
+  .slide-frame{display:contents !important}
+  .slide{transform:none !important}
+  body{height:auto !important;overflow:auto !important;background:#0B0E14 !important}
+}
+
+/* ─── SCREEN SCALER ─── */
+html,body{margin:0;padding:0;overflow-x:hidden;background:#050709}
+.slide-frame{
+  width:100vw;height:100vh;
+  display:flex;align-items:center;justify-content:center;
+  background:#050709;
+  flex-shrink:0;
+}
+
+/* ─── SLIDE ─── */
+.slide{
+  width:1280px;height:720px;
+  padding:50px 72px;
+  position:relative;overflow:hidden;
+  page-break-after:always;break-after:page;
+  display:flex;flex-direction:column;
+  background:#0B0E14 !important;
+  -webkit-print-color-adjust:exact !important;
+  print-color-adjust:exact !important;
+  flex-shrink:0;
+}
+
+/* ─── PERSISTENT ELEMENTS ─── */
+.logo-mark{
+  position:absolute;top:22px;left:72px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:8px;font-weight:600;letter-spacing:.2em;
+  text-transform:uppercase;color:#5A9E8F;opacity:.6;
+  z-index:10;
+}
+.slide-num{
+  position:absolute;bottom:18px;right:40px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:7px;letter-spacing:.15em;color:#2D3748;
+  z-index:10;
+}
+
+/* ─── TYPOGRAPHY ─── */
+.eyebrow{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:8px;font-weight:600;
+  letter-spacing:.25em;text-transform:uppercase;
+  color:#5A9E8F;margin-bottom:6px;display:block;
+}
+h1{
+  font-family:'Bebas Neue',cursive;
+  font-size:52px;letter-spacing:.04em;line-height:.95;
+  font-weight:400;color:#E2E8F0;
+}
+h1 .c{color:#00F5FF}
+h1 .l{color:#A3FF12}
+h1 .a{color:#FFB800}
+h1 .t{color:#5A9E8F}
+
+h2{
+  font-family:'Bebas Neue',cursive;
+  font-size:32px;letter-spacing:.04em;line-height:1;
+  font-weight:400;margin-bottom:4px;
+}
+h2 .c{color:#00F5FF}
+
+.hero-num{
+  font-family:'Bebas Neue',cursive;
+  font-size:68px;letter-spacing:.02em;line-height:1;
+}
+.body{font-size:11px;color:#94A3B8;line-height:1.75;max-width:480px}
+.small{font-size:9.5px;color:#64748B;line-height:1.65}
+
+/* ─── GLASS CARD ─── */
+.card{
+  background:rgba(22,27,34,.65) !important;
+  border:1px solid rgba(90,158,143,.18);
+  border-radius:14px;padding:14px 13px;
+  -webkit-print-color-adjust:exact !important;
+  print-color-adjust:exact !important;
+}
+.card-c{border-color:rgba(0,245,255,.22) !important;background:rgba(0,245,255,.03) !important}
+.card-l{border-color:rgba(163,255,18,.2) !important;background:rgba(163,255,18,.03) !important}
+.card-a{border-color:rgba(255,184,0,.2) !important;background:rgba(255,184,0,.03) !important}
+
+/* ─── PILL / TAG ─── */
+.pill{
+  display:inline-flex;align-items:center;gap:5px;
+  border-radius:100px;padding:3px 10px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:8px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  -webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;
+}
+.pill-live{background:rgba(163,255,18,.1) !important;color:#A3FF12;border:1px solid rgba(163,255,18,.3)}
+.pill-cyan{background:rgba(0,245,255,.08) !important;color:#00F5FF;border:1px solid rgba(0,245,255,.25)}
+
+/* ─── GLOW BLOBS ─── */
+.blob{
+  position:absolute;border-radius:50%;pointer-events:none;
+  -webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;
+}
+.blob-c{background:radial-gradient(circle,rgba(0,245,255,.07) 0%,transparent 65%) !important}
+.blob-t{background:radial-gradient(circle,rgba(90,158,143,.09) 0%,transparent 65%) !important}
+.blob-l{background:radial-gradient(circle,rgba(163,255,18,.06) 0%,transparent 65%) !important}
+.blob-a{background:radial-gradient(circle,rgba(255,184,0,.07) 0%,transparent 65%) !important}
+
+/* ─── STAT BOX ─── */
+.stat{
+  background:rgba(22,27,34,.6) !important;
+  border:1px solid rgba(90,158,143,.15);
+  border-radius:12px;padding:13px 12px;
+  text-align:center;
+  -webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;
+}
+.stat-n{font-family:'Bebas Neue',cursive;font-size:42px;letter-spacing:.02em;line-height:1}
+.stat-l{font-size:8.5px;color:#64748B;letter-spacing:.12em;text-transform:uppercase;margin-top:2px;font-family:'IBM Plex Mono',monospace}
+
+/* ─── BULLET ROW ─── */
+.brow{
+  display:flex;align-items:flex-start;gap:8px;
+  padding:7px 10px;margin-bottom:5px;
+  background:rgba(22,27,34,.5) !important;
+  border:1px solid rgba(90,158,143,.12);
+  border-radius:8px;
+  -webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;
+}
+.brow-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.brow-dot-c{background:#00F5FF !important}
+.brow-dot-l{background:#A3FF12 !important}
+.brow-dot-a{background:#FFB800 !important}
+.brow-dot-t{background:#5A9E8F !important}
+.brow-text{font-size:10px;color:#94A3B8;line-height:1.6}
+.brow-text b{color:#E2E8F0}
+
+/* ─── GRID HELPERS ─── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+
+/* ─── DIVIDER ─── */
+.div{height:1px;background:rgba(90,158,143,.12);margin:10px 0}
+
+/* ─── TEAM CARD ─── */
+.tcard{
+  background:rgba(22,27,34,.65) !important;
+  border:1px solid rgba(90,158,143,.2);
+  border-radius:16px;padding:18px 16px;
+  -webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;
+}
+.avt{
+  width:44px;height:44px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Bebas Neue',cursive;font-size:20px;color:#0B0E14;
+  margin-bottom:10px;
+  -webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;
+}
+</style>
+</head>
+<body>
+
+<!-- ══ 01 COVER ══════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-cover" style="align-items:center;justify-content:center;text-align:center;">
+
+  <!-- animated canvas network (browser only) -->
+  <canvas id="cover-canvas" style="position:absolute;inset:0;width:100%;height:100%;opacity:1;"></canvas>
+
+  <!-- static SVG for print -->
+  <svg class="print-bg" style="display:none;position:absolute;inset:0;width:100%;height:100%;" viewBox="0 0 1122 630" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <radialGradient id="pg0" cx="50%" cy="50%" r="40%"><stop offset="0%" stop-color="#00F5FF" stop-opacity=".08"/><stop offset="100%" stop-color="#00F5FF" stop-opacity="0"/></radialGradient>
+    </defs>
+    <rect width="1122" height="630" fill="#0B0E14"/>
+    <ellipse cx="561" cy="315" rx="320" ry="200" fill="url(#pg0)"/>
+    <line x1="561" y1="315" x2="180" y2="140" stroke="#5A9E8F" stroke-width=".7" stroke-opacity=".3"/>
+    <line x1="561" y1="315" x2="920" y2="120" stroke="#5A9E8F" stroke-width=".7" stroke-opacity=".3"/>
+    <line x1="561" y1="315" x2="980" y2="460" stroke="#5A9E8F" stroke-width=".7" stroke-opacity=".3"/>
+    <line x1="561" y1="315" x2="150" y2="500" stroke="#5A9E8F" stroke-width=".7" stroke-opacity=".3"/>
+    <line x1="561" y1="315" x2="400" y2="530" stroke="#5A9E8F" stroke-width=".7" stroke-opacity=".3"/>
+    <line x1="561" y1="315" x2="750" y2="540" stroke="#5A9E8F" stroke-width=".7" stroke-opacity=".3"/>
+    <circle cx="561" cy="315" r="18" fill="rgba(0,245,255,.1)" stroke="#00F5FF" stroke-width="1.5"/>
+    <circle cx="561" cy="315" r="6" fill="#00F5FF"/>
+    <circle cx="180" cy="140" r="8" fill="rgba(90,158,143,.2)" stroke="#5A9E8F" stroke-width="1"/><circle cx="180" cy="140" r="3" fill="#5A9E8F"/>
+    <circle cx="920" cy="120" r="8" fill="rgba(90,158,143,.2)" stroke="#5A9E8F" stroke-width="1"/><circle cx="920" cy="120" r="3" fill="#5A9E8F"/>
+    <circle cx="980" cy="460" r="8" fill="rgba(90,158,143,.2)" stroke="#5A9E8F" stroke-width="1"/><circle cx="980" cy="460" r="3" fill="#5A9E8F"/>
+    <circle cx="150" cy="500" r="8" fill="rgba(90,158,143,.2)" stroke="#5A9E8F" stroke-width="1"/><circle cx="150" cy="500" r="3" fill="#5A9E8F"/>
+    <circle cx="400" cy="530" r="5" fill="rgba(90,158,143,.15)" stroke="#5A9E8F" stroke-width=".8"/>
+    <circle cx="750" cy="540" r="5" fill="rgba(90,158,143,.15)" stroke="#5A9E8F" stroke-width=".8"/>
+  </svg>
+
+  <div style="position:relative;z-index:2;">
+    <div class="pill pill-live" style="margin-bottom:16px;">
+      <span style="width:6px;height:6px;border-radius:50%;background:#A3FF12;display:inline-block;"></span>
+      Platform Live · Q1 2026
+    </div>
+    <div style="font-family:'Bebas Neue',cursive;font-size:88px;letter-spacing:.08em;line-height:.9;color:#E2E8F0;margin-bottom:4px;">
+      EVOL<span style="color:#00F5FF;">VI</span>AN
+    </div>
+    <div style="font-family:'DM Sans',sans-serif;font-size:14px;color:#64748B;letter-spacing:.2em;text-transform:uppercase;margin-bottom:20px;">
+      The AI Workforce OS
+    </div>
+    <div style="font-size:12px;color:#94A3B8;max-width:380px;margin:0 auto;line-height:1.75;">
+      Hierarchical teams of specialist agents that replace entire departments — built by the people they replace.
+    </div>
+    <div style="margin-top:20px;display:flex;align-items:center;justify-content:center;gap:16px;">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#2D3748;letter-spacing:.15em;">HERIOT-WATT UNIVERSITY</span>
+      <span style="width:1px;height:10px;background:#2D3748;"></span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#2D3748;letter-spacing:.15em;">HWU ENTERPRISE FUND</span>
+      <span style="width:1px;height:10px;background:#2D3748;"></span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#2D3748;letter-spacing:.15em;">EDINBURGH · 2026</span>
+    </div>
+  </div>
+
+  <div class="slide-num">01</div>
+</div>
+
+
+<!-- ══ 02 PROBLEM ════════════════════════════════════════════════════ -->
+<div class="slide" style="background:#0B0E14 !important;">
+  <div class="blob blob-c" style="width:400px;height:400px;top:-120px;right:-100px;"></div>
+  <div class="logo-mark">Evolvian</div>
+
+  <div style="display:flex;gap:20px;align-items:stretch;flex:1;margin-top:24px;">
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;">
+      <span class="eyebrow">The Problem</span>
+      <h1>THE STACK<br>IS <span class="c">BROKEN.</span></h1>
+      <div style="margin-top:12px;">
+        <div class="brow">
+          <div class="brow-dot brow-dot-c"></div>
+          <div class="brow-text"><b>15+ disconnected tools</b> — no coordination, no memory, no team.</div>
+        </div>
+        <div class="brow">
+          <div class="brow-dot brow-dot-a"></div>
+          <div class="brow-text"><b>Tools augment people.</b> Nobody has replaced the whole department.</div>
+        </div>
+        <div class="brow">
+          <div class="brow-dot brow-dot-l"></div>
+          <div class="brow-text"><b>Displaced workers earn nothing.</b> Their expertise disappears with them.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GRAPHIC: Stats -->
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="stat">
+          <div class="stat-n" style="color:#00F5FF;">15<span style="font-size:36px">+</span></div>
+          <div class="stat-l">AI Tools Per Team</div>
+        </div>
+        <div class="stat">
+          <div class="stat-n" style="color:#ef4444;">$0</div>
+          <div class="stat-l">Earned When Replaced</div>
+        </div>
+      </div>
+
+      <div class="stat">
+        <div style="font-family:'Bebas Neue',cursive;font-size:22px;letter-spacing:.04em;color:#FFB800;margin-bottom:3px;">No Coordination. No Memory. No Team.</div>
+        <div style="font-size:9.5px;color:#64748B;line-height:1.6;">Every AI tool today is a point solution.<br>None replace the team. None talk to each other.</div>
+      </div>
+
+      <!-- chaos visual -->
+      <div class="card" style="padding:10px 12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <!-- messy tools -->
+          <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+            <div style="background:rgba(239,68,68,.06) !important;border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:5px 7px;text-align:center;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+              <div style="font-size:8.5px;color:#94A3B8;font-family:'IBM Plex Mono',monospace;">ChatGPT</div>
+            </div>
+            <div style="background:rgba(239,68,68,.06) !important;border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:5px 7px;text-align:center;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+              <div style="font-size:8.5px;color:#94A3B8;font-family:'IBM Plex Mono',monospace;">Zapier</div>
+            </div>
+            <div style="background:rgba(239,68,68,.06) !important;border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:5px 7px;text-align:center;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+              <div style="font-size:8.5px;color:#94A3B8;font-family:'IBM Plex Mono',monospace;">Notion AI</div>
+            </div>
+            <div style="background:rgba(239,68,68,.06) !important;border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:5px 7px;text-align:center;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+              <div style="font-size:8.5px;color:#94A3B8;font-family:'IBM Plex Mono',monospace;">Jasper</div>
+            </div>
+          </div>
+          <!-- arrow -->
+          <div style="color:#2D3748;font-size:20px;flex-shrink:0;">→</div>
+          <!-- evolvian unified -->
+          <div style="background:rgba(0,245,255,.05) !important;border:1px solid rgba(0,245,255,.2);border-radius:8px;padding:8px 12px;text-align:center;flex:0.7;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+            <div style="font-family:'Bebas Neue',cursive;font-size:14px;letter-spacing:.1em;color:#00F5FF;">EVOLVIAN</div>
+            <div style="font-size:7.5px;color:#5A9E8F;font-family:'IBM Plex Mono',monospace;margin-top:2px;">ONE PLATFORM</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <div class="slide-num">02</div>
+</div>
+
+
+<!-- ══ 03 SOLUTION ═══════════════════════════════════════════════════ -->
+<div class="slide" style="background:#0B0E14 !important;">
+  <div class="blob blob-t" style="width:380px;height:380px;bottom:-100px;left:-80px;"></div>
+  <div class="logo-mark">Evolvian</div>
+
+  <div style="display:flex;gap:20px;align-items:stretch;flex:1;margin-top:24px;">
+
+    <!-- Left: visual hierarchy -->
+    <div style="flex:.95;display:flex;align-items:center;justify-content:center;">
+      <svg viewBox="0 0 300 260" style="width:100%;max-height:130mm;" overflow="visible">
+        <defs>
+          <radialGradient id="wg" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#00F5FF" stop-opacity=".5"/>
+            <stop offset="100%" stop-color="#00F5FF" stop-opacity="0"/>
+          </radialGradient>
+          <filter id="gf1" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="gf2" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+
+        <!-- Background grid lines (subtle) -->
+        <line x1="0" y1="80" x2="300" y2="80" stroke="rgba(90,158,143,.06)" stroke-width=".5"/>
+        <line x1="0" y1="165" x2="300" y2="165" stroke="rgba(90,158,143,.06)" stroke-width=".5"/>
+        <line x1="0" y1="235" x2="300" y2="235" stroke="rgba(90,158,143,.06)" stroke-width=".5"/>
+
+        <!-- LABEL: top -->
+        <text x="150" y="10" fill="#2D3748" font-size="7" font-family="IBM Plex Mono" text-anchor="middle" letter-spacing="2">GOVERNANCE</text>
+
+        <!-- EVO WARDEN node -->
+        <circle cx="150" cy="52" r="36" fill="url(#wg)" opacity=".5"/>
+        <circle cx="150" cy="52" r="26" fill="rgba(0,245,255,.06)" stroke="#00F5FF" stroke-width="1.5" filter="url(#gf1)"/>
+        <text x="150" y="48" fill="#00F5FF" font-size="11" font-family="Bebas Neue" letter-spacing="2.5" text-anchor="middle">EVO</text>
+        <text x="150" y="61" fill="#5A9E8F" font-size="6.5" font-family="IBM Plex Mono" letter-spacing="1.5" text-anchor="middle">WARDEN</text>
+
+        <!-- Trunk lines -->
+        <line x1="150" y1="78" x2="60"  y2="135" stroke="#5A9E8F" stroke-width="1.2" stroke-opacity=".4"/>
+        <line x1="150" y1="78" x2="150" y2="135" stroke="#5A9E8F" stroke-width="1.2" stroke-opacity=".4"/>
+        <line x1="150" y1="78" x2="240" y2="135" stroke="#5A9E8F" stroke-width="1.2" stroke-opacity=".4"/>
+
+        <!-- LABEL: middle -->
+        <text x="150" y="125" fill="#2D3748" font-size="7" font-family="IBM Plex Mono" text-anchor="middle" letter-spacing="2">SPECIALIST AGENTS</text>
+
+        <!-- Worker nodes -->
+        <rect x="22" y="135" width="76" height="28" rx="8" fill="rgba(22,27,34,.9)" stroke="#5A9E8F" stroke-width=".8"/>
+        <text x="60" y="153" fill="#E2E8F0" font-size="9" font-family="DM Sans" font-weight="600" text-anchor="middle">Marketer</text>
+
+        <rect x="112" y="135" width="76" height="28" rx="8" fill="rgba(22,27,34,.9)" stroke="#5A9E8F" stroke-width=".8"/>
+        <text x="150" y="153" fill="#E2E8F0" font-size="9" font-family="DM Sans" font-weight="600" text-anchor="middle">Developer</text>
+
+        <rect x="202" y="135" width="76" height="28" rx="8" fill="rgba(22,27,34,.9)" stroke="#5A9E8F" stroke-width=".8"/>
+        <text x="240" y="153" fill="#E2E8F0" font-size="9" font-family="DM Sans" font-weight="600" text-anchor="middle">Designer</text>
+
+        <!-- Branch lines to tools -->
+        <line x1="60"  y1="163" x2="60"  y2="205" stroke="#5A9E8F" stroke-width=".8" stroke-opacity=".3"/>
+        <line x1="150" y1="163" x2="150" y2="205" stroke="#5A9E8F" stroke-width=".8" stroke-opacity=".3"/>
+        <line x1="240" y1="163" x2="240" y2="205" stroke="#5A9E8F" stroke-width=".8" stroke-opacity=".3"/>
+
+        <!-- LABEL: tools -->
+        <text x="150" y="198" fill="#2D3748" font-size="7" font-family="IBM Plex Mono" text-anchor="middle" letter-spacing="2">TOOLS</text>
+
+        <!-- Tool chips -->
+        <rect x="22"  y="206" width="76" height="22" rx="5" fill="rgba(163,255,18,.05)" stroke="rgba(163,255,18,.2)" stroke-width=".7"/>
+        <text x="60"  y="221" fill="#A3FF12" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">Web Search</text>
+
+        <rect x="112" y="206" width="76" height="22" rx="5" fill="rgba(163,255,18,.05)" stroke="rgba(163,255,18,.2)" stroke-width=".7"/>
+        <text x="150" y="221" fill="#A3FF12" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">Code Exec</text>
+
+        <rect x="202" y="206" width="76" height="22" rx="5" fill="rgba(163,255,18,.05)" stroke="rgba(163,255,18,.2)" stroke-width=".7"/>
+        <text x="240" y="221" fill="#A3FF12" font-size="8" font-family="IBM Plex Mono" text-anchor="middle">File / Email</text>
+
+        <!-- Evolution arrow (right side) -->
+        <path d="M278 80 Q290 130 278 182" stroke="#FFB800" stroke-width="1.2" fill="none" stroke-opacity=".5" stroke-dasharray="3,2"/>
+        <text x="288" y="130" fill="#FFB800" font-size="7" font-family="IBM Plex Mono" text-anchor="middle" transform="rotate(90 288 130)" letter-spacing="1.5">EVOLVES</text>
+
+        <!-- Human loop -->
+        <text x="150" y="250" fill="#FFB800" font-size="8" font-family="DM Sans" text-anchor="middle" opacity=".7">↑ Human-in-the-loop at every layer ↑</text>
+      </svg>
+    </div>
+
+    <!-- Right: copy -->
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;">
+      <span class="eyebrow">The Solution</span>
+      <h1>ONE<br>PLATFORM.<br><span class="c">ZERO</span><br>CHAOS.</h1>
+      <div style="margin-top:14px;margin-bottom:14px;">
+        <div class="brow">
+          <div class="brow-dot brow-dot-c"></div>
+          <div class="brow-text"><b>Warden orchestrates</b> — decomposes, delegates, reviews, escalates.</div>
+        </div>
+        <div class="brow">
+          <div class="brow-dot brow-dot-t"></div>
+          <div class="brow-text"><b>Specialists execute</b> — every agent has a role, tools, and memory.</div>
+        </div>
+        <div class="brow">
+          <div class="brow-dot brow-dot-l"></div>
+          <div class="brow-text"><b>Teams evolve</b> — every task improves quality scores automatically.</div>
+        </div>
+      </div>
+
+      <div class="card card-a" style="border-radius:12px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7.5px;letter-spacing:.2em;color:#FFB800;margin-bottom:5px;text-transform:uppercase;">The Differentiator</div>
+        <div style="font-size:10.5px;color:#E2E8F0;line-height:1.7;">Displaced workers <b style="color:#A3FF12;">build and earn</b> from their own AI replacement — listing agents on the marketplace for commission.</div>
+      </div>
+    </div>
+
+  </div>
+  <div class="slide-num">03</div>
+</div>
+
+
+<!-- ══ 04 PLATFORM ═══════════════════════════════════════════════════ -->
+<div class="slide" style="background:#0B0E14 !important;">
+  <div class="blob blob-c" style="width:300px;height:300px;top:-80px;right:-60px;"></div>
+  <div class="logo-mark">Evolvian</div>
+
+  <div style="margin-top:20px;">
+    <span class="eyebrow">The Platform</span>
+    <h2 style="margin-bottom:10px;">Six Systems. <span class="c">One Workforce.</span></h2>
+  </div>
+
+  <div class="g3" style="flex:1;">
+
+    <div class="card card-c" style="display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;">
+      <div style="margin-bottom:9px;">
+        <svg width="36" height="36" viewBox="0 0 32 32">
+          <rect width="32" height="32" rx="8" fill="rgba(0,245,255,.1)"/>
+          <circle cx="16" cy="13" r="4" fill="#00F5FF" fill-opacity=".7"/>
+          <path d="M8 26c0-4.418 3.582-8 8-8s8 3.582 8 8" stroke="#00F5FF" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:20px;letter-spacing:.05em;color:#00F5FF;margin-bottom:5px;">Agent Marketplace</div>
+      <div style="font-size:10.5px;color:#64748B;line-height:1.6;">Pre-trained specialists.<br>One click to deploy.</div>
+    </div>
+
+    <div class="card card-l" style="display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;">
+      <div style="margin-bottom:9px;">
+        <svg width="36" height="36" viewBox="0 0 32 32">
+          <rect width="32" height="32" rx="8" fill="rgba(163,255,18,.1)"/>
+          <rect x="7" y="9" width="7" height="7" rx="2" fill="#A3FF12" fill-opacity=".7"/>
+          <rect x="18" y="9" width="7" height="7" rx="2" fill="#A3FF12" fill-opacity=".7"/>
+          <rect x="7" y="19" width="7" height="7" rx="2" fill="#A3FF12" fill-opacity=".3"/>
+          <rect x="18" y="19" width="7" height="7" rx="2" fill="#A3FF12" fill-opacity=".3"/>
+        </svg>
+      </div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:20px;letter-spacing:.05em;color:#A3FF12;margin-bottom:5px;">Tool Marketplace</div>
+      <div style="font-size:10.5px;color:#64748B;line-height:1.6;">Equip agents with<br>exactly the tools they need.</div>
+    </div>
+
+    <div class="card" style="border-color:rgba(90,158,143,.25) !important;background:rgba(90,158,143,.04) !important;display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;">
+      <div style="margin-bottom:9px;">
+        <svg width="36" height="36" viewBox="0 0 32 32">
+          <rect width="32" height="32" rx="8" fill="rgba(90,158,143,.1)"/>
+          <path d="M8 11h16M8 16h12M8 21h8" stroke="#5A9E8F" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:20px;letter-spacing:.05em;color:#5A9E8F;margin-bottom:5px;">Team Inbox</div>
+      <div style="font-size:10.5px;color:#64748B;line-height:1.6;">Chat with every agent.<br>No status meetings.</div>
+    </div>
+
+    <div class="card card-a" style="display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;">
+      <div style="margin-bottom:9px;">
+        <svg width="36" height="36" viewBox="0 0 32 32">
+          <rect width="32" height="32" rx="8" fill="rgba(255,184,0,.1)"/>
+          <path d="M10 16l4 4 8-8" stroke="#FFB800" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:20px;letter-spacing:.05em;color:#FFB800;margin-bottom:5px;">Neural Vault</div>
+      <div style="font-size:10.5px;color:#64748B;line-height:1.6;">Every file, organised<br>and version-tracked.</div>
+    </div>
+
+    <div class="card card-c" style="background:rgba(0,245,255,.03) !important;display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;">
+      <div style="margin-bottom:9px;">
+        <svg width="32" height="32" viewBox="0 0 32 32">
+          <rect width="32" height="32" rx="8" fill="rgba(0,245,255,.08)"/>
+          <circle cx="16" cy="16" r="3" fill="#00F5FF" fill-opacity=".8"/>
+          <circle cx="8" cy="11" r="2" fill="#5A9E8F"/><circle cx="24" cy="11" r="2" fill="#5A9E8F"/>
+          <circle cx="8" cy="21" r="2" fill="#5A9E8F"/><circle cx="24" cy="21" r="2" fill="#5A9E8F"/>
+          <line x1="16" y1="13" x2="9" y2="11" stroke="#5A9E8F" stroke-width=".8"/>
+          <line x1="16" y1="13" x2="23" y2="11" stroke="#5A9E8F" stroke-width=".8"/>
+          <line x1="16" y1="19" x2="9" y2="21" stroke="#5A9E8F" stroke-width=".8"/>
+          <line x1="16" y1="19" x2="23" y2="21" stroke="#5A9E8F" stroke-width=".8"/>
+        </svg>
+      </div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:20px;letter-spacing:.05em;color:#00F5FF;margin-bottom:5px;">Knowledge Graph</div>
+      <div style="font-size:10.5px;color:#64748B;line-height:1.6;">Teams get smarter<br>with every task.</div>
+    </div>
+
+    <div class="card card-l" style="background:rgba(163,255,18,.02) !important;display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;">
+      <div style="margin-bottom:9px;">
+        <svg width="36" height="36" viewBox="0 0 32 32">
+          <rect width="32" height="32" rx="8" fill="rgba(163,255,18,.08)"/>
+          <rect x="6" y="9" width="20" height="3" rx="1.5" fill="#A3FF12" fill-opacity=".8"/>
+          <rect x="6" y="15" width="14" height="3" rx="1.5" fill="#A3FF12" fill-opacity=".5"/>
+          <rect x="6" y="21" width="10" height="3" rx="1.5" fill="#A3FF12" fill-opacity=".3"/>
+        </svg>
+      </div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:20px;letter-spacing:.05em;color:#A3FF12;margin-bottom:5px;">Job Board</div>
+      <div style="font-size:10.5px;color:#64748B;line-height:1.6;">Every task, every agent.<br>Nothing slips through.</div>
+    </div>
+
+  </div>
+  <div class="slide-num">04</div>
+</div>
+
+
+<!-- ══ 05 MARKET ══════════════════════════════════════════════════════ -->
+<div class="slide" style="background:#0B0E14 !important;">
+  <div class="blob blob-l" style="width:350px;height:350px;bottom:-80px;right:-60px;"></div>
+  <div class="logo-mark">Evolvian</div>
+
+  <div style="display:flex;gap:20px;align-items:stretch;flex:1;margin-top:24px;">
+
+    <!-- Left: numbers -->
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;">
+      <span class="eyebrow">Market Opportunity</span>
+      <h1>EVERY<br>BUSINESS<br>WITH A <span class="l">TEAM.</span></h1>
+
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">
+        <div class="card" style="background:rgba(0,245,255,.03) !important;border-color:rgba(0,245,255,.15) !important;padding:10px 12px;">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">
+            <span style="font-family:'Bebas Neue',cursive;font-size:28px;color:#00F5FF;letter-spacing:.03em;">£485B</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:7.5px;color:#5A9E8F;letter-spacing:.15em;text-transform:uppercase;">TAM — Global AI Software</span>
+          </div>
+          <div style="font-size:9px;color:#2D3748;">Enterprise AI workforce automation</div>
+        </div>
+        <div class="card" style="background:rgba(163,255,18,.03) !important;border-color:rgba(163,255,18,.15) !important;padding:10px 12px;">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">
+            <span style="font-family:'Bebas Neue',cursive;font-size:28px;color:#A3FF12;letter-spacing:.03em;">£32B</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:7.5px;color:#5A9E8F;letter-spacing:.15em;text-transform:uppercase;">SAM — UK / EU AI Tooling</span>
+          </div>
+          <div style="font-size:9px;color:#2D3748;">SMEs + growth-stage companies</div>
+        </div>
+        <div class="card" style="background:rgba(255,184,0,.04) !important;border-color:rgba(255,184,0,.2) !important;padding:10px 12px;">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">
+            <span style="font-family:'Bebas Neue',cursive;font-size:28px;color:#FFB800;letter-spacing:.03em;">£300M</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:7.5px;color:#5A9E8F;letter-spacing:.15em;text-transform:uppercase;">SOM — 3-Year Target</span>
+          </div>
+          <div style="font-size:9px;color:#2D3748;">10% of 500k addressable SMEs × £6k ARR</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: concentric rings -->
+    <div style="flex:.85;display:flex;align-items:center;justify-content:center;">
+      <svg viewBox="0 0 280 280" style="width:100%;max-height:130mm;">
+        <defs>
+          <radialGradient id="mrg1" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#00F5FF" stop-opacity=".12"/>
+            <stop offset="100%" stop-color="#00F5FF" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="mrg2" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#A3FF12" stop-opacity=".1"/>
+            <stop offset="100%" stop-color="#A3FF12" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="mrg3" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#FFB800" stop-opacity=".1"/>
+            <stop offset="100%" stop-color="#FFB800" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+
+        <!-- TAM ring -->
+        <circle cx="140" cy="140" r="128" fill="url(#mrg1)" stroke="#00F5FF" stroke-width=".7" stroke-opacity=".25"/>
+        <!-- SAM ring -->
+        <circle cx="140" cy="140" r="90" fill="url(#mrg2)" stroke="#A3FF12" stroke-width=".7" stroke-opacity=".3"/>
+        <!-- SOM ring -->
+        <circle cx="140" cy="140" r="54" fill="url(#mrg3)" stroke="#FFB800" stroke-width=".8" stroke-opacity=".4"/>
+        <!-- Center -->
+        <circle cx="140" cy="140" r="24" fill="rgba(255,184,0,.08)" stroke="#FFB800" stroke-width="1.2"/>
+        <text x="140" y="136" fill="#FFB800" font-size="8" font-family="Bebas Neue" letter-spacing="1.5" text-anchor="middle">SOM</text>
+        <text x="140" y="147" fill="#FFB800" font-size="9" font-family="Bebas Neue" letter-spacing=".5" text-anchor="middle">£300M</text>
+
+        <!-- Labels -->
+        <text x="140" y="68" fill="#A3FF12" font-size="8.5" font-family="IBM Plex Mono" text-anchor="middle" letter-spacing=".5">SAM · £32B</text>
+        <text x="140" y="24" fill="#00F5FF" font-size="8.5" font-family="IBM Plex Mono" text-anchor="middle" letter-spacing=".5">TAM · £485B</text>
+
+        <!-- Tick lines -->
+        <line x1="140" y1="50" x2="140" y2="60" stroke="#A3FF12" stroke-width="1" stroke-opacity=".4"/>
+        <line x1="140" y1="14" x2="140" y2="24" stroke="#00F5FF" stroke-width="1" stroke-opacity=".4"/>
+      </svg>
+    </div>
+
+  </div>
+  <div class="slide-num">05</div>
+</div>
+
+
+<!-- ══ 06 BUSINESS MODEL ══════════════════════════════════════════════ -->
+<div class="slide" style="background:#0B0E14 !important;">
+  <div class="blob blob-a" style="width:320px;height:320px;top:-80px;left:-60px;"></div>
+  <div class="logo-mark">Evolvian</div>
+
+  <div style="margin-top:20px;text-align:center;">
+    <span class="eyebrow">Business Model</span>
+    <h2 style="margin-bottom:12px;">Three Revenue Streams. <span class="c">One Platform.</span></h2>
+  </div>
+
+  <div style="display:flex;gap:14px;flex:1;align-items:center;">
+
+    <!-- Stream 1 -->
+    <div class="card" style="flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;gap:8px;padding:20px 16px;border-top:3px solid #00F5FF !important;background:rgba(0,245,255,.03) !important;">
+      <div style="font-family:'Bebas Neue',cursive;font-size:48px;color:#00F5FF;letter-spacing:.02em;line-height:1;">01</div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:20px;letter-spacing:.05em;color:#E2E8F0;">Agent Usage</div>
+      <div style="font-size:10.5px;color:#64748B;line-height:1.7;">Each agent priced by its creator.<br>Charged per task or per hour.<br>Quality sets the rate.</div>
+      <div style="width:100%;height:1px;background:rgba(90,158,143,.12);"></div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#00F5FF;letter-spacing:.1em;">Pay-per-task / Pay-per-hour</div>
+    </div>
+
+    <!-- Arrow -->
+    <div style="display:flex;align-items:center;color:#2D3748;font-size:20px;flex-shrink:0;">+</div>
+
+    <!-- Stream 2 -->
+    <div class="card" style="flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;gap:8px;padding:20px 16px;border-top:3px solid #A3FF12 !important;background:rgba(163,255,18,.03) !important;">
+      <div style="font-family:'Bebas Neue',cursive;font-size:48px;color:#A3FF12;letter-spacing:.02em;line-height:1;">02</div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:20px;letter-spacing:.05em;color:#E2E8F0;">Tool Usage</div>
+      <div style="font-size:10.5px;color:#64748B;line-height:1.7;">Every tool call is billed.<br>Web search, code exec,<br>file read — charged per use.</div>
+      <div style="width:100%;height:1px;background:rgba(90,158,143,.12);"></div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#A3FF12;letter-spacing:.1em;">Pay-per-call</div>
+    </div>
+
+    <!-- Arrow -->
+    <div style="display:flex;align-items:center;color:#2D3748;font-size:20px;flex-shrink:0;">+</div>
+
+    <!-- Stream 3 -->
+    <div class="card" style="flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;gap:8px;padding:20px 16px;border-top:3px solid #FFB800 !important;background:rgba(255,184,0,.03) !important;">
+      <div style="font-family:'Bebas Neue',cursive;font-size:48px;color:#FFB800;letter-spacing:.02em;line-height:1;">03</div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:20px;letter-spacing:.05em;color:#E2E8F0;">Platform Cut</div>
+      <div style="font-size:10.5px;color:#64748B;line-height:1.7;">Evolvian takes a commission<br>on every agent deployment.<br>Creators keep the rest.</div>
+      <div style="width:100%;height:1px;background:rgba(90,158,143,.12);"></div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#FFB800;letter-spacing:.1em;">15–20% commission</div>
+    </div>
+
+  </div>
+
+  <!-- Bottom note -->
+  <div style="margin-top:10px;padding:8px 12px;background:rgba(22,27,34,.5) !important;border:1px solid rgba(90,158,143,.12);border-radius:8px;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+    <div style="display:flex;align-items:center;justify-content:space-around;">
+      <div style="text-align:center;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#5A9E8F;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px;">Pay As You Go</div>
+        <div style="font-size:9.5px;color:#E2E8F0;">No subscription. Use what you need.</div>
+      </div>
+      <div style="width:1px;height:24px;background:rgba(90,158,143,.15);"></div>
+      <div style="text-align:center;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#5A9E8F;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px;">Creator Economy</div>
+        <div style="font-size:9.5px;color:#E2E8F0;">Workers set their own agent prices</div>
+      </div>
+      <div style="width:1px;height:24px;background:rgba(90,158,143,.15);"></div>
+      <div style="text-align:center;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#5A9E8F;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px;">Network Effect</div>
+        <div style="font-size:9.5px;color:#E2E8F0;">More agents → more quality → more usage</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-num">06</div>
+</div>
+
+
+<!-- ══ 07 GTM ══════════════════════════════════════════════════════ -->
+<div class="slide" style="background:#0B0E14 !important;">
+  <div class="blob blob-t" style="width:300px;height:300px;bottom:-60px;right:-50px;"></div>
+  <div class="logo-mark">Evolvian</div>
+
+  <div style="margin-top:20px;text-align:center;">
+    <span class="eyebrow">Go-To-Market</span>
+    <h2 style="margin-bottom:12px;">Product-Led. <span class="c">Community-Fuelled.</span></h2>
+  </div>
+
+  <div style="display:flex;gap:12px;flex:1;align-items:center;">
+
+    <!-- Phase 1 -->
+    <div class="card" style="flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;gap:8px;padding:20px 16px;position:relative;overflow:hidden;">
+      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(to right,#00F5FF,rgba(0,245,255,0)) !important;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;"></div>
+      <div class="pill pill-live">Now · Q1 2026</div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:26px;letter-spacing:.06em;color:#E2E8F0;line-height:1.1;">SEED &amp; VALIDATE</div>
+      <div style="font-size:10.5px;color:#64748B;line-height:1.7;">Early adopter onboarding.<br>Free tier &amp; rapid UX iteration.<br>Build community flywheel.</div>
+      <div style="width:100%;height:1px;background:rgba(90,158,143,.12);"></div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#5A9E8F;letter-spacing:.1em;">Target: 50 active teams</div>
+    </div>
+
+    <!-- Arrow -->
+    <div style="display:flex;align-items:center;color:#2D3748;font-size:20px;flex-shrink:0;">→</div>
+
+    <!-- Phase 2 -->
+    <div class="card" style="flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;gap:8px;padding:20px 16px;position:relative;overflow:hidden;">
+      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(to right,#A3FF12,rgba(163,255,18,0)) !important;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;"></div>
+      <div class="pill" style="background:rgba(163,255,18,.08) !important;color:#A3FF12;border:1px solid rgba(163,255,18,.25);">Q3 2026</div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:26px;letter-spacing:.06em;color:#E2E8F0;line-height:1.1;">GROW MARKETPLACE</div>
+      <div style="font-size:10.5px;color:#64748B;line-height:1.7;">Open marketplace publishing.<br>SME partnerships live.<br>Creator monetisation active.</div>
+      <div style="width:100%;height:1px;background:rgba(90,158,143,.12);"></div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#5A9E8F;letter-spacing:.1em;">Target: 500 teams · 1k agents</div>
+    </div>
+
+    <!-- Arrow -->
+    <div style="display:flex;align-items:center;color:#2D3748;font-size:20px;flex-shrink:0;">→</div>
+
+    <!-- Phase 3 -->
+    <div class="card" style="flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;justify-content:center;gap:8px;padding:20px 16px;position:relative;overflow:hidden;">
+      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(to right,#FFB800,rgba(255,184,0,0)) !important;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;"></div>
+      <div class="pill" style="background:rgba(255,184,0,.08) !important;color:#FFB800;border:1px solid rgba(255,184,0,.25);">2027</div>
+      <div style="font-family:'Bebas Neue',cursive;font-size:26px;letter-spacing:.06em;color:#E2E8F0;line-height:1.1;">ENTERPRISE SCALE</div>
+      <div style="font-size:10.5px;color:#64748B;line-height:1.7;">Custom enterprise deployments.<br>White-label offering.<br>Series A readiness.</div>
+      <div style="width:100%;height:1px;background:rgba(90,158,143,.12);"></div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#5A9E8F;letter-spacing:.1em;">Target: £1M ARR</div>
+    </div>
+
+  </div>
+  <div class="slide-num">07</div>
+</div>
+
+
+<!-- ══ 08 COMPETITION ════════════════════════════════════════════════ -->
+<div class="slide" style="background:#0B0E14 !important;">
+  <div class="blob blob-c" style="width:280px;height:280px;top:-60px;left:-50px;"></div>
+  <div class="logo-mark">Evolvian</div>
+
+  <div style="display:flex;gap:20px;align-items:stretch;flex:1;margin-top:24px;">
+
+    <!-- Left: matrix -->
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;">
+      <svg viewBox="0 0 260 240" style="width:100%;max-height:125mm;">
+        <!-- Axes -->
+        <line x1="20" y1="220" x2="250" y2="220" stroke="#2D3748" stroke-width="1"/>
+        <line x1="20" y1="220" x2="20" y2="10" stroke="#2D3748" stroke-width="1"/>
+
+        <!-- Axis labels -->
+        <text x="135" y="237" fill="#4A5568" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle" letter-spacing="1">BREADTH OF AUTOMATION →</text>
+        <text x="8" y="115" fill="#4A5568" font-size="7.5" font-family="IBM Plex Mono" text-anchor="middle" letter-spacing="1" transform="rotate(-90 8 115)">WORKER MONETISATION →</text>
+
+        <!-- Quadrant labels -->
+        <text x="135" y="24" fill="#1A2530" font-size="7" font-family="IBM Plex Mono" text-anchor="middle">HIGH VALUE ZONE</text>
+
+        <!-- Competitors (grey) -->
+        <circle cx="75"  cy="165" r="12" fill="rgba(100,116,139,.12)" stroke="#64748B" stroke-width=".8"/>
+        <text x="75"  y="169" fill="#64748B" font-size="7.5" font-family="DM Sans" text-anchor="middle">ChatGPT</text>
+
+        <circle cx="55"  cy="140" r="12" fill="rgba(100,116,139,.12)" stroke="#64748B" stroke-width=".8"/>
+        <text x="55"  y="144" fill="#64748B" font-size="7.5" font-family="DM Sans" text-anchor="middle">Zapier</text>
+
+        <circle cx="120" cy="155" r="12" fill="rgba(100,116,139,.12)" stroke="#64748B" stroke-width=".8"/>
+        <text x="120" y="159" fill="#64748B" font-size="7.5" font-family="DM Sans" text-anchor="middle">n8n</text>
+
+        <circle cx="90"  cy="120" r="12" fill="rgba(100,116,139,.12)" stroke="#64748B" stroke-width=".8"/>
+        <text x="90"  y="124" fill="#64748B" font-size="7.5" font-family="DM Sans" text-anchor="middle">CrewAI</text>
+
+        <circle cx="150" cy="135" r="12" fill="rgba(100,116,139,.12)" stroke="#64748B" stroke-width=".8"/>
+        <text x="150" y="139" fill="#64748B" font-size="7.5" font-family="DM Sans" text-anchor="middle">AutoGen</text>
+
+        <!-- Evolvian -->
+        <circle cx="215" cy="40" r="22" fill="rgba(0,245,255,.08)" stroke="#00F5FF" stroke-width="1.5"/>
+        <circle cx="215" cy="40" r="10" fill="rgba(0,245,255,.15)"/>
+        <text x="215" y="36" fill="#00F5FF" font-size="8.5" font-family="Bebas Neue" letter-spacing="1.5" text-anchor="middle">EVOLVIAN</text>
+        <text x="215" y="47" fill="#5A9E8F" font-size="6.5" font-family="IBM Plex Mono" text-anchor="middle">UNIQUE</text>
+
+        <!-- Dashed quadrant line -->
+        <line x1="135" y1="10" x2="135" y2="220" stroke="#1E2D30" stroke-width=".7" stroke-dasharray="3,3"/>
+        <line x1="20"  y1="115" x2="250" y2="115" stroke="#1E2D30" stroke-width=".7" stroke-dasharray="3,3"/>
+
+        <!-- Arrow tips -->
+        <polygon points="250,218 244,214 244,222" fill="#2D3748"/>
+        <polygon points="18,10 14,16 22,16" fill="#2D3748"/>
+      </svg>
+    </div>
+
+    <!-- Right: moat table -->
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;">
+      <span class="eyebrow">Competition &amp; Moat</span>
+      <h2 style="margin-bottom:10px;">Unique <span class="c">Position.</span></h2>
+
+      <div style="font-size:9px;color:#2D3748;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase;">No competitor combines all three:</div>
+
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,245,255,.04) !important;border:1px solid rgba(0,245,255,.15);border-radius:8px;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+          <span style="font-size:14px;flex-shrink:0;">⚡</span>
+          <div>
+            <div style="font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;color:#E2E8F0;margin-bottom:1px;">Full-stack AI workforce</div>
+            <div style="font-size:8.5px;color:#64748B;">Not a point tool — replaces entire departments</div>
+          </div>
+          <span style="margin-left:auto;font-size:12px;color:#A3FF12;">✓</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(163,255,18,.04) !important;border:1px solid rgba(163,255,18,.15);border-radius:8px;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+          <span style="font-size:14px;flex-shrink:0;">🔄</span>
+          <div>
+            <div style="font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;color:#E2E8F0;margin-bottom:1px;">Self-evolving quality engine</div>
+            <div style="font-size:8.5px;color:#64748B;">Teams improve with every execution automatically</div>
+          </div>
+          <span style="margin-left:auto;font-size:12px;color:#A3FF12;">✓</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,184,0,.04) !important;border:1px solid rgba(255,184,0,.15);border-radius:8px;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+          <span style="font-size:14px;flex-shrink:0;">💰</span>
+          <div>
+            <div style="font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;color:#E2E8F0;margin-bottom:1px;">Worker monetisation model</div>
+            <div style="font-size:8.5px;color:#64748B;">Displaced workers earn from their own AI replacement</div>
+          </div>
+          <span style="margin-left:auto;font-size:12px;color:#A3FF12;">✓</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <div class="slide-num">08</div>
+</div>
+
+
+<!-- ══ 09 TRACTION ════════════════════════════════════════════════════ -->
+<div class="slide" style="background:#0B0E14 !important;">
+  <div class="blob blob-l" style="width:320px;height:320px;bottom:-70px;left:-60px;"></div>
+  <div class="logo-mark">Evolvian</div>
+
+  <div style="margin-top:20px;text-align:center;">
+    <span class="eyebrow">Traction</span>
+    <h2 style="margin-bottom:12px;">Platform <span class="c">Live.</span> Foundation Built.</h2>
+  </div>
+
+  <div style="display:flex;gap:14px;flex:1;align-items:center;justify-content:center;">
+
+    <!-- Stats column -->
+    <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start;">
+      <div class="stat">
+        <div class="stat-n" style="color:#00F5FF;">6</div>
+        <div class="stat-l">Core Systems Built</div>
+      </div>
+      <div class="stat">
+        <div class="stat-n" style="color:#A3FF12;">4</div>
+        <div class="stat-l">Live Agent Tools</div>
+      </div>
+      <div class="stat">
+        <div class="stat-n" style="color:#FFB800;">3</div>
+        <div class="stat-l">LLM Integrations</div>
+      </div>
+      <div class="stat">
+        <div class="stat-n" style="color:#5A9E8F;">∞</div>
+        <div class="stat-l">Agent Teams Possible</div>
+      </div>
+    </div>
+
+    <!-- Milestones -->
+    <div style="flex:1.4;display:flex;flex-direction:column;gap:7px;">
+      <div style="padding:8px 10px;background:rgba(0,245,255,.04) !important;border:1px solid rgba(0,245,255,.15);border-left:3px solid #00F5FF !important;border-radius:8px;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7.5px;color:#5A9E8F;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px;">Q1 2026</div>
+        <div style="font-size:10px;font-weight:600;color:#E2E8F0;">Platform launched — all 6 core systems live</div>
+      </div>
+      <div style="padding:8px 10px;background:rgba(163,255,18,.03) !important;border:1px solid rgba(163,255,18,.15);border-left:3px solid #A3FF12 !important;border-radius:8px;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7.5px;color:#5A9E8F;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px;">Q1 2026</div>
+        <div style="font-size:10px;font-weight:600;color:#E2E8F0;">HWU Enterprise Fund — selected for funding consideration</div>
+      </div>
+      <div style="padding:8px 10px;background:rgba(90,158,143,.04) !important;border:1px solid rgba(90,158,143,.15);border-left:3px solid #5A9E8F !important;border-radius:8px;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7.5px;color:#5A9E8F;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px;">Q1 2026</div>
+        <div style="font-size:10px;font-weight:600;color:#E2E8F0;">Self-evolving quality engine — 3-layer hybrid scoring live</div>
+      </div>
+      <div style="padding:8px 10px;background:rgba(22,27,34,.5) !important;border:1px solid rgba(90,158,143,.12);border-left:3px solid #2D3748 !important;border-radius:8px;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7.5px;color:#5A9E8F;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px;">Q2 2026 — Upcoming</div>
+        <div style="font-size:10px;font-weight:600;color:#64748B;">Open beta · marketplace publish · first paid customers</div>
+      </div>
+      <div style="padding:8px 10px;background:rgba(22,27,34,.5) !important;border:1px solid rgba(90,158,143,.12);border-left:3px solid #2D3748 !important;border-radius:8px;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7.5px;color:#5A9E8F;letter-spacing:.12em;text-transform:uppercase;margin-bottom:2px;">Q3 2026 — Planned</div>
+        <div style="font-size:10px;font-weight:600;color:#64748B;">Enterprise pilot · mobile app · Series A preparation</div>
+      </div>
+    </div>
+
+  </div>
+  <div class="slide-num">09</div>
+</div>
+
+
+<!-- ══ 10 TEAM ════════════════════════════════════════════════════════ -->
+<div class="slide" style="background:#0B0E14 !important;">
+  <div class="blob blob-c" style="width:300px;height:300px;top:-60px;right:-50px;"></div>
+  <div class="logo-mark">Evolvian</div>
+
+  <div style="display:flex;gap:20px;align-items:stretch;flex:1;margin-top:20px;">
+
+    <div style="flex:0.4;display:flex;flex-direction:column;justify-content:center;">
+      <span class="eyebrow">The Team</span>
+      <h1>BUILT<br>BY<br><span class="c">DOERS.</span></h1>
+      <div style="margin-top:12px;font-size:10px;color:#64748B;line-height:1.75;max-width:200px;">
+        Research-backed, technically deep, and obsessed with building AI that actually works.
+      </div>
+    </div>
+
+    <div style="flex:1;display:flex;flex-direction:column;gap:12px;justify-content:center;">
+
+      <!-- Murtaza -->
+      <div class="tcard">
+        <div style="display:flex;align-items:flex-start;gap:12px;">
+          <div class="avt" style="background:linear-gradient(135deg,#5A9E8F,#00F5FF) !important;flex-shrink:0;">M</div>
+          <div style="flex:1;">
+            <div style="font-family:'Bebas Neue',cursive;font-size:22px;letter-spacing:.04em;line-height:1;margin-bottom:2px;">Murtaza Odho</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:#5A9E8F;margin-bottom:8px;">Founder &amp; CEO · Full-Stack AI Engineer</div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;">
+              <span style="background:rgba(0,245,255,.08) !important;border:1px solid rgba(0,245,255,.2);border-radius:100px;padding:2px 8px;font-size:8px;color:#00F5FF;font-family:'IBM Plex Mono',monospace;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">BSc AI · HWU</span>
+              <span style="background:rgba(0,245,255,.08) !important;border:1px solid rgba(0,245,255,.2);border-radius:100px;padding:2px 8px;font-size:8px;color:#00F5FF;font-family:'IBM Plex Mono',monospace;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">FastAPI · React · LLMs</span>
+              <span style="background:rgba(0,245,255,.08) !important;border:1px solid rgba(0,245,255,.2);border-radius:100px;padding:2px 8px;font-size:8px;color:#00F5FF;font-family:'IBM Plex Mono',monospace;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">Multi-Agent Systems Research</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Wei Pang -->
+      <div class="tcard">
+        <div style="display:flex;align-items:flex-start;gap:12px;">
+          <div class="avt" style="background:linear-gradient(135deg,#FFB800,#A3FF12) !important;flex-shrink:0;">W</div>
+          <div style="flex:1;">
+            <div style="font-family:'Bebas Neue',cursive;font-size:22px;letter-spacing:.04em;line-height:1;margin-bottom:2px;">Wei Pang</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:#5A9E8F;margin-bottom:8px;">Co-Founder &amp; Advisor · Associate Professor, HWU</div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;">
+              <span style="background:rgba(255,184,0,.08) !important;border:1px solid rgba(255,184,0,.2);border-radius:100px;padding:2px 8px;font-size:8px;color:#FFB800;font-family:'IBM Plex Mono',monospace;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">PhD Computer Science</span>
+              <span style="background:rgba(255,184,0,.08) !important;border:1px solid rgba(255,184,0,.2);border-radius:100px;padding:2px 8px;font-size:8px;color:#FFB800;font-family:'IBM Plex Mono',monospace;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">NLP &amp; Knowledge Graphs</span>
+              <span style="background:rgba(255,184,0,.08) !important;border:1px solid rgba(255,184,0,.2);border-radius:100px;padding:2px 8px;font-size:8px;color:#FFB800;font-family:'IBM Plex Mono',monospace;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">80+ Research Publications</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <div class="slide-num">10</div>
+</div>
+
+
+<!-- ══ 11 THE ASK ══════════════════════════════════════════════════════ -->
+<div class="slide" style="background:#0B0E14 !important;">
+  <div class="blob blob-c" style="width:400px;height:400px;bottom:-100px;right:-80px;"></div>
+  <div class="logo-mark">Evolvian</div>
+
+  <div style="display:flex;gap:22px;align-items:stretch;flex:1;margin-top:20px;">
+
+    <!-- Left: the number -->
+    <div style="flex:.8;display:flex;flex-direction:column;justify-content:center;">
+      <span class="eyebrow">The Ask</span>
+      <div style="font-family:'Bebas Neue',cursive;font-size:78px;letter-spacing:.03em;line-height:.9;color:#00F5FF;margin-bottom:4px;">£35K</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#5A9E8F;letter-spacing:.2em;text-transform:uppercase;margin-bottom:14px;">Pre-Seed · HWU Enterprise Fund</div>
+      <div style="font-size:10.5px;color:#94A3B8;line-height:1.75;">
+        18-month runway to reach open beta, first paying customers, and Series A readiness.
+      </div>
+    </div>
+
+    <!-- Right: use of funds -->
+    <div style="flex:1.2;display:flex;flex-direction:column;justify-content:center;gap:8px;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#5A9E8F;letter-spacing:.2em;text-transform:uppercase;margin-bottom:4px;">Use of Funds</div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(0,245,255,.04) !important;border:1px solid rgba(0,245,255,.15);border-radius:10px;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+        <div style="font-family:'Bebas Neue',cursive;font-size:24px;color:#00F5FF;letter-spacing:.03em;min-width:52px;">40%</div>
+        <div>
+          <div style="font-size:10px;font-weight:600;color:#E2E8F0;margin-bottom:1px;">Product &amp; Engineering</div>
+          <div style="font-size:8.5px;color:#64748B;">Open beta, mobile, marketplace publishing</div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(163,255,18,.03) !important;border:1px solid rgba(163,255,18,.15);border-radius:10px;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+        <div style="font-family:'Bebas Neue',cursive;font-size:24px;color:#A3FF12;letter-spacing:.03em;min-width:52px;">30%</div>
+        <div>
+          <div style="font-size:10px;font-weight:600;color:#E2E8F0;margin-bottom:1px;">Compute &amp; Infrastructure</div>
+          <div style="font-size:8.5px;color:#64748B;">LLM API costs, hosting, scaling</div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(255,184,0,.03) !important;border:1px solid rgba(255,184,0,.15);border-radius:10px;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+        <div style="font-family:'Bebas Neue',cursive;font-size:24px;color:#FFB800;letter-spacing:.03em;min-width:52px;">20%</div>
+        <div>
+          <div style="font-size:10px;font-weight:600;color:#E2E8F0;margin-bottom:1px;">Growth &amp; Sales</div>
+          <div style="font-size:8.5px;color:#64748B;">First B2B outreach, content, partnerships</div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(90,158,143,.04) !important;border:1px solid rgba(90,158,143,.15);border-radius:10px;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;">
+        <div style="font-family:'Bebas Neue',cursive;font-size:24px;color:#5A9E8F;letter-spacing:.03em;min-width:52px;">10%</div>
+        <div>
+          <div style="font-size:10px;font-weight:600;color:#E2E8F0;margin-bottom:1px;">Legal &amp; Operations</div>
+          <div style="font-size:8.5px;color:#64748B;">Company setup, IP protection, admin</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <div class="slide-num">11</div>
+</div>
+
+
+<!-- ══ 12 CLOSE ════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-close" style="align-items:center;justify-content:center;text-align:center;">
+
+  <canvas id="close-canvas" style="position:absolute;inset:0;width:100%;height:100%;opacity:.7;"></canvas>
+
+  <!-- static SVG for print -->
+  <svg class="print-bg" style="display:none;position:absolute;inset:0;width:100%;height:100%;" viewBox="0 0 1122 630" preserveAspectRatio="xMidYMid slice">
+    <rect width="1122" height="630" fill="#0B0E14"/>
+    <line x1="561" y1="315" x2="180" y2="140" stroke="#5A9E8F" stroke-width=".7" stroke-opacity=".25"/>
+    <line x1="561" y1="315" x2="920" y2="120" stroke="#5A9E8F" stroke-width=".7" stroke-opacity=".25"/>
+    <line x1="561" y1="315" x2="980" y2="460" stroke="#5A9E8F" stroke-width=".7" stroke-opacity=".25"/>
+    <line x1="561" y1="315" x2="150" y2="500" stroke="#5A9E8F" stroke-width=".7" stroke-opacity=".25"/>
+    <circle cx="561" cy="315" r="12" fill="rgba(0,245,255,.1)" stroke="#00F5FF" stroke-width="1"/>
+    <circle cx="180" cy="140" r="5" fill="rgba(90,158,143,.2)" stroke="#5A9E8F" stroke-width="1"/>
+    <circle cx="920" cy="120" r="5" fill="rgba(90,158,143,.2)" stroke="#5A9E8F" stroke-width="1"/>
+    <circle cx="980" cy="460" r="5" fill="rgba(90,158,143,.2)" stroke="#5A9E8F" stroke-width="1"/>
+    <circle cx="150" cy="500" r="5" fill="rgba(90,158,143,.2)" stroke="#5A9E8F" stroke-width="1"/>
+  </svg>
+
+  <div style="position:relative;z-index:2;">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#5A9E8F;letter-spacing:.25em;text-transform:uppercase;margin-bottom:14px;">The Future of Work</div>
+    <div style="font-family:'Bebas Neue',cursive;font-size:72px;letter-spacing:.08em;line-height:.9;color:#E2E8F0;margin-bottom:8px;">
+      LET'S BUILD<br>THE <span style="color:#00F5FF;">AI WORKFORCE</span><br>TOGETHER.
+    </div>
+    <div style="font-size:12px;color:#4A5568;margin-top:18px;line-height:1.75;">
+      The AI revolution is replacing jobs.<br>We're making sure workers own a piece of it.
+    </div>
+
+    <div style="margin-top:24px;display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;">
+      <div style="text-align:left;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;color:#2D3748;letter-spacing:.15em;text-transform:uppercase;margin-bottom:3px;">Email</div>
+        <div style="font-size:11px;color:#00F5FF;">murtaza.0903@gmail.com</div>
+      </div>
+      <div style="width:1px;height:28px;background:#2D3748;"></div>
+      <div style="text-align:left;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;color:#2D3748;letter-spacing:.15em;text-transform:uppercase;margin-bottom:3px;">Web</div>
+        <div style="font-size:11px;color:#5A9E8F;">https://evolvian.vercel.app/</div>
+      </div>
+      <div style="width:1px;height:28px;background:#2D3748;"></div>
+      <div style="text-align:left;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;color:#2D3748;letter-spacing:.15em;text-transform:uppercase;margin-bottom:3px;">Ask</div>
+        <div style="font-size:11px;color:#FFB800;">£35,000 Pre-Seed</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-num">12</div>
+</div>
+
+
+<script>
+// ── Animated network canvas (landing page style) ──────────────────
+function makeNetwork(canvasId, nodeCount, accentColor, connectionColor){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  function resize(){
+    const r = canvas.parentElement.getBoundingClientRect();
+    canvas.width = r.width;
+    canvas.height = r.height;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const nodes = Array.from({length: nodeCount}, (_,i) => ({
+    x: Math.random(),
+    y: Math.random(),
+    vx: (Math.random()-.5) * .00015,
+    vy: (Math.random()-.5) * .00015,
+    r: 1.5 + Math.random() * 2.5,
+    phase: Math.random() * Math.PI * 2,
+    isCentral: i === 0
+  }));
+
+  if(nodeCount > 1) {
+    nodes[0].x = .5; nodes[0].y = .5;
+    nodes[0].r = 5; nodes[0].isCentral = true;
+  }
+
+  let t = 0;
+  function draw(){
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0,0,W,H);
+
+    // background
+    ctx.fillStyle = '#0B0E14';
+    ctx.fillRect(0,0,W,H);
+
+    t++;
+    for(const n of nodes){
+      n.x = (n.x + n.vx + 1) % 1;
+      n.y = (n.y + n.vy + 1) % 1;
+    }
+
+    const CONNECT_DIST = Math.min(W,H) * .28;
+
+    // connections
+    for(let i = 0; i < nodes.length; i++){
+      for(let j = i+1; j < nodes.length; j++){
+        const a = nodes[i], b = nodes[j];
+        const dx = (a.x - b.x)*W, dy = (a.y - b.y)*H;
+        const d = Math.sqrt(dx*dx+dy*dy);
+        if(d < CONNECT_DIST){
+          const alpha = (1 - d/CONNECT_DIST) * .35;
+          ctx.beginPath();
+          ctx.moveTo(a.x*W, a.y*H);
+          ctx.lineTo(b.x*W, b.y*H);
+          ctx.strokeStyle = connectionColor.replace('{a}', alpha.toFixed(3));
+          ctx.lineWidth = .6;
+          ctx.stroke();
+        }
+      }
+    }
+
+    // nodes
+    for(const n of nodes){
+      const pulse = Math.sin(t/90 + n.phase) * .5 + .5;
+      const nx = n.x*W, ny = n.y*H;
+      if(n.isCentral){
+        const g = ctx.createRadialGradient(nx,ny,0,nx,ny,n.r*5);
+        g.addColorStop(0, accentColor.replace('{a}','.4'));
+        g.addColorStop(1, accentColor.replace('{a}','0'));
+        ctx.beginPath(); ctx.arc(nx,ny,n.r*5,0,Math.PI*2);
+        ctx.fillStyle = g; ctx.fill();
+        ctx.beginPath(); ctx.arc(nx,ny,n.r,0,Math.PI*2);
+        ctx.fillStyle = accentColor.replace('{a}','1'); ctx.fill();
+      } else {
+        const alpha = .25 + pulse * .45;
+        ctx.beginPath(); ctx.arc(nx,ny,n.r,0,Math.PI*2);
+        ctx.fillStyle = connectionColor.replace('{a}', alpha.toFixed(3));
+        ctx.fill();
+      }
+    }
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+makeNetwork('cover-canvas', 55, 'rgba(0,245,255,{a})', 'rgba(90,158,143,{a})');
+makeNetwork('close-canvas', 40, 'rgba(0,245,255,{a})', 'rgba(90,158,143,{a})');
+
+// ── Per-slide centering frames + fit-scale ───────────────────────
+(function initDeck(){
+  const BASE_W = 1280; // 16:9 HD
+  const BASE_H = 720;  // 16:9 HD
+
+  // Wrap every slide in a centering frame
+  document.querySelectorAll('.slide').forEach(function(slide){
+    const frame = document.createElement('div');
+    frame.className = 'slide-frame';
+    slide.parentNode.insertBefore(frame, slide);
+    frame.appendChild(slide);
+    slide.style.transformOrigin = 'center center';
+  });
+
+  function applyScale(){
+    const s = Math.min(
+      window.innerWidth  / BASE_W,
+      window.innerHeight / BASE_H
+    ) * 0.97; // 3% breathing room
+    document.querySelectorAll('.slide').forEach(function(slide){
+      slide.style.transform = 'scale(' + s + ')';
+    });
+  }
+
+  applyScale();
+  window.addEventListener('resize', applyScale);
+})();
+</script>
+
+</body>
+</html>

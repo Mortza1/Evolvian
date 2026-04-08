@@ -15,9 +15,17 @@ from schemas import (
     MarketplaceAgentTemplate, MarketplaceCategoryResponse,
     HireAgentRequest, AgentResponse
 )
-from models import User, Team, Agent
+from models import User, Team, Agent, InstalledTool
 from core.agents.registry import AGENT_REGISTRY
 from rag_service import rag_service
+
+# Maps internal tool names (used in templates) to catalog IDs (used in DB)
+_TOOL_NAME_TO_CATALOG_ID = {
+    "web_search": "tool-websearch",
+    "web_scrape": "tool-browser",
+    "code_executor": "tool-code-executor",
+    "file_reader": "tool-file-manager",
+}
 
 router = APIRouter(prefix="/api/marketplace", tags=["Marketplace"])
 
@@ -148,6 +156,12 @@ async def hire_marketplace_agent(
     if not template:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent template not found")
 
+    # Map template tool names to catalog IDs (e.g. "web_search" -> "tool-websearch")
+    catalog_tool_ids = [
+        _TOOL_NAME_TO_CATALOG_ID[t] for t in (template.tools or [])
+        if t in _TOOL_NAME_TO_CATALOG_ID
+    ]
+
     # Create agent from template
     agent = Agent(
         team_id=hire_data.team_id,
@@ -166,12 +180,30 @@ async def hire_marketplace_agent(
         can_delegate=template.can_delegate,
         can_ask_questions=template.can_ask_questions,
         knowledge_base=template.knowledge_base,
+        tools_access=catalog_tool_ids,
     )
 
     db.add(agent)
     template.hires_count += 1
     db.commit()
     db.refresh(agent)
+
+    # Auto-install any tools the agent needs (if not already on the team)
+    for catalog_id in catalog_tool_ids:
+        exists = db.query(InstalledTool).filter(
+            InstalledTool.team_id == hire_data.team_id,
+            InstalledTool.tool_id == catalog_id,
+        ).first()
+        if not exists:
+            db.add(InstalledTool(
+                team_id=hire_data.team_id,
+                tool_id=catalog_id,
+                status="connected",
+                assigned_agent_ids=[],
+                configuration={},
+            ))
+    if catalog_tool_ids:
+        db.commit()
 
     # Index knowledge base into RAG
     if template.knowledge_base:

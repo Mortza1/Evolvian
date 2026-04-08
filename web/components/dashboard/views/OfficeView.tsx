@@ -1,12 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTeamAgents, type HiredAgent } from '@/lib/services/agents';
 import {
   useEvolutionStats,
   useAgentPerformance,
-  formatFitness,
-  getFitnessColor,
   formatTaskType,
 } from '@/lib/services/evolution';
 import AgentEvolutionModal from '@/components/office/AgentEvolutionModal';
@@ -32,6 +30,13 @@ function fitnessClass(val: number): string {
   if (val >= 0.6) return 'text-[#7A9A6A]';
   if (val >= 0.4) return 'text-[#BF8A52]';
   return 'text-[#9E5A5A]';
+}
+
+function fitnessHex(val: number): string {
+  if (val >= 0.8) return '#5A9E8F';
+  if (val >= 0.6) return '#7A9A6A';
+  if (val >= 0.4) return '#BF8A52';
+  return '#9E5A5A';
 }
 
 // ─── Section label ────────────────────────────────────────────────────────────
@@ -243,6 +248,7 @@ function ratingColor(r: number) {
 export default function OfficeView({ teamId }: OfficeViewProps) {
   const [evolvingAgent, setEvolvingAgent] = useState<HiredAgent | null>(null);
   const [selectedTaskType, setSelectedTaskType] = useState<string | null>(null);
+  const [evolutionExpanded, setEvolutionExpanded] = useState(true);
 
   const { agents: employees, isLoading, error, refresh: refreshEmployees } = useTeamAgents({
     teamId: parseInt(teamId, 10),
@@ -252,10 +258,17 @@ export default function OfficeView({ teamId }: OfficeViewProps) {
     teamId: parseInt(teamId, 10),
     autoFetch: true,
   });
-  const { performanceByName } = useAgentPerformance({
+  const { performances, performanceByName } = useAgentPerformance({
     teamId: parseInt(teamId, 10),
     autoFetch: true,
   });
+
+  // Auto-select first task type so the workflows table is visible by default
+  useEffect(() => {
+    if (taskTypes.length > 0 && selectedTaskType === null) {
+      setSelectedTaskType(taskTypes[0]);
+    }
+  }, [taskTypes]);
 
   // Determine MVP (highest avg quality among agents with executions)
   const mvpName = (() => {
@@ -336,8 +349,6 @@ export default function OfficeView({ teamId }: OfficeViewProps) {
     );
   }
 
-  const activeTypes = selectedTaskType ? [selectedTaskType] : taskTypes;
-
   return (
     <div style={{ fontFamily: "'Syne', sans-serif" }}>
 
@@ -376,168 +387,285 @@ export default function OfficeView({ teamId }: OfficeViewProps) {
 
       {/* ── Evolution Insights ─────────────────────────────────────────────── */}
       <section className="mb-10 animate-evolve-in" style={{ animationDelay: '100ms' }}>
-        <SectionLabel
-          label="Evolution Insights"
-          action={
-            <button
-              onClick={() => refreshEvolution()}
-              className="flex items-center gap-1.5 rounded border border-[#1E2D30] px-3 py-1.5 text-[11px] text-[#3A5056] transition-all hover:border-[#5A9E8F]/30 hover:text-[#5A9E8F]"
-              style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-            >
-              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Refresh
-            </button>
-          }
-        />
 
-        {evolutionLoading ? (
-          <div className="rounded-md border border-[#1E2D30] bg-[#111A1D] p-6 animate-pulse">
-            <div className="grid grid-cols-3 gap-4">
-              {[1, 2, 3].map(i => <div key={i} className="h-24 rounded bg-[#1A2A2D]" />)}
+        {/* Collapsible header */}
+        <div className="mb-0 flex items-center gap-4">
+          <button
+            onClick={() => setEvolutionExpanded(v => !v)}
+            className="flex items-center gap-3 group"
+          >
+            <h2
+              style={{ fontFamily: "'Syne', sans-serif" }}
+              className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[#3A5056] group-hover:text-[#5A9E8F] transition-colors"
+            >
+              Evolution Insights
+            </h2>
+            <svg
+              className="h-3 w-3 text-[#2A3E44] group-hover:text-[#5A9E8F] transition-all"
+              style={{ transform: evolutionExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          <div className="flex-1 h-px bg-[#141E22]" />
+          {taskTypes.length > 0 && (
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[10px] text-[#2A3E44]">
+              {taskTypes.length} type{taskTypes.length !== 1 ? 's' : ''} · {Object.values(statsByType).reduce((a, s) => a + s.total_executions, 0)} runs
+            </span>
+          )}
+          <button
+            onClick={() => { refreshEvolution(); }}
+            className="flex items-center gap-1.5 rounded border border-[#1A2A2D] px-2.5 py-1.5 text-[10px] text-[#2A3E44] transition-all hover:border-[#5A9E8F]/30 hover:text-[#5A9E8F]"
+            style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+          >
+            <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh
+          </button>
+        </div>
+
+        {/* Expandable body */}
+        <div
+          style={{
+            overflow: 'hidden',
+            maxHeight: evolutionExpanded ? '2000px' : '0px',
+            opacity: evolutionExpanded ? 1 : 0,
+            transition: 'max-height 0.35s ease, opacity 0.25s ease',
+            marginTop: evolutionExpanded ? '24px' : '0px',
+          }}
+        >
+          {evolutionLoading ? (
+            <div className="rounded-md border border-[#1E2D30] bg-[#111A1D] p-6 animate-pulse">
+              <div className="grid grid-cols-3 gap-4">
+                {[1, 2, 3].map(i => <div key={i} className="h-20 rounded bg-[#1A2A2D]" />)}
+              </div>
             </div>
-          </div>
-        ) : taskTypes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-[#1E2D30] py-12 text-center">
-            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md border border-[#1E2D30] bg-[#111A1D]">
-              <svg className="h-4 w-4 text-[#2A3E44]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          ) : taskTypes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-[#1A2A2D] py-10 text-center">
+              <svg className="mb-3 h-5 w-5 text-[#1E2D30]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
+              <p className="text-[11px] text-[#2E4248]">No workflow data yet — run some operations to see evolution insights</p>
             </div>
-            <p className="text-[12px] text-[#2E4248]">No workflow data yet — run some operations to see evolution insights</p>
-          </div>
-        ) : (
-          <div className="rounded-md border border-[#1E2D30] bg-[#111A1D] overflow-hidden">
-            {/* Type filter tabs */}
-            <div className="flex items-center gap-1 border-b border-[#172025] px-4 py-3 overflow-x-auto scrollbar-hide">
-              {[{ id: null, label: 'All Types' }, ...taskTypes.map(t => ({ id: t, label: formatTaskType(t) }))].map(({ id, label }) => (
-                <button
-                  key={String(id)}
-                  onClick={() => setSelectedTaskType(id)}
-                  className={`shrink-0 rounded px-3 py-1.5 text-[11px] font-medium transition-all ${
-                    selectedTaskType === id
-                      ? 'bg-[#5A9E8F]/15 text-[#5A9E8F] border border-[#5A9E8F]/40'
-                      : 'text-[#3A5056] hover:text-[#7A9EA6] border border-transparent hover:border-[#1E2D30]'
-                  }`}
-                  style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+          ) : (
+            <div className="space-y-3">
 
-            {/* Stats grid */}
-            <div className="grid grid-cols-1 gap-px bg-[#172025] md:grid-cols-3 p-px">
-              {activeTypes.map((type) => {
-                const stats = statsByType[type];
-                if (!stats) return null;
-                return (
-                  <div key={type} className="bg-[#111A1D] p-5">
-                    <div className="mb-4 flex items-center justify-between">
-                      <span
-                        style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }}
-                        className="text-[13px] text-[#C8C4BC]"
-                      >
-                        {formatTaskType(type)}
-                      </span>
-                      <span
-                        style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-                        className="rounded border border-[#1E2D30] bg-[#0F1719] px-2 py-0.5 text-[10px] text-[#3A5056]"
-                      >
-                        {stats.total_executions} runs
-                      </span>
-                    </div>
-                    <div className="space-y-2.5">
-                      {[
-                        { label: 'Avg Quality', value: formatFitness(stats.avg_quality), color: fitnessClass(stats.avg_quality) },
-                        { label: 'Avg Cost',    value: `$${stats.avg_cost.toFixed(2)}`,  color: 'text-[#BF8A52]' },
-                        { label: 'Workflows',  value: String(stats.unique_workflows),     color: 'text-[#EAE6DF]' },
-                      ].map(({ label, value, color }) => (
-                        <div key={label} className="flex items-center justify-between">
-                          <span className="text-[12px] text-[#3A5056]">{label}</span>
-                          <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className={`text-[12px] font-medium ${color}`}>
-                            {value}
+              {/* Task type selector cards */}
+              <div className={`grid gap-3 ${taskTypes.length === 1 ? 'grid-cols-1' : taskTypes.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                {taskTypes.map((type) => {
+                  const stats = statsByType[type];
+                  const isSelected = selectedTaskType === type;
+                  const q = stats?.avg_quality ?? 0;
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => setSelectedTaskType(isSelected ? null : type)}
+                      className="group relative overflow-hidden rounded-md border text-left transition-all duration-200"
+                      style={{
+                        borderColor: isSelected ? 'rgba(90,158,143,0.5)' : '#1E2D30',
+                        background: isSelected ? 'rgba(90,158,143,0.06)' : '#0D1619',
+                      }}
+                    >
+                      {/* Left accent bar */}
+                      <div
+                        className="absolute left-0 top-0 h-full w-[3px] transition-all duration-200"
+                        style={{ backgroundColor: isSelected ? fitnessHex(q) : '#172025' }}
+                      />
+                      <div className="pl-4 pr-4 py-4">
+                        <div className="mb-3 flex items-start justify-between">
+                          <span
+                            style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700 }}
+                            className="text-[13px] text-[#C8C4BC] group-hover:text-[#EAE6DF] transition-colors"
+                          >
+                            {formatTaskType(type)}
                           </span>
+                          <span
+                            style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '9px', color: '#3A5056' }}
+                            className="rounded border border-[#172025] bg-[#0A1214] px-1.5 py-0.5 uppercase tracking-[0.1em]"
+                          >
+                            {stats?.total_executions ?? 0} runs
+                          </span>
+                        </div>
+                        {/* Big quality number */}
+                        <div className="flex items-end gap-2">
+                          <span
+                            style={{ fontFamily: "'IBM Plex Mono', monospace", letterSpacing: '-0.03em', color: fitnessHex(q), lineHeight: 1 }}
+                            className="text-[2.2rem] font-semibold"
+                          >
+                            {Math.round(q * 100)}
+                          </span>
+                          <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="mb-1 text-[13px] text-[#2A3E44]">%</span>
+                          <span className="mb-1 ml-auto text-[10px] text-[#2A3E44]">avg quality</span>
+                        </div>
+                        {/* Quality bar */}
+                        <div className="mt-2 h-[2px] overflow-hidden rounded-full bg-[#172025]">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{ width: `${Math.round(q * 100)}%`, backgroundColor: fitnessHex(q) }}
+                          />
+                        </div>
+                        {/* Sub-stats */}
+                        <div className="mt-3 flex items-center gap-4">
+                          <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[10px] text-[#2A3E44]">
+                            {stats?.unique_workflows ?? 0} config{(stats?.unique_workflows ?? 0) !== 1 ? 's' : ''}
+                          </span>
+                          {(stats?.avg_latency_ms ?? 0) > 0 && (
+                            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[10px] text-[#2A3E44]">
+                              {((stats?.avg_latency_ms ?? 0) / 1000).toFixed(1)}s avg
+                            </span>
+                          )}
+                          {isSelected && (
+                            <span className="ml-auto text-[9px] uppercase tracking-[0.12em] text-[#5A9E8F]">expanded ↑</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Expanded detail panel */}
+              {selectedTaskType && statsByType[selectedTaskType] && (() => {
+                const stats = statsByType[selectedTaskType];
+                const workflows = stats.top_workflows ?? [];
+                return (
+                  <div className="overflow-hidden rounded-md border border-[#1E2D30] bg-[#0D1619]">
+
+                    {/* Metric strip */}
+                    <div className="grid grid-cols-4 divide-x divide-[#172025] border-b border-[#172025]">
+                      {[
+                        { label: 'Avg Quality',  value: `${Math.round(stats.avg_quality * 100)}%`,  color: fitnessHex(stats.avg_quality) },
+                        { label: 'Avg Cost',     value: `$${stats.avg_cost.toFixed(4)}`,            color: '#BF8A52' },
+                        { label: 'Avg Latency',  value: stats.avg_latency_ms > 0 ? `${(stats.avg_latency_ms / 1000).toFixed(1)}s` : '—', color: '#7A9EA6' },
+                        { label: 'Unique Configs', value: String(stats.unique_workflows),           color: '#EAE6DF' },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="px-5 py-4">
+                          <div
+                            style={{ fontFamily: "'IBM Plex Mono', monospace", color, letterSpacing: '-0.02em' }}
+                            className="mb-1 text-[1.4rem] font-semibold leading-none"
+                          >
+                            {value}
+                          </div>
+                          <div className="text-[10px] uppercase tracking-[0.12em] text-[#2A3E44]">{label}</div>
                         </div>
                       ))}
                     </div>
-                    {stats.best_workflow && (
-                      <div className="mt-4 border-t border-[#172025] pt-4">
-                        <p className="mb-2 text-[10px] uppercase tracking-[0.12em] text-[#2E4248]">Best workflow</p>
-                        <div className="flex items-center justify-between">
-                          <code
-                            style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-                            className="text-[11px] text-[#5A9E8F]"
-                          >
-                            {stats.best_workflow.signature.substring(0, 8)}…
-                          </code>
-                          <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className={`text-[11px] font-medium ${fitnessClass(stats.best_workflow.fitness_score)}`}>
-                            {formatFitness(stats.best_workflow.fitness_score)} fit
-                          </span>
-                        </div>
-                        <p className="mt-1 text-[10px] text-[#2A3E44]">
-                          {stats.best_workflow.agents.length} agents · {stats.best_workflow.execution_count} runs
+
+                    {/* Workflow configs */}
+                    {workflows.length > 0 && (
+                      <div className="border-b border-[#172025] px-5 py-4">
+                        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#2A3E44]">
+                          Workflow Configs — ranked by fitness
                         </p>
+                        <div className="space-y-2.5">
+                          {workflows.map((wf, idx) => (
+                            <div key={wf.signature} className="group flex items-center gap-4 rounded-md border border-transparent px-3 py-2.5 transition-all hover:border-[#1E2D30] hover:bg-[#111A1D]">
+                              {/* Rank + star */}
+                              <div
+                                style={{ fontFamily: "'IBM Plex Mono', monospace", color: idx === 0 ? '#BF8A52' : '#2A3E44', minWidth: 20 }}
+                                className="text-[11px] font-medium"
+                              >
+                                {idx === 0 ? '★' : `${idx + 1}`}
+                              </div>
+                              {/* Signature */}
+                              <code style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#5A9E8F', minWidth: 80 }} className="text-[11px]">
+                                {wf.signature.substring(0, 8)}…
+                              </code>
+                              {/* Agents */}
+                              <div className="flex flex-1 flex-wrap gap-1">
+                                {wf.agents.slice(0, 4).map((a) => (
+                                  <span
+                                    key={a}
+                                    className="rounded border border-[#1A2A2D] bg-[#0A1214] px-1.5 py-0.5 text-[9px] text-[#4A6A72]"
+                                    style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                                  >
+                                    {a}
+                                  </span>
+                                ))}
+                                {wf.agents.length > 4 && (
+                                  <span className="text-[9px] text-[#2A3E44]">+{wf.agents.length - 4}</span>
+                                )}
+                              </div>
+                              {/* Quality bar + value */}
+                              <div className="flex items-center gap-2" style={{ minWidth: 100 }}>
+                                <div className="h-[3px] flex-1 overflow-hidden rounded-full bg-[#172025]">
+                                  <div
+                                    className="h-full rounded-full"
+                                    style={{ width: `${Math.round(wf.avg_quality_score * 100)}%`, backgroundColor: fitnessHex(wf.avg_quality_score) }}
+                                  />
+                                </div>
+                                <span
+                                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: fitnessHex(wf.avg_quality_score), minWidth: 32, textAlign: 'right' }}
+                                  className="text-[11px] font-medium"
+                                >
+                                  {Math.round(wf.avg_quality_score * 100)}%
+                                </span>
+                              </div>
+                              {/* Fitness */}
+                              <div style={{ minWidth: 56, textAlign: 'right' }}>
+                                <span
+                                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: fitnessHex(wf.fitness_score) }}
+                                  className="text-[11px] font-semibold"
+                                >
+                                  {Math.round(wf.fitness_score * 100)}
+                                </span>
+                                <span style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[9px] text-[#2A3E44]"> fit</span>
+                              </div>
+                              {/* Runs */}
+                              <span style={{ fontFamily: "'IBM Plex Mono', monospace", minWidth: 36, textAlign: 'right' }} className="text-[10px] text-[#2A3E44]">
+                                ×{wf.execution_count}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Agent leaderboard */}
+                    {performances.length > 0 && (
+                      <div className="px-5 py-4">
+                        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#2A3E44]">Agent Performance</p>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          {performances.slice(0, 6).map((p, idx) => (
+                            <div key={p.agent_name} className="flex items-center gap-3 rounded-md border border-[#172025] bg-[#0A1214] px-3 py-2.5">
+                              <span
+                                style={{ fontFamily: "'IBM Plex Mono', monospace", color: idx === 0 ? '#BF8A52' : '#1E2D30', minWidth: 16 }}
+                                className="text-[10px] font-semibold"
+                              >
+                                {idx === 0 ? '★' : `#${idx + 1}`}
+                              </span>
+                              <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 600 }} className="flex-1 truncate text-[12px] text-[#C8C4BC]">
+                                {p.agent_name}
+                              </span>
+                              {/* Bar */}
+                              <div className="flex items-center gap-2">
+                                <div className="h-[3px] w-16 overflow-hidden rounded-full bg-[#172025]">
+                                  <div
+                                    className="h-full rounded-full transition-all duration-700"
+                                    style={{ width: `${Math.round(p.avg_quality * 100)}%`, backgroundColor: fitnessHex(p.avg_quality) }}
+                                  />
+                                </div>
+                                <span
+                                  style={{ fontFamily: "'IBM Plex Mono', monospace", color: fitnessHex(p.avg_quality), minWidth: 28, textAlign: 'right' }}
+                                  className="text-[10px] font-semibold"
+                                >
+                                  {Math.round(p.avg_quality * 100)}%
+                                </span>
+                                <TrendIcon trend={p.trend} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
                 );
-              })}
+              })()}
             </div>
-
-            {/* Top workflows table */}
-            {selectedTaskType && statsByType[selectedTaskType]?.top_workflows?.length > 0 && (
-              <div className="border-t border-[#172025] p-5">
-                <p className="mb-4 text-[12px] font-semibold uppercase tracking-[0.14em] text-[#3A5056]">
-                  Top performing workflows
-                </p>
-                <div className="overflow-x-auto scrollbar-hide">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-[#172025]">
-                        {['Signature', 'Agents', 'Quality', 'Cost', 'Fitness', 'Runs'].map((h, i) => (
-                          <th
-                            key={h}
-                            className={`pb-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#2E4248] ${i > 1 ? 'text-right' : 'text-left'}`}
-                          >
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#172025]">
-                      {statsByType[selectedTaskType].top_workflows.map((wf, idx) => (
-                        <tr key={wf.signature} className="hover:bg-[#0F1719] transition-colors">
-                          <td className="py-3">
-                            <code style={{ fontFamily: "'IBM Plex Mono', monospace" }} className="text-[11px] text-[#5A9E8F]">
-                              {idx === 0 ? '★ ' : ''}{wf.signature.substring(0, 8)}…
-                            </code>
-                          </td>
-                          <td className="py-3 text-[12px] text-[#7A9EA6]">
-                            {wf.agents.slice(0, 2).join(', ')}{wf.agents.length > 2 ? ` +${wf.agents.length - 2}` : ''}
-                          </td>
-                          <td className={`py-3 text-right text-[12px] font-medium ${fitnessClass(wf.avg_quality_score)}`} style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                            {formatFitness(wf.avg_quality_score)}
-                          </td>
-                          <td className="py-3 text-right text-[12px] text-[#BF8A52]" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                            ${wf.avg_cost.toFixed(2)}
-                          </td>
-                          <td className={`py-3 text-right text-[12px] font-semibold ${fitnessClass(wf.fitness_score)}`} style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                            {formatFitness(wf.fitness_score)}
-                          </td>
-                          <td className="py-3 text-right text-[12px] text-[#3A5056]" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                            {wf.execution_count}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </section>
 
       {/* ── Agent roster ────────────────────────────────────────────────────── */}

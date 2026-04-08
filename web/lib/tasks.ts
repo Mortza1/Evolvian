@@ -113,10 +113,12 @@ function mapOperationToTask(op: any): Task {
           supervisor: typeof op.workflow_config.hierarchy_team.supervisor === 'string'
             ? op.workflow_config.hierarchy_team.supervisor
             : op.workflow_config.hierarchy_team.supervisor?.name ?? '',
+          subSupervisors: op.workflow_config.hierarchy_team.sub_supervisors ?? [],
           workers: (op.workflow_config.hierarchy_team.workers ?? []).map((w: any) =>
             typeof w === 'string' ? w : w?.name ?? ''
           ),
           teamName: op.workflow_config.hierarchy_team.team_name ?? '',
+          treeDepth: op.workflow_config.hierarchy_team.tree_depth ?? undefined,
           stepTree: op.workflow_config.hierarchy_team.step_tree ?? undefined,
         }
       : undefined,
